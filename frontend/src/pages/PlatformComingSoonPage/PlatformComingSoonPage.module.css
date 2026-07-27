@@ -1,0 +1,80 @@
+.page {
+  min-height: calc(100dvh - 4.5rem);
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+
+.card {
+  width: min(100%, 34rem);
+  border: 1px solid var(--color-slate-200);
+  border-radius: 1.1rem;
+  padding: clamp(2rem, 6vw, 3.5rem);
+  background: var(--color-white);
+  box-shadow: 0 12px 36px rgb(15 23 42 / 0.06);
+  text-align: center;
+}
+
+.icon {
+  width: 3.2rem;
+  height: 3.2rem;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 1.1rem;
+  border-radius: 0.9rem;
+  color: var(--color-blue-700);
+  background: var(--color-blue-50);
+}
+
+.card p,
+.card h1,
+.card > span:not(.icon) {
+  margin: 0;
+}
+
+.card p {
+  color: var(--color-blue-600);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.card h1 {
+  margin-top: 0.4rem;
+  color: var(--color-slate-950);
+  font-size: 2rem;
+  letter-spacing: -0.045em;
+}
+
+.card > span:not(.icon) {
+  display: block;
+  margin-top: 0.7rem;
+  color: var(--color-slate-500);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.card a {
+  min-height: 2.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.4rem;
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.8rem;
+  color: var(--color-blue-700);
+  font-size: 0.8rem;
+  font-weight: 680;
+  text-decoration: none;
+}
+
+.card a:hover {
+  background: var(--color-blue-50);
+}
+
+.card a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+

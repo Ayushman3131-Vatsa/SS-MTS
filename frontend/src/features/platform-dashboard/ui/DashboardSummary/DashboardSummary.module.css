@@ -1,0 +1,136 @@
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.secondaryGrid {
+  margin-top: 1rem;
+}
+
+.card {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  border: 1px solid var(--color-slate-200);
+  border-radius: 1rem;
+  padding: 1.15rem;
+  background: var(--color-white);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.035);
+}
+
+.icon {
+  width: 2.45rem;
+  height: 2.45rem;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 0.72rem;
+  color: var(--color-blue-700);
+  background: var(--color-blue-50);
+}
+
+.secondaryIcon {
+  color: var(--color-slate-600);
+  background: var(--color-slate-100);
+}
+
+.cardBody {
+  min-width: 0;
+}
+
+.cardBody p,
+.cardBody span {
+  margin: 0;
+  color: var(--color-slate-500);
+}
+
+.cardBody p {
+  min-height: 2.25em;
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.15;
+}
+
+.cardBody strong {
+  display: block;
+  margin-top: 0.28rem;
+  color: var(--color-slate-950);
+  font-size: clamp(1.45rem, 2vw, 1.9rem);
+  font-weight: 710;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+}
+
+.cardBody > span {
+  display: block;
+  margin-top: 0.4rem;
+  overflow: hidden;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health {
+  display: flex !important;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 1rem !important;
+  letter-spacing: -0.02em !important;
+}
+
+.health > span {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.success {
+  color: #15803d !important;
+}
+
+.warning {
+  color: #b45309 !important;
+}
+
+.danger {
+  color: var(--color-danger-700) !important;
+}
+
+.neutral {
+  color: var(--color-slate-500) !important;
+}
+
+@media (max-width: 74rem) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 34rem) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cardBody p {
+    min-height: auto;
+  }
+}
+

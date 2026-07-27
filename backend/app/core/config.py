@@ -1,0 +1,77 @@
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BACKEND_DIRECTORY = Path(__file__).resolve().parents[2]
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=BACKEND_DIRECTORY / ".env",
+        extra="ignore",
+    )
+
+    database_url: str = "postgresql+asyncpg://postgres:admin@localhost:5432/multi_tenant_poc"
+
+    jwt_secret_key: str = "change-me-to-a-long-random-string"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60
+
+    environment: str = "development"
+
+    browser_session_expire_minutes: int = Field(default=60, ge=1, le=1440)
+    session_cookie_name: str = Field(
+        default="mt_session",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+    csrf_cookie_name: str = Field(
+        default="mt_csrf",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+
+    auth_rate_limit_window_minutes: int = Field(default=15, ge=1, le=60)
+    auth_account_failure_limit: int = Field(default=5, ge=1, le=100)
+    auth_ip_failure_limit: int = Field(default=20, ge=1, le=1000)
+    auth_lockout_minutes: int = Field(default=15, ge=1, le=1440)
+
+    max_request_body_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+
+    @property
+    def is_development(self) -> bool:
+        return self.environment.strip().lower() in {
+            "dev",
+            "development",
+            "local",
+            "test",
+            "testing",
+        }
+
+    @property
+    def secure_cookies(self) -> bool:
+        return not self.is_development
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        if self.session_cookie_name == self.csrf_cookie_name:
+            raise ValueError("SESSION_COOKIE_NAME and CSRF_COOKIE_NAME must be different")
+        if not self.is_development and (
+            self.jwt_secret_key == "change-me-to-a-long-random-string"
+            or len(self.jwt_secret_key) < 32
+        ):
+            raise ValueError(
+                "JWT_SECRET_KEY must be a unique secret of at least 32 characters "
+                "outside development and test environments"
+            )
+        return self
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

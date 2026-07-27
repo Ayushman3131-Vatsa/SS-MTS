@@ -1,0 +1,66 @@
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  background:
+    radial-gradient(circle at center, var(--color-blue-50), transparent 27rem),
+    var(--color-white);
+}
+
+.icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  display: grid;
+  place-items: center;
+  margin: 3rem 0 1.2rem;
+  border-radius: 1rem;
+  color: var(--color-danger-700);
+  background: var(--color-danger-50);
+}
+
+.page > p {
+  margin: 0;
+  color: var(--color-danger-700);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.page h1 {
+  max-width: 36rem;
+  margin: 0.6rem 0 0;
+  color: var(--color-slate-950);
+  font-size: clamp(1.9rem, 4vw, 3rem);
+  letter-spacing: -0.045em;
+}
+
+.page > span {
+  max-width: 32rem;
+  margin-top: 1rem;
+  color: var(--color-slate-500);
+  line-height: 1.65;
+}
+
+.page a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.8rem;
+  border-radius: var(--radius-md);
+  padding: 0.72rem 1rem;
+  color: var(--color-white);
+  background: var(--color-blue-600);
+  font-size: 0.88rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.page a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}

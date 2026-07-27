@@ -1,0 +1,46 @@
+import { describe, expect, it } from "vitest";
+
+import { getPrincipalHome } from "./routing";
+import type { SessionPrincipal } from "./session";
+
+const tenantPrincipal = (
+  role: "Tenant Admin" | "Project Manager" | "Employee",
+): SessionPrincipal => ({
+  principal_type: "tenant_user",
+  principal_id: "d94f8e58-05d0-4df1-868b-69a843c5d3a7",
+  name: "Avery Morgan",
+  email: "avery@example.com",
+  role,
+  tenant: {
+    tenant_id: "63e6c159-3c6c-43bb-856a-8ed53e21dabe",
+    org_name: "Northstar Labs",
+    workspace_slug: "northstar-labs",
+    offerings: [],
+  },
+});
+
+describe("getPrincipalHome", () => {
+  it.each(["Tenant Admin", "Project Manager"] as const)(
+    "routes %s to the tenant overview",
+    (role) => {
+      expect(getPrincipalHome(tenantPrincipal(role))).toBe("/app/overview");
+    },
+  );
+
+  it("routes employees to My Work", () => {
+    expect(getPrincipalHome(tenantPrincipal("Employee"))).toBe("/app/my-work");
+  });
+
+  it("routes platform administrators to the platform console", () => {
+    expect(
+      getPrincipalHome({
+        principal_type: "platform_admin",
+        principal_id: "d94f8e58-05d0-4df1-868b-69a843c5d3a7",
+        name: "Platform Operator",
+        email: "operator@example.com",
+        role: "Platform Admin",
+        tenant: null,
+      }),
+    ).toBe("/platform");
+  });
+});
