@@ -1,0 +1,308 @@
+.page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(25rem, 0.92fr) minmax(34rem, 1.08fr);
+  background: var(--color-white);
+}
+
+.brandPanel {
+  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: clamp(2rem, 4vw, 3.8rem);
+  color: var(--color-slate-300);
+  background:
+    radial-gradient(circle at 82% 12%, rgb(37 99 235 / 0.2), transparent 31%),
+    linear-gradient(145deg, #111827 0%, #0b1220 58%, #101828 100%);
+}
+
+.brandPanel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.018) 1px, transparent 1px);
+  background-size: 3.5rem 3.5rem;
+  mask-image: linear-gradient(to bottom, transparent, black 25%, transparent);
+}
+
+.brandTop,
+.story,
+.copyright {
+  position: relative;
+  z-index: 1;
+}
+
+.brandTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.secureLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 999px;
+  padding: 0.38rem 0.65rem;
+  color: var(--color-slate-300);
+  background: rgb(255 255 255 / 0.04);
+  font-size: 0.74rem;
+  font-weight: 620;
+}
+
+.story {
+  width: min(100%, 34rem);
+  margin: auto 0;
+  padding: 4.5rem 0 3.5rem;
+}
+
+.kicker {
+  margin: 0 0 1rem;
+  color: var(--color-blue-300);
+  font-size: 0.75rem;
+  font-weight: 720;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.story h1 {
+  margin: 0;
+  color: var(--color-white);
+  font-size: clamp(2.3rem, 4.2vw, 4rem);
+  font-weight: 670;
+  letter-spacing: -0.055em;
+  line-height: 1.04;
+}
+
+.story > p:not(.kicker) {
+  max-width: 31rem;
+  margin: 1.5rem 0 0;
+  color: var(--color-slate-400);
+  font-size: clamp(0.96rem, 1.3vw, 1.08rem);
+  line-height: 1.7;
+}
+
+.network {
+  position: relative;
+  width: min(100%, 28rem);
+  height: 10.5rem;
+  margin: 2.25rem 0 1.7rem;
+}
+
+.boundary {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgb(96 165 250 / 0.17);
+  border-radius: 1.4rem;
+  background: rgb(255 255 255 / 0.018);
+  box-shadow: inset 0 0 2.4rem rgb(37 99 235 / 0.04);
+}
+
+.node {
+  position: absolute;
+  z-index: 2;
+  width: 1.4rem;
+  height: 1.4rem;
+  display: grid;
+  place-items: center;
+  border: 3px solid #16233a;
+  border-radius: 50%;
+  background: var(--color-blue-400);
+  box-shadow: 0 0 0 1px rgb(147 197 253 / 0.36);
+}
+
+.nodeA {
+  left: 12%;
+  top: 29%;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-width: 6px;
+  color: var(--color-white);
+  background: var(--color-blue-600);
+}
+
+.nodeB {
+  left: 48%;
+  top: 18%;
+}
+
+.nodeC {
+  left: 75%;
+  top: 55%;
+}
+
+.nodeD {
+  left: 45%;
+  top: 72%;
+}
+
+.line {
+  position: absolute;
+  z-index: 1;
+  height: 1px;
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--color-blue-500), rgb(96 165 250 / 0.18));
+}
+
+.lineA {
+  left: 20%;
+  top: 43%;
+  width: 31%;
+  transform: rotate(-15deg);
+}
+
+.lineB {
+  left: 50%;
+  top: 29%;
+  width: 32%;
+  transform: rotate(30deg);
+}
+
+.lineC {
+  left: 20%;
+  top: 50%;
+  width: 31%;
+  transform: rotate(35deg);
+}
+
+.trustLine {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  color: var(--color-blue-300);
+}
+
+.trustLine div {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.trustLine strong {
+  color: var(--color-slate-200);
+  font-size: 0.82rem;
+}
+
+.trustLine span {
+  color: var(--color-slate-500);
+  font-size: 0.75rem;
+}
+
+.copyright {
+  margin: 0;
+  color: var(--color-slate-600);
+  font-size: 0.72rem;
+}
+
+.formPanel {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem clamp(1.5rem, 6vw, 6.5rem);
+  background:
+    radial-gradient(circle at 90% 5%, rgb(239 246 255 / 0.9), transparent 25rem),
+    var(--color-white);
+}
+
+.mobileBrand {
+  width: 100%;
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobileBrand > span {
+  color: var(--color-slate-500);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.formContainer {
+  width: min(100%, 28.5rem);
+  margin: auto;
+  padding: 3.5rem 0;
+}
+
+.formHeader {
+  margin-bottom: 2rem;
+}
+
+.formHeader p {
+  margin: 0 0 0.75rem;
+  color: var(--color-blue-600);
+  font-size: 0.75rem;
+  font-weight: 740;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.formHeader h2 {
+  margin: 0;
+  color: var(--color-slate-950);
+  font-size: clamp(1.8rem, 3vw, 2.25rem);
+  font-weight: 690;
+  letter-spacing: -0.045em;
+  line-height: 1.15;
+}
+
+.formHeader span {
+  display: block;
+  margin-top: 0.78rem;
+  color: var(--color-slate-500);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.formFooter {
+  margin: 0;
+  color: var(--color-slate-400);
+  font-size: 0.72rem;
+}
+
+@media (max-width: 58rem) {
+  .page {
+    display: block;
+    background: var(--color-slate-50);
+  }
+
+  .brandPanel {
+    display: none;
+  }
+
+  .formPanel {
+    min-height: 100dvh;
+    padding: 1.5rem max(1.25rem, env(safe-area-inset-left));
+    background:
+      radial-gradient(circle at 100% 0%, var(--color-blue-50), transparent 24rem),
+      var(--color-white);
+  }
+
+  .mobileBrand {
+    display: flex;
+  }
+
+  .formContainer {
+    padding: 3rem 0;
+  }
+}
+
+@media (max-width: 30rem) {
+  .formPanel {
+    align-items: stretch;
+  }
+
+  .formContainer {
+    padding: 2.5rem 0 2rem;
+  }
+
+  .formHeader {
+    margin-bottom: 1.6rem;
+  }
+}

@@ -1,0 +1,36 @@
+.page {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1.1rem;
+  color: var(--color-slate-600);
+  background: var(--color-slate-50);
+}
+
+.page p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.spinner {
+  width: 1.85rem;
+  height: 1.85rem;
+  margin-top: 0.75rem;
+  border: 2px solid var(--color-slate-200);
+  border-top-color: var(--color-blue-600);
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.8s;
+  }
+}

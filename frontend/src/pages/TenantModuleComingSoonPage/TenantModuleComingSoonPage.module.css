@@ -1,0 +1,9 @@
+.page { width: min(100% - 2rem, 62rem); margin: 0 auto; padding: clamp(2rem, 6vw, 5rem) 0; }
+.page > a { display: inline-flex; align-items: center; gap: .35rem; color: var(--color-slate-500); font-size: .7rem; font-weight: 650; text-decoration: none; }
+.page section { margin-top: 1.2rem; border: 1px solid var(--color-slate-200); border-radius: 1rem; padding: clamp(2rem, 6vw, 4.5rem); background: var(--color-white); box-shadow: var(--shadow-sm); }
+.page section > span { width: 3.2rem; height: 3.2rem; display: grid; place-items: center; border-radius: .9rem; color: var(--color-blue-700); background: var(--color-blue-50); }
+.page p { margin: 1.3rem 0 0; color: var(--color-blue-600); font-size: .68rem; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.page h1 { margin: .4rem 0 0; color: var(--color-slate-950); font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -.05em; }
+.page section > div { max-width: 35rem; margin-top: .8rem; color: var(--color-slate-500); font-size: .85rem; line-height: 1.7; }
+.page aside { display: flex; align-items: center; gap: .4rem; margin-top: 2rem; border: 1px dashed var(--color-slate-300); border-radius: .75rem; padding: 1rem; color: var(--color-slate-500); font-size: .72rem; }
+.page aside strong { color: var(--color-slate-800); }

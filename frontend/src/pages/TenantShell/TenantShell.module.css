@@ -1,0 +1,77 @@
+.shell {
+  min-height: 100dvh;
+  display: grid;
+  grid-template: "topbar topbar" 4.5rem "sidebar main" minmax(calc(100dvh - 4.5rem), auto) / 16rem minmax(0, 1fr);
+  background: var(--color-slate-50);
+}
+
+.topbar {
+  z-index: 40;
+  grid-area: topbar;
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--color-slate-200);
+  padding: 0 clamp(1rem, 3vw, 2rem);
+  background: rgb(255 255 255 / .92);
+  backdrop-filter: blur(14px);
+}
+
+.brand, .identity { display: flex; align-items: center; gap: .75rem; }
+.brand > button { display: none; border: 0; padding: .45rem; color: var(--color-slate-600); background: transparent; }
+.identity > span { display: grid; justify-items: end; line-height: 1.25; }
+.identity strong { font-size: .78rem; }
+.identity small { color: var(--color-slate-500); font-size: .65rem; }
+.identity i { width: 2.15rem; height: 2.15rem; display: grid; place-items: center; border: 1px solid var(--color-blue-200); border-radius: 50%; color: var(--color-blue-700); background: var(--color-blue-50); font-size: .78rem; font-style: normal; font-weight: 750; }
+
+.sidebar {
+  z-index: 30;
+  grid-area: sidebar;
+  position: sticky;
+  top: 4.5rem;
+  height: calc(100dvh - 4.5rem);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #1e293b;
+  padding: 1rem .8rem;
+  color: var(--color-white);
+  background: radial-gradient(circle at 10% 92%, rgb(37 99 235 / .18), transparent 12rem), #0f172a;
+}
+
+.workspace { display: flex; align-items: center; gap: .65rem; padding: .2rem .35rem 1rem; }
+.workspace > span { width: 2rem; height: 2rem; flex: 0 0 auto; display: grid; place-items: center; border-radius: .55rem; color: var(--color-blue-300); background: rgb(37 99 235 / .15); }
+.workspace > div { min-width: 0; display: grid; flex: 1; }
+.workspace strong, .workspace small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace strong { font-size: .72rem; }
+.workspace small { color: var(--color-slate-400); font-size: .6rem; }
+.workspace > button { display: none; border: 0; padding: .4rem; color: var(--color-slate-300); background: transparent; }
+
+.sidebar nav { min-height: 0; display: grid; align-content: start; gap: .18rem; overflow-y: auto; }
+.sidebar nav p { margin: .8rem .55rem .3rem; color: var(--color-slate-500); font-size: .58rem; font-weight: 720; letter-spacing: .11em; text-transform: uppercase; }
+.sidebar nav a { min-height: 2.55rem; display: flex; align-items: center; gap: .7rem; border: 1px solid transparent; border-radius: .6rem; padding: .58rem .7rem; color: var(--color-slate-300); font-size: .72rem; font-weight: 590; text-decoration: none; }
+.sidebar nav a:hover { color: var(--color-white); background: rgb(255 255 255 / .055); }
+.sidebar nav a.active { border-color: rgb(96 165 250 / .16); color: var(--color-white); background: rgb(37 99 235 / .2); }
+.sidebar nav a.active svg { color: var(--color-blue-300); }
+.sidebar nav a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.license { display: flex; align-items: center; gap: .6rem; margin-top: auto; border: 1px solid rgb(148 163 184 / .12); border-radius: .7rem; padding: .7rem; color: var(--color-slate-400); background: rgb(255 255 255 / .035); }
+.license span { min-width: 0; display: grid; }
+.license strong { color: var(--color-slate-300); font-size: .64rem; }
+.license small { font-size: .55rem; }
+.main { min-width: 0; grid-area: main; }
+.error { border-bottom: 1px solid var(--color-danger-200); padding: .7rem 1.5rem; color: var(--color-danger-800); background: var(--color-danger-50); font-size: .75rem; }
+.backdrop { display: none; }
+
+@media (max-width: 44rem) {
+  .shell { display: block; padding-top: 4.5rem; }
+  .topbar { position: fixed; inset: 0 0 auto; height: 4.5rem; }
+  .brand > button { display: grid; }
+  .identity > span, .identity i { display: none; }
+  .sidebar { position: fixed; top: 0; bottom: 0; left: 0; width: min(18rem, calc(100vw - 3rem)); height: 100dvh; visibility: hidden; transform: translateX(-105%); transition: transform 180ms ease, visibility 0s linear 180ms; }
+  .sidebar.open { visibility: visible; transform: translateX(0); transition-delay: 0s; }
+  .workspace > button { display: grid; }
+  .backdrop { z-index: 50; position: fixed; inset: 0; display: block; border: 0; background: rgb(2 6 23 / .58); }
+}

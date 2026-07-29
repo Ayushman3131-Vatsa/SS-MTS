@@ -1,0 +1,249 @@
+.page {
+  width: min(100%, 96rem);
+  margin: 0 auto;
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.page > [role="alert"],
+.page > section,
+.page > .skeleton {
+  margin-top: 1rem;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.pageHeader p,
+.pageHeader h1,
+.pageHeader > div > span {
+  margin: 0;
+}
+
+.pageHeader p {
+  color: var(--color-blue-600);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.pageHeader h1 {
+  margin-top: 0.24rem;
+  color: var(--color-slate-950);
+  font-size: clamp(1.75rem, 3vw, 2.4rem);
+  font-weight: 710;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+}
+
+.pageHeader > div > span {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--color-slate-500);
+  font-size: 0.82rem;
+}
+
+.actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.filters {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.filters label {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.filters label > span {
+  color: var(--color-slate-500);
+  font-size: 0.65rem;
+  font-weight: 620;
+}
+
+.filters select {
+  min-height: 2.55rem;
+  border: 1px solid var(--color-slate-300);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 2rem 0.5rem 0.7rem;
+  color: var(--color-slate-700);
+  background: var(--color-white);
+  font: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.filters select:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.refreshGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.refreshGroup > span {
+  color: var(--color-slate-500);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.errorState {
+  min-height: 28rem;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--color-slate-300);
+  border-radius: 1rem;
+  padding: 2rem;
+  background: var(--color-white);
+  text-align: center;
+}
+
+.errorState > div {
+  max-width: 28rem;
+}
+
+.errorState h2 {
+  margin: 0;
+  color: var(--color-slate-900);
+  font-size: 1.2rem;
+}
+
+.errorState p {
+  margin: 0.6rem 0 1.2rem;
+  color: var(--color-slate-500);
+  font-size: 0.85rem;
+}
+
+.skeleton {
+  display: grid;
+  gap: 1rem;
+}
+
+.skeletonCards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.skeletonCards div,
+.skeletonChart,
+.skeletonRow div {
+  border: 1px solid var(--color-slate-200);
+  border-radius: 1rem;
+  background:
+    linear-gradient(
+      100deg,
+      var(--color-white) 20%,
+      var(--color-slate-100) 38%,
+      var(--color-white) 56%
+    );
+  background-size: 240% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.skeletonCards div {
+  height: 7.2rem;
+}
+
+.skeletonChart {
+  height: 23rem;
+}
+
+.skeletonRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.skeletonRow div {
+  height: 20rem;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@keyframes shimmer {
+  to {
+    background-position-x: -240%;
+  }
+}
+
+@media (max-width: 78rem) {
+  .pageHeader {
+    display: grid;
+  }
+
+  .actions {
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 74rem) {
+  .skeletonCards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 42rem) {
+  .actions {
+    display: grid;
+    align-items: stretch;
+  }
+
+  .filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filters select {
+    width: 100%;
+  }
+
+  .refreshGroup {
+    justify-content: space-between;
+  }
+
+  .skeletonRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 34rem) {
+  .page {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .filters,
+  .skeletonCards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonCards div,
+  .skeletonChart,
+  .skeletonRow div {
+    animation: none;
+  }
+}

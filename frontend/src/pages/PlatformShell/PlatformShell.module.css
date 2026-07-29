@@ -1,0 +1,343 @@
+.shell {
+  min-height: 100dvh;
+  display: grid;
+  grid-template:
+    "topbar topbar" 4.5rem
+    "sidebar main" minmax(calc(100dvh - 4.5rem), auto) /
+    16rem minmax(0, 1fr);
+  color: var(--color-slate-900);
+  background: var(--color-slate-50);
+}
+
+.topbar {
+  z-index: 40;
+  grid-area: topbar;
+  position: sticky;
+  top: 0;
+  height: 4.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  border-bottom: 1px solid var(--color-slate-200);
+  padding: 0 clamp(1rem, 3vw, 2rem);
+  background: rgb(255 255 255 / 0.9);
+  backdrop-filter: blur(14px);
+}
+
+.brandGroup,
+.identity {
+  display: flex;
+  align-items: center;
+}
+
+.brandGroup {
+  gap: 0.7rem;
+}
+
+.identity {
+  gap: 0.8rem;
+}
+
+.identityText {
+  display: grid;
+  justify-items: end;
+  gap: 0.08rem;
+}
+
+.identityText strong {
+  font-size: 0.82rem;
+  font-weight: 680;
+}
+
+.identityText span {
+  color: var(--color-slate-500);
+  font-size: 0.72rem;
+}
+
+.avatar {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-blue-200);
+  border-radius: 50%;
+  color: var(--color-blue-700);
+  background: var(--color-blue-50);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.menuButton,
+.closeButton {
+  display: none;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 0.55rem;
+  color: var(--color-slate-600);
+  background: transparent;
+  cursor: pointer;
+}
+
+.menuButton:focus-visible,
+.closeButton:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.sidebar {
+  z-index: 30;
+  grid-area: sidebar;
+  position: sticky;
+  top: 4.5rem;
+  height: calc(100dvh - 4.5rem);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #1e293b;
+  padding: 1.25rem 0.9rem;
+  color: var(--color-white);
+  background:
+    radial-gradient(circle at 10% 92%, rgb(37 99 235 / 0.18), transparent 12rem),
+    #0f172a;
+}
+
+.sidebarHeader > div {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.sidebarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.2rem 0.45rem 1.25rem;
+}
+
+.sidebarHeader > div > div,
+.sidebarFooter > div {
+  display: grid;
+}
+
+.sidebarHeader strong,
+.sidebarFooter strong {
+  font-size: 0.75rem;
+  font-weight: 680;
+}
+
+.sidebarHeader span:not(.sidebarIcon),
+.sidebarFooter span {
+  color: var(--color-slate-400);
+  font-size: 0.64rem;
+}
+
+.sidebarIcon {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(147 197 253 / 0.25);
+  border-radius: 0.55rem;
+  color: var(--color-blue-300);
+  background: rgb(37 99 235 / 0.12);
+}
+
+.sidebar nav {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.navLabel {
+  margin: 0 0.6rem 0.4rem;
+  color: var(--color-slate-500);
+  font-size: 0.61rem;
+  font-weight: 720;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.navItem {
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.78rem;
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  padding: 0.7rem 0.75rem;
+  color: var(--color-slate-300);
+  font-size: 0.79rem;
+  font-weight: 590;
+  text-decoration: none;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.navItem:hover {
+  color: var(--color-white);
+  background: rgb(255 255 255 / 0.055);
+}
+
+.navItem:focus-visible {
+  outline: 3px solid rgb(96 165 250 / 0.42);
+  outline-offset: 2px;
+}
+
+.navItem.active {
+  border-color: rgb(96 165 250 / 0.16);
+  color: var(--color-white);
+  background: rgb(37 99 235 / 0.2);
+}
+
+.navItem.active svg {
+  color: var(--color-blue-300);
+}
+
+.sidebarFooter {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: auto;
+  border: 1px solid rgb(148 163 184 / 0.12);
+  border-radius: 0.7rem;
+  padding: 0.75rem;
+  color: var(--color-slate-400);
+  background: rgb(255 255 255 / 0.035);
+}
+
+.main {
+  min-width: 0;
+  grid-area: main;
+}
+
+.logoutError {
+  border-bottom: 1px solid var(--color-danger-200);
+  padding: 0.7rem 1.5rem;
+  color: var(--color-danger-800);
+  background: var(--color-danger-50);
+  font-size: 0.8rem;
+}
+
+.backdrop {
+  display: none;
+}
+
+@media (max-width: 68rem) and (min-width: 44.001rem) {
+  .shell {
+    grid-template-columns: 4.75rem minmax(0, 1fr);
+  }
+
+  .sidebar {
+    align-items: center;
+    padding-right: 0.65rem;
+    padding-left: 0.65rem;
+  }
+
+  .sidebarHeader {
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .sidebarHeader > div > div,
+  .sidebarFooter > div,
+  .navLabel,
+  .navItem span {
+    display: none;
+  }
+
+  .sidebar nav {
+    width: 100%;
+  }
+
+  .navItem {
+    justify-content: center;
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .sidebarFooter {
+    justify-content: center;
+    padding: 0.7rem;
+  }
+}
+
+@media (max-width: 44rem) {
+  .shell {
+    display: block;
+    padding-top: 4.5rem;
+  }
+
+  .topbar {
+    position: fixed;
+    right: 0;
+    left: 0;
+  }
+
+  .menuButton,
+  .closeButton {
+    display: grid;
+  }
+
+  .sidebar {
+    z-index: 60;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(18rem, calc(100vw - 3rem));
+    height: 100dvh;
+    visibility: hidden;
+    padding-top: 1rem;
+    box-shadow: 20px 0 60px rgb(2 6 23 / 0.3);
+    transform: translateX(-105%);
+    transition:
+      transform 200ms ease,
+      visibility 0s linear 200ms;
+  }
+
+  .drawerOpen {
+    visibility: visible;
+    transform: translateX(0);
+    transition-delay: 0s;
+  }
+
+  .closeButton {
+    color: var(--color-slate-300);
+  }
+
+  .backdrop {
+    z-index: 50;
+    position: fixed;
+    inset: 0;
+    display: block;
+    border: 0;
+    padding: 0;
+    background: rgb(2 6 23 / 0.56);
+    cursor: default;
+  }
+}
+
+@media (max-width: 34rem) {
+  .topbar {
+    padding-right: 0.6rem;
+    padding-left: 0.85rem;
+  }
+
+  .identityText,
+  .avatar {
+    display: none;
+  }
+
+  .identity {
+    gap: 0.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navItem,
+  .sidebar {
+    transition: none;
+  }
+}

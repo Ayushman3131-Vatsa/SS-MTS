@@ -1,15 +1,19 @@
-# Multi-Tenant Task Management POC
+# Multi-Tenant Task Management
 
-A multi-tenant task/project management API built on the "shared database,
-shared schema, `tenant_id` discriminator" model described in the
-architecture doc. Stack: **FastAPI + SQLAlchemy 2.0 (async) + asyncpg +
-Alembic + PostgreSQL**, JWT-based auth.
+A secure multi-tenant task/project application built on a shared PostgreSQL
+schema with a `tenant_id` discriminator. The backend uses **FastAPI +
+SQLAlchemy 2.0 (async) + asyncpg + Alembic + PostgreSQL**. The browser client
+uses **React + Vite + TypeScript + CSS Modules**.
+
+API clients can continue to use bearer JWTs. The React application uses
+revocable opaque sessions stored in HttpOnly cookies; raw browser-session
+tokens are never stored in PostgreSQL or exposed to JavaScript.
 
 ## 1. Architecture recap
 
 - **Isolation model**: one Postgres database, one set of tables; every
   tenant-owned row carries a `tenant_id`. There is no per-tenant schema or
-  database (yet) — see [`app/db/session.py`](app/db/session.py) for the seam
+  database (yet) — see [`backend/app/db/session.py`](backend/app/db/session.py) for the seam
   where that would change if it ever needs to.
 - **Role hierarchy**: `platform_admins` (not tenant-scoped) creates
   `tenants` + seeds the first `Tenant Admin` user in one transaction. A
@@ -19,15 +23,16 @@ Alembic + PostgreSQL**, JWT-based auth.
   column; every UPDATE is a single `WHERE ... AND version = :version`
   statement — see any `update_*` function in a module's `service.py`.
 - **Audit trail**: `audit_logs` rows are written in the same transaction as
-  the mutation they describe (see [`app/common/audit.py`](app/common/audit.py)).
+  the mutation they describe (see [`backend/app/common/audit.py`](backend/app/common/audit.py)).
 
 ## 2. Project layout
 
 ```
-app/
+backend/
+  app/
   core/                 # cross-cutting infra, no domain knowledge
     config.py              Settings (reads .env via pydantic-settings)
-    security.py            password hashing (bcrypt) + JWT encode/decode
+    security.py            Argon2id/bcrypt, password policy, normalization, JWT
     exceptions.py          AppError hierarchy (404/403/409/422/401) -> HTTP status codes
 
   db/                    # database connection layer, kept isolated on purpose
@@ -38,15 +43,18 @@ app/
 
   models/                # SQLAlchemy ORM models, one file per table, mirrors the DDL exactly
     platform_admin.py, tenant.py, user.py, project.py, task.py,
-    task_comment.py, daily_progress_log.py, audit_log.py
+    task_comment.py, daily_progress_log.py, audit_log.py,
+    browser_session.py, auth_rate_limit.py, subscription_plan.py,
+    tenant_subscription.py, tenant_database_allocation.py,
+    platform_activity_event.py
 
   schemas/               # Pydantic request/response models, one file per domain
-    auth.py, tenant.py, user.py, project.py, task.py, comment.py, daily_log.py
+    auth.py, tenant.py, platform_dashboard.py, user.py, project.py, task.py,
+    comment.py, daily_log.py
 
   middleware/
-    auth_middleware.py     JWTGateMiddleware — runs in front of EVERY request
-                            (except /auth/*, /docs, /health). Verifies the JWT
-                            signature/expiry only; does not touch the DB.
+    auth_middleware.py     accepts bearer JWTs or opaque browser sessions
+    security_middleware.py request-size limits and response security headers
 
   common/                # security & cross-module helpers shared by all modules
     deps.py                Principal dataclass + get_current_principal (DB-backed
@@ -60,6 +68,7 @@ app/
 
   modules/               # one folder per domain, each with router + service + repository
     auth/                  login endpoints (admin + tenant user)
+    platform_dashboard/    cross-tenant metrics, charts, activity, readiness
     tenants/               tenant onboarding (platform-admin only)
     users/                 user provisioning (Tenant Admin only)
     projects/              project CRUD
@@ -72,16 +81,30 @@ app/
       service.py   business rules, orchestration, calls repository + audit
       repository.py  raw SQLAlchemy queries, returns ORM objects — no business logic
 
-  main.py                FastAPI() app, registers JWTGateMiddleware, exception
-                          handler, and every module's router
+  main.py                FastAPI app, middleware, error handlers, OpenAPI, routers
 
-alembic/
-  env.py                 Alembic's own (separate, throwaway) DB connection for migrations
-  versions/0001_initial_schema.py   the DDL from the architecture doc, applied verbatim
+  alembic/
+    env.py                 Alembic's own (separate, throwaway) DB connection for migrations
+    versions/              initial schema plus secure-login migrations
 
-scripts/
-  seed_platform_admin.py   one-off CLI to bootstrap the very first platform_admins row
-                            (Administrator is "seeded/self" — nothing in the API creates one)
+  scripts/
+    seed_platform_admin.py   one-off CLI to bootstrap the very first platform_admins row
+                              (Administrator is "seeded/self" — nothing in the API creates one)
+    cleanup_auth_state.py     scheduled cleanup for expired/revoked sessions and
+                              stale login-throttle counters
+
+  tests/                   backend unit and PostgreSQL integration tests
+  alembic.ini              migration configuration
+  requirements.txt         Python dependencies
+  .env.example             backend environment template
+
+frontend/
+  src/app/                routing and providers
+  src/pages/              login, PlatformShell, dashboard and destinations
+  src/features/auth/      forms, validation, and login operations
+  src/features/platform-dashboard/ typed API, polling state, charts and activity
+  src/entities/session/   principal state and role routing
+  src/shared/             API transport, reusable UI, and design tokens
 ```
 
 **Why `repository` / `service` / `router` per module?** Keeps DB queries,
@@ -91,39 +114,56 @@ knows how a connection is actually obtained.
 
 ## 3. Setup
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+```powershell
+Set-Location backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 
-cp .env.example .env   # then edit DATABASE_URL / JWT_SECRET_KEY
+Copy-Item .env.example .env   # then set DATABASE_URL and a strong JWT_SECRET_KEY
+python -m alembic upgrade head
 
-alembic upgrade head                       # creates all tables + indexes
+python -m scripts.seed_platform_admin `
+  --name "Platform Admin" `
+  --email admin@platform.io
+# Enter and confirm the password at the hidden prompt.
 
-python -m scripts.seed_platform_admin \
-  --name "Platform Admin" --email admin@platform.io --password "AdminPass123"
+python -m uvicorn app.main:app --reload     # API: http://127.0.0.1:8000/docs
 
-uvicorn app.main:app --reload              # http://localhost:8000/docs
+Set-Location ..\frontend
+npm install
+npm run dev                                # UI: http://127.0.0.1:5173
 ```
+
+Vite proxies `/api` to FastAPI during development. Deploy the frontend and
+`/api` behind one public origin in production.
+
+The backend liveness endpoint is `GET http://127.0.0.1:8000/health`, and
+API/database readiness is available at `/health/ready`. The interactive API
+documentation is at `/docs`. The React landing page is served by Vite at
+`http://127.0.0.1:5173`.
 
 ## 4. API reference
 
-All endpoints except `/auth/*`, `/health`, `/docs` require
-`Authorization: Bearer <token>`. "Role" below is enforced twice: once by the
-route's `Depends()` (coarse role gate) and again inside the service layer
-for resource-level scoping (e.g. a PM can only touch projects they manage).
+Protected endpoints accept either `Authorization: Bearer <token>` or the
+opaque browser session. Role and tenant scope are enforced again after
+authentication by database-backed dependencies and service rules.
 
 ### Auth (`/auth`) — public
 
 | Method | Path | Description |
 |---|---|---|
+| POST | `/auth/session/platform` | Platform Admin browser login using secure cookies |
+| POST | `/auth/session/tenant` | Tenant-user browser login by workspace slug |
+| GET | `/auth/session` | Restore the current browser principal |
+| DELETE | `/auth/session` | Revoke the browser session and clear cookies |
 | POST | `/auth/admin/login` | Platform admin login → JWT |
 | POST | `/auth/login` | Tenant user login (requires `tenant_id` + `email` + `password` — see note below) |
 
 > Tenant user emails are only unique **within** a tenant
-> (`UNIQUE(tenant_id, email)`), not globally, so login must disambiguate
-> which tenant. This POC takes `tenant_id` explicitly in the login request;
-> a real deployment would resolve it from a subdomain/org-slug instead.
+> (`UNIQUE(tenant_id, email)`), not globally. The compatibility bearer
+> endpoint uses `tenant_id`; the browser endpoint uses the tenant's friendly,
+> unique `workspace_slug`.
 
 ### Tenants (`/tenants`) — platform admin only
 
@@ -132,6 +172,16 @@ for resource-level scoping (e.g. a PM can only touch projects they manage).
 | POST | `/tenants` | Create a tenant + seed its first Tenant Admin, one transaction |
 | GET | `/tenants` | List all tenants |
 | GET | `/tenants/{tenant_id}` | Get one tenant |
+
+### Platform dashboard — platform admin only
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/platform/dashboard` | Dynamic KPI, chart, and recent-activity snapshot |
+| GET | `/health/ready` | Minimal public API/PostgreSQL readiness probe |
+
+See [docs/platform-dashboard.md](docs/platform-dashboard.md) for metric
+definitions, filters, persistence, and frontend refresh behavior.
 
 ### Users (`/users`) — tenant-scoped
 
@@ -179,12 +229,69 @@ for resource-level scoping (e.g. a PM can only touch projects they manage).
 
 ## 5. Request flow / security
 
-1. `JWTGateMiddleware` (app/middleware/auth_middleware.py) intercepts every
-   request first, rejecting anything without a valid, unexpired JWT.
-2. `get_current_principal` (app/common/deps.py) then re-loads the user/admin
+1. Authentication middleware accepts a signed bearer JWT or looks up the
+   SHA-256 digest of an opaque browser cookie in `browser_sessions`.
+2. Unsafe cookie-authenticated requests must also supply the matching CSRF
+   cookie through `X-CSRF-Token`.
+3. `get_current_principal` (`backend/app/common/deps.py`) then re-loads the user/admin
    from the DB on every request — a deactivated user's still-valid token
    stops working immediately rather than at next expiry.
-3. `require_roles(...)` gates coarse role access at the route level.
-4. Each module's `service.py` does the fine-grained, resource-level check
-   (`app/common/authz.py`) — e.g. an Employee can only reach tasks they're
+4. `require_roles(...)` gates coarse role access at the route level.
+5. Each module's `service.py` does the fine-grained, resource-level check
+   (`backend/app/common/authz.py`) — e.g. an Employee can only reach tasks they're
    assigned to, never another employee's.
+
+Account creation enforces a 12–128 character password with uppercase,
+lowercase, number, and special-character requirements plus common/contextual
+password rejection. Login deliberately does not reapply creation-time
+strength rules, so valid legacy passwords remain usable.
+
+See [docs/authentication.md](docs/authentication.md) for browser sessions,
+CSRF, validation, throttling, and frontend module boundaries.
+
+## 6. Verification
+
+Fast checks:
+
+```powershell
+Set-Location backend
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m alembic check
+
+Set-Location ..\frontend
+npm.cmd run test
+npm.cmd run lint
+npm.cmd run build
+npm.cmd run test:e2e
+```
+
+The PostgreSQL integration suite creates and drops only a random database
+matching `mt_auth_test_<32 hex characters>`:
+
+```powershell
+$env:TEST_DATABASE_URL = $env:DATABASE_URL
+Set-Location backend
+.\.venv\Scripts\python.exe -m unittest tests.integration.test_postgres_auth -v
+```
+
+The database role used for that suite needs `CREATEDB`. See
+[backend/tests/integration/README.md](backend/tests/integration/README.md) for its safety
+contract.
+
+## 7. Production operations
+
+- Serve the compiled frontend and `/api` behind one HTTPS origin.
+- Set `ENVIRONMENT=production`, a unique `JWT_SECRET_KEY` of at least 32
+  characters, and matching backend/frontend CSRF cookie names.
+- Configure Uvicorn to trust forwarding headers only from the actual reverse
+  proxy, for example:
+
+  ```powershell
+  Set-Location backend
+  python -m uvicorn app.main:app --proxy-headers --forwarded-allow-ips "10.0.0.10"
+  ```
+
+  Never use `*` unless the application server is otherwise network-isolated;
+  the canonical client IP is used for shared login throttling.
+- Run `python -m scripts.cleanup_auth_state` from `backend/` on a schedule (every 15 minutes is
+  a suitable default).
