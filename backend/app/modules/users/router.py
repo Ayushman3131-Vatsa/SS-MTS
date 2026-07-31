@@ -17,8 +17,7 @@ async def create_user(
     principal: Principal = Depends(require_roles("Tenant Admin")),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
-    user = await service.create_user(db, principal, payload)
-    return UserResponse.model_validate(user)
+    return service.to_user_response(await service.create_user(db, principal, payload))
 
 
 @router.get("", response_model=list[UserResponse])
@@ -26,7 +25,7 @@ async def list_users(
     principal: Principal = Depends(require_tenant_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[UserResponse]:
-    return [UserResponse.model_validate(u) for u in await service.list_users(db, principal)]
+    return [service.to_user_response(u) for u in await service.list_users(db, principal)]
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -35,8 +34,7 @@ async def get_user(
     principal: Principal = Depends(require_tenant_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
-    user = await service.get_user_or_404(db, principal, user_id)
-    return UserResponse.model_validate(user)
+    return service.to_user_response(await service.get_user_or_404(db, principal, user_id))
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
@@ -46,5 +44,4 @@ async def update_user(
     principal: Principal = Depends(require_roles("Tenant Admin")),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
-    user = await service.update_user(db, principal, user_id, payload)
-    return UserResponse.model_validate(user)
+    return service.to_user_response(await service.update_user(db, principal, user_id, payload))

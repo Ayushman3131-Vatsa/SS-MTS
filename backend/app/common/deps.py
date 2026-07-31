@@ -5,10 +5,11 @@ from typing import Literal
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.roles import get_active_role_name
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.db.session import get_db
 from app.models.platform_admin import PlatformAdmin
-from app.models.user import User
+from app.models.user_account import UserAccount
 
 
 @dataclass(frozen=True)
@@ -46,15 +47,18 @@ async def get_current_principal(request: Request, db: AsyncSession = Depends(get
             user_id = uuid.UUID(str(claims["sub"]))
         except (KeyError, TypeError, ValueError):
             raise UnauthorizedError("Authentication required") from None
-        user = await db.get(User, {"tenant_id": tenant_id, "user_id": user_id})
-        if user is None or user.status != "Active":
+        user = await db.get(UserAccount, user_id)
+        if user is None or user.tenant_id != tenant_id or not user.is_active:
+            raise UnauthorizedError("Authentication required")
+        role_name = await get_active_role_name(db, user.id)
+        if role_name is None:
             raise UnauthorizedError("Authentication required")
         return Principal(
             type="user",
-            id=user.user_id,
+            id=user.id,
             email=user.email,
             tenant_id=user.tenant_id,
-            role=user.role,
+            role=role_name,
         )
 
     raise UnauthorizedError("Authentication required")

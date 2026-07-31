@@ -13,7 +13,9 @@ class DailyProgressLog(Base):
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "task_id"], ["tasks.tenant_id", "tasks.task_id"], name="fk_log_task"),
         ForeignKeyConstraint(
-            ["tenant_id", "updated_by_user_id"], ["users.tenant_id", "users.user_id"], name="fk_log_author"
+            ["tenant_id", "updated_by_user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
+            name="fk_log_author",
         ),
         Index("idx_daily_logs_task_lookup", "tenant_id", "task_id"),
     )

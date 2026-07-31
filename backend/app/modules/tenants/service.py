@@ -26,12 +26,13 @@ from app.models.enums import (
     TenantStatus,
     TenantSubscriptionStatus,
 )
+from app.common.roles import assign_role, seed_tenant_system_roles
 from app.models.platform_activity_event import PlatformActivityEvent
 from app.models.tenant import Tenant
 from app.models.tenant_database_allocation import TenantDatabaseAllocation
 from app.models.tenant_offering import TenantOffering
 from app.models.tenant_subscription import TenantSubscription
-from app.models.user import User
+from app.models.user_account import UserAccount
 from app.modules.tenants import repository
 from app.schemas.tenant import (
     OfferingResponse,
@@ -203,16 +204,20 @@ async def create_tenant(
         for offering in offerings
     )
 
-    tenant_admin = User(
+    roles = await seed_tenant_system_roles(db, tenant.tenant_id)
+    tenant_admin_role = roles["TENANT_ADMIN"]
+
+    tenant_admin = UserAccount(
         tenant_id=tenant.tenant_id,
-        name=payload.tenant_admin_name,
+        display_name=payload.tenant_admin_name,
         email=admin_email,
         password_hash=hash_password(payload.tenant_admin_password),
-        role="Tenant Admin",
         created_by_user_id=None,
+        is_active=True,
     )
     db.add(tenant_admin)
     await db.flush()
+    await assign_role(db, user_id=tenant_admin.id, role=tenant_admin_role, assigned_by=None)
 
     db.add(
         PlatformActivityEvent(
@@ -257,10 +262,14 @@ async def create_tenant(
         db,
         tenant_id=tenant.tenant_id,
         entity_type="user",
-        entity_id=tenant_admin.user_id,
+        entity_id=tenant_admin.id,
         action="CREATE",
         changed_by_user_id=None,
-        new_value={"name": tenant_admin.name, "email": tenant_admin.email, "role": tenant_admin.role},
+        new_value={
+            "name": tenant_admin.display_name,
+            "email": tenant_admin.email,
+            "role": "Tenant Admin",
+        },
     )
 
     await db.commit()

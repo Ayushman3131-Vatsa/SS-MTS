@@ -27,13 +27,19 @@ class Task(Base):
             ["tenant_id", "parent_task_id"], ["tasks.tenant_id", "tasks.task_id"], name="fk_parent_task"
         ),
         ForeignKeyConstraint(
-            ["tenant_id", "assignee_id"], ["users.tenant_id", "users.user_id"], name="fk_task_assignee"
+            ["tenant_id", "assignee_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
+            name="fk_task_assignee",
         ),
         ForeignKeyConstraint(
-            ["tenant_id", "technical_lead_id"], ["users.tenant_id", "users.user_id"], name="fk_task_tech_lead"
+            ["tenant_id", "technical_lead_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
+            name="fk_task_tech_lead",
         ),
         ForeignKeyConstraint(
-            ["tenant_id", "functional_lead_id"], ["users.tenant_id", "users.user_id"], name="fk_task_func_lead"
+            ["tenant_id", "functional_lead_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
+            name="fk_task_func_lead",
         ),
         CheckConstraint(
             "status IN ('New', 'Assigned', 'In Progress', 'Blocked', 'On Hold', 'Under Review', "

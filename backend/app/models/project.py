@@ -10,8 +10,16 @@ from app.db.base import Base
 class Project(Base):
     __tablename__ = "projects"
     __table_args__ = (
-        ForeignKeyConstraint(["tenant_id", "pm_id"], ["users.tenant_id", "users.user_id"], name="fk_project_pm"),
-        ForeignKeyConstraint(["tenant_id", "dm_id"], ["users.tenant_id", "users.user_id"], name="fk_project_dm"),
+        ForeignKeyConstraint(
+            ["tenant_id", "pm_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
+            name="fk_project_pm",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "dm_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
+            name="fk_project_dm",
+        ),
         CheckConstraint(
             "status IN ('Not Started', 'In Progress', 'Completed', 'On Hold', 'Cancelled')",
             name="check_project_status",

@@ -12,7 +12,7 @@ from app.models.tenant import Tenant
 from app.models.tenant_database_allocation import TenantDatabaseAllocation
 from app.models.tenant_subscription import TenantSubscription
 from app.models.tenant_offering import TenantOffering
-from app.models.user import User
+from app.models.user_account import UserAccount
 
 
 @dataclass(frozen=True)
@@ -62,8 +62,8 @@ class TenantReadModel:
 
 def _tenant_details_statement():
     user_count = (
-        select(func.count(User.user_id))
-        .where(User.tenant_id == Tenant.tenant_id)
+        select(func.count(UserAccount.id))
+        .where(UserAccount.tenant_id == Tenant.tenant_id)
         .correlate(Tenant)
         .scalar_subquery()
     )
