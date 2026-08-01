@@ -1,16 +1,13 @@
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import CITEXT, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.models.base import Base
-
-if TYPE_CHECKING:
-    from app.models.employee import Employee
 
 
 class UserAccount(Base):
@@ -36,13 +33,6 @@ class UserAccount(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
 
-    employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("employees.id", ondelete="SET NULL"),
-        unique=True,
-        nullable=True,
-        index=True,
-    )
     created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("user_accounts.id", ondelete="SET NULL"),
@@ -62,8 +52,6 @@ class UserAccount(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
-
-    employee: Mapped[Optional["Employee"]] = relationship("Employee")
 
     @property
     def user_id(self) -> uuid.UUID:

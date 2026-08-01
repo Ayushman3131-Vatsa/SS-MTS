@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
     )
 
-    # --- user_accounts (employee_id FK added after employees exist) ---
+    # --- user_accounts ---
     op.create_table(
         "user_accounts",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -46,7 +46,6 @@ def upgrade() -> None:
         sa.Column("email", postgresql.CITEXT(), nullable=False),
         sa.Column("password_hash", sa.String(length=255), nullable=False),
         sa.Column("display_name", sa.String(length=255), nullable=False),
-        sa.Column("employee_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("created_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("force_pw_reset", sa.Boolean(), nullable=False, server_default=sa.text("false")),
@@ -71,7 +70,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("tenant_id", "email", name="uq_tenant_user_email"),
         sa.UniqueConstraint("tenant_id", "id", name="uq_user_accounts_tenant_id"),
-        sa.UniqueConstraint("employee_id"),
     )
     op.create_index("ix_user_accounts_tenant_id", "user_accounts", ["tenant_id"])
     op.create_index("ix_user_accounts_email", "user_accounts", ["email"])
@@ -438,20 +436,7 @@ def upgrade() -> None:
         for index in table.indexes:
             index.create(bind=conn)
         for fk in table.foreign_key_constraints:
-            # Defer user_accounts.employee_id → employees until after employees exists.
-            if table.name == "user_accounts" and "employee_id" in fk.column_keys:
-                continue
             conn.execute(AddConstraint(fk))
-
-    # Now that employees exists, attach optional employee_id FK
-    op.create_foreign_key(
-        "fk_user_accounts_employee_id",
-        "user_accounts",
-        "employees",
-        ["employee_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
 
 
 def downgrade() -> None:
