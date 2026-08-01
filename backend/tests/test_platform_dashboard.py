@@ -8,12 +8,12 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI, Response as FastAPIResponse
 from pydantic import ValidationError
 
-from app.common.deps import Principal, require_platform_admin
-from app.core.exceptions import ForbiddenError
+from app.auth.deps import Principal, require_platform_admin
+from app.common.exceptions import ForbiddenError
 from app.main import app as production_app
-from app.modules.platform_dashboard import router as dashboard_router
-from app.modules.platform_dashboard import service
-from app.schemas.platform_dashboard import (
+from app.tenant_management.dashboard import router as dashboard_router
+from app.tenant_management.dashboard import service
+from app.tenant_management.schemas.platform_dashboard import (
     ActivityTenant,
     DashboardCharts,
     DashboardFilters,

@@ -4,21 +4,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
-from app.core.config import get_settings
-from app.core.exceptions import AppError
-from app.middleware.auth_middleware import AuthenticationMiddleware, PUBLIC_ROUTES
-from app.middleware.security_middleware import (
+from app.common.config import get_settings
+from app.common.exceptions import AppError
+from app.auth.middleware import AuthenticationMiddleware, PUBLIC_ROUTES
+from app.common.middleware.security_middleware import (
     RequestSizeLimitMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.modules.auth.router import router as auth_router
-from app.modules.comments.router import router as comments_router
-from app.modules.daily_logs.router import router as daily_logs_router
-from app.modules.projects.router import router as projects_router
-from app.modules.platform_dashboard.router import router as platform_dashboard_router
-from app.modules.tasks.router import router as tasks_router
-from app.modules.tenants.router import router as tenants_router
-from app.modules.users.router import router as users_router
+from app.auth.router import router as auth_router
+from app.task_management.router import router as task_management_router
+from app.tenant_management.router import router as tenant_management_router
 
 app = FastAPI(title="Multi-Tenant Task Management POC", version="0.1.0")
 
@@ -69,13 +64,8 @@ async def health() -> dict:
 
 
 app.include_router(auth_router)
-app.include_router(tenants_router)
-app.include_router(users_router)
-app.include_router(projects_router)
-app.include_router(platform_dashboard_router)
-app.include_router(tasks_router)
-app.include_router(comments_router)
-app.include_router(daily_logs_router)
+app.include_router(tenant_management_router)
+app.include_router(task_management_router)
 
 
 def custom_openapi() -> dict:

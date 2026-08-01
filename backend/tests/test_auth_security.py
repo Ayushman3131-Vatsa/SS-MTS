@@ -9,25 +9,25 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.core.config import Settings
-from app.middleware.auth_middleware import (
+from app.common.config import Settings
+from app.auth.middleware import (
     AuthenticationMiddleware,
     PUBLIC_ROUTES,
     db_manager,
 )
-from app.middleware.security_middleware import (
+from app.common.middleware.security_middleware import (
     RequestSizeLimitMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.modules.auth import router as auth_router
-from app.modules.auth.service import (
+from app.auth.login import router as auth_router
+from app.auth.login.service import (
     BrowserAuthenticationResult,
     _create_browser_session,
     browser_session_csrf_is_valid,
     digest_secret,
     platform_account_throttle_key,
 )
-from app.schemas.auth import (
+from app.auth.schemas.auth import (
     PlatformSessionLoginRequest,
     SessionPrincipalResponse,
     TenantSessionLoginRequest,
@@ -269,7 +269,7 @@ class TransportMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(db_manager, "session_for", new=fake_session_for),
             patch(
-                "app.middleware.auth_middleware.auth_service.get_active_browser_session",
+                "app.auth.middleware.auth_service.get_active_browser_session",
                 new=AsyncMock(return_value=session),
             ),
         ):
@@ -316,11 +316,11 @@ class TransportMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(db_manager, "session_for", new=fake_session_for),
             patch(
-                "app.middleware.auth_middleware.auth_service.get_active_browser_session",
+                "app.auth.middleware.auth_service.get_active_browser_session",
                 new=AsyncMock(return_value=session),
             ),
             patch(
-                "app.middleware.auth_middleware.auth_service.touch_browser_session",
+                "app.auth.middleware.auth_service.touch_browser_session",
                 new=touch,
             ),
         ):
@@ -378,7 +378,7 @@ class TransportMiddlewareTests(unittest.IsolatedAsyncioTestCase):
             await send({"type": "http.response.body", "body": b"{}"})
 
         with patch(
-            "app.middleware.security_middleware.get_settings",
+            "app.common.middleware.security_middleware.get_settings",
             return_value=Settings(_env_file=None, environment="development"),
         ):
             app = SecurityHeadersMiddleware(downstream)

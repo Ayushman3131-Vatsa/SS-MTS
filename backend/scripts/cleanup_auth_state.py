@@ -7,8 +7,8 @@ Schedule this command periodically (for example, every 15 minutes):
 
 import asyncio
 
-from app.db.session import db_manager
-from app.modules.auth.service import cleanup_expired_auth_state
+from app.common.db.session import db_manager
+from app.auth.login.service import cleanup_expired_auth_state
 
 
 async def _cleanup() -> None:

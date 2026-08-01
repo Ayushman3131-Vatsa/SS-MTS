@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from passlib.hash import bcrypt
 from pydantic import ValidationError
 
-from app.core.security import (
+from app.common.security import (
     hash_password,
     normalize_email,
     normalize_workspace_slug,
@@ -18,10 +18,10 @@ from app.core.security import (
     verify_password_and_update,
 )
 from app.main import request_validation_error_handler
-from app.models.enums import SubscriptionPlanCode
-from app.schemas.comment import CommentCreateRequest
-from app.schemas.tenant import TenantCreateRequest
-from app.schemas.user import UserCreateRequest
+from app.tenant_management.models.enums import SubscriptionPlanCode
+from app.task_management.schemas.comment import CommentCreateRequest
+from app.tenant_management.schemas.tenant import TenantCreateRequest
+from app.auth.schemas.user import UserCreateRequest
 from scripts.seed_platform_admin import _prompt_for_password
 
 

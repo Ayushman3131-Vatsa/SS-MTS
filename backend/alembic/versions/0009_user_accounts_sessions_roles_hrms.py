@@ -353,8 +353,8 @@ def upgrade() -> None:
     # sorted_tables ordering, so create bodies first, then foreign keys.
     from sqlalchemy.schema import AddConstraint, CreateTable
 
-    from app.db.base import Base
-    import app.models  # noqa: F401
+    from app.common.db.base import Base
+    import app.db.all_models  # noqa: F401
 
     already = {
         "user_accounts",
