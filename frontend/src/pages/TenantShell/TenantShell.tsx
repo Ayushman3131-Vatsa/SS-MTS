@@ -12,6 +12,7 @@ import {
   Menu,
   Monitor,
   ReceiptText,
+  SlidersHorizontal,
   UserRound,
   Users,
   UserSearch,
@@ -133,6 +134,15 @@ export const TenantShell = () => {
             <LayoutDashboard size={17} />
             <span>{principal.role === "Employee" ? "My work" : "Overview"}</span>
           </NavLink>
+          {principal.role === "Tenant Admin" && (
+            <NavLink
+              to="/app/configurations"
+              className={({ isActive }) => isActive ? styles.active : ""}
+            >
+              <SlidersHorizontal size={17} />
+              <span>Configurations</span>
+            </NavLink>
+          )}
           {principal.tenant.offerings.length > 0 && <p>Licensed offerings</p>}
           {principal.tenant.offerings.map((offering) => {
             const Icon = iconByKey[offering.icon_key] ?? BriefcaseBusiness;

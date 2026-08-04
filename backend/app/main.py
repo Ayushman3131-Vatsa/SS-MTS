@@ -13,6 +13,7 @@ from app.middleware.security_middleware import (
 )
 from app.modules.auth.router import router as auth_router
 from app.modules.comments.router import router as comments_router
+from app.modules.configurations.router import router as configurations_router
 from app.modules.daily_logs.router import router as daily_logs_router
 from app.modules.projects.router import router as projects_router
 from app.modules.platform_dashboard.router import router as platform_dashboard_router
@@ -75,6 +76,7 @@ app.include_router(projects_router)
 app.include_router(platform_dashboard_router)
 app.include_router(tasks_router)
 app.include_router(comments_router)
+app.include_router(configurations_router)
 app.include_router(daily_logs_router)
 
 

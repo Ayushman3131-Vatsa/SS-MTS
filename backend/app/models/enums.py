@@ -49,6 +49,18 @@ class PlatformActorType(str, Enum):
     SYSTEM = "SYSTEM"
 
 
+class ConfigTemplateType(str, Enum):
+    EMAIL = "EMAIL"
+    LETTER = "LETTER"
+    NOTIFICATION = "NOTIFICATION"
+    OTHER = "OTHER"
+
+
+class ConfigCategoryStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+
+
 LEGACY_SUBSCRIPTION_PLAN_CODES: dict[str, SubscriptionPlanCode] = {
     "free": SubscriptionPlanCode.FREE,
     "basic": SubscriptionPlanCode.BASIC,

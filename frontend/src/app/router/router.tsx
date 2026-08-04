@@ -22,6 +22,20 @@ const PlatformDashboardPage = lazy(async () => {
   return { default: page.PlatformDashboardPage };
 });
 
+const ConfigurationsPage = lazy(async () => {
+  const page = await import(
+    "../../pages/ConfigurationsPage/ConfigurationsPage"
+  );
+  return { default: page.ConfigurationsPage };
+});
+
+const ConfigTemplateEditorPage = lazy(async () => {
+  const page = await import(
+    "../../pages/ConfigTemplateEditorPage/ConfigTemplateEditorPage"
+  );
+  return { default: page.ConfigTemplateEditorPage };
+});
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -82,6 +96,27 @@ export const router = createBrowserRouter([
               {
                 path: "overview",
                 element: <TenantLandingPage variant="overview" />,
+              },
+            ],
+          },
+          {
+            element: <ProtectedRoute roles={["Tenant Admin"]} />,
+            children: [
+              {
+                path: "configurations",
+                element: (
+                  <Suspense fallback={<RouteLoader label="Loading configurations…" />}>
+                    <ConfigurationsPage />
+                  </Suspense>
+                ),
+              },
+              {
+                path: "configurations/templates/:templateId",
+                element: (
+                  <Suspense fallback={<RouteLoader label="Loading template editor…" />}>
+                    <ConfigTemplateEditorPage />
+                  </Suspense>
+                ),
               },
             ],
           },
