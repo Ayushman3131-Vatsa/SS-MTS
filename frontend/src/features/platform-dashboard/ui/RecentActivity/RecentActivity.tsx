@@ -45,6 +45,24 @@ const readMetadata = (
   return null;
 };
 
+const readOfferingName = (metadata: Record<string, unknown>): string => {
+  const offering = metadata.offering;
+  if (offering && typeof offering === "object") {
+    const displayName = (offering as Record<string, unknown>).display_name;
+    if (typeof displayName === "string" && displayName.trim()) {
+      return displayName.trim();
+    }
+  }
+  return "Offering";
+};
+
+const formatEventType = (eventType: string): string =>
+  eventType
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
 const getActivityCopy = (event: PlatformActivity): ActivityCopy => {
   const tenantName = event.tenant.tenant_name;
 
@@ -80,6 +98,7 @@ const getActivityCopy = (event: PlatformActivity): ActivityCopy => {
         tone: "red",
       };
     case "TENANT_REACTIVATED":
+    case "TENANT_ACTIVATED":
       return {
         detail: "Platform access was restored.",
         icon: RotateCcw,
@@ -99,6 +118,58 @@ const getActivityCopy = (event: PlatformActivity): ActivityCopy => {
         icon: CircleX,
         title: `Database setup failed for ${tenantName}`,
         tone: "red",
+      };
+    case "OFFERING_GRANTED": {
+      const offeringName = readOfferingName(event.metadata);
+      return {
+        detail: "Time-bound workspace access was granted.",
+        icon: CircleCheck,
+        title: `${offeringName} granted to ${tenantName}`,
+        tone: "green",
+      };
+    }
+    case "OFFERING_SUSPENDED": {
+      const offeringName = readOfferingName(event.metadata);
+      return {
+        detail: "Offering access was temporarily paused.",
+        icon: Ban,
+        title: `${offeringName} suspended for ${tenantName}`,
+        tone: "orange",
+      };
+    }
+    case "OFFERING_RESUMED": {
+      const offeringName = readOfferingName(event.metadata);
+      return {
+        detail: "Offering access was restored.",
+        icon: RotateCcw,
+        title: `${offeringName} resumed for ${tenantName}`,
+        tone: "green",
+      };
+    }
+    case "OFFERING_DEACTIVATED": {
+      const offeringName = readOfferingName(event.metadata);
+      return {
+        detail: "The entitlement was deactivated.",
+        icon: CircleX,
+        title: `${offeringName} deactivated for ${tenantName}`,
+        tone: "red",
+      };
+    }
+    case "OFFERING_EXPIRED": {
+      const offeringName = readOfferingName(event.metadata);
+      return {
+        detail: "The entitlement reached its expiry date.",
+        icon: CircleX,
+        title: `${offeringName} expired for ${tenantName}`,
+        tone: "slate",
+      };
+    }
+    default:
+      return {
+        detail: "A platform event was recorded.",
+        icon: RefreshCcw,
+        title: `${tenantName}: ${formatEventType(event.event_type)}`,
+        tone: "slate",
       };
   }
 };

@@ -5,6 +5,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Integer,
     Index,
     String,
     UniqueConstraint,
@@ -84,3 +85,4 @@ class Tenant(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")

@@ -12,6 +12,7 @@ export interface SessionTenant {
   tenant_id: string;
   org_name: string;
   workspace_slug: string;
+  status: "ACTIVE" | "SUSPENDED";
   offerings: SessionOffering[];
 }
 

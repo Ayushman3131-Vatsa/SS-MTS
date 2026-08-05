@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ArrowLeft,
   Building2,
+  Clock3,
   Check,
   Eye,
   EyeOff,
@@ -10,6 +11,7 @@ import {
   PackageCheck,
   Save,
   UserRound,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -117,6 +119,7 @@ const registrationSchema = z.object({
 });
 
 type RegistrationFormValues = z.infer<typeof registrationSchema>;
+type OfferingWindow = { starts_at: string; ends_at: string };
 
 const emptyDefaults: RegistrationFormValues = {
   org_name: "",
@@ -149,18 +152,50 @@ const emptyDefaults: RegistrationFormValues = {
 
 const textOrNull = (value: string): string | null => value.trim() || null;
 
+const localDateTimeValue = (date: Date): string => {
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
+};
+
+const createOfferingWindows = (
+  offerings: TenantRegistrationOptions["offerings"],
+): Record<string, OfferingWindow> => {
+  const start = new Date();
+  const end = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const defaultWindow = {
+    starts_at: localDateTimeValue(start),
+    ends_at: localDateTimeValue(end),
+  };
+  return Object.fromEntries(
+    offerings.map((offering) => [offering.offering_id, { ...defaultWindow }]),
+  );
+};
+
+const accessDuration = (window: OfferingWindow | undefined): string => {
+  if (!window) return "Dates required";
+  const start = new Date(window.starts_at).getTime();
+  const end = new Date(window.ends_at).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return "Check dates";
+  }
+  const days = Math.ceil((end - start) / 86_400_000);
+  return `${days}-day access`;
+};
+
 export const TenantRegistrationPage = () => {
   const navigate = useNavigate();
   const [options, setOptions] = useState<TenantRegistrationOptions | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [offeringWindows, setOfferingWindows] = useState<Record<string, OfferingWindow>>({});
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
     register,
     reset,
     setError,
+    setValue,
     watch,
   } = useForm<RegistrationFormValues>({
     resolver: zodResolver(registrationSchema),
@@ -174,6 +209,7 @@ export const TenantRegistrationPage = () => {
       .getRegistrationOptions(controller.signal)
       .then((data) => {
         setOptions(data);
+        setOfferingWindows(createOfferingWindows(data.offerings));
         reset({
           ...emptyDefaults,
           status: data.defaults.status,
@@ -199,6 +235,48 @@ export const TenantRegistrationPage = () => {
     () => options?.plans.find((plan) => plan.code === selectedPlanCode),
     [options, selectedPlanCode],
   );
+  const selectedOfferingIds = watch("offering_ids");
+  const selectedOfferings = useMemo(
+    () =>
+      options?.offerings.filter((offering) =>
+        selectedOfferingIds.includes(offering.offering_id),
+      ) ?? [],
+    [options, selectedOfferingIds],
+  );
+
+  const updateOfferingWindow = (
+    offeringId: string,
+    field: keyof OfferingWindow,
+    value: string,
+  ) => {
+    setOfferingWindows((current) => ({
+      ...current,
+      [offeringId]: {
+        ...(current[offeringId] ?? { starts_at: "", ends_at: "" }),
+        [field]: value,
+      },
+    }));
+  };
+
+  const removeOffering = (offeringId: string) => {
+    setValue(
+      "offering_ids",
+      selectedOfferingIds.filter((selectedId) => selectedId !== offeringId),
+      { shouldDirty: true, shouldValidate: true },
+    );
+  };
+
+  const resetRegistration = () => {
+    if (!options) return;
+    reset({
+      ...emptyDefaults,
+      status: options.defaults.status,
+      subscription_plan_code: options.defaults.subscription_plan_code,
+      database_mode: options.defaults.database_mode,
+    });
+    setOfferingWindows(createOfferingWindows(options.offerings));
+    setSubmitError(null);
+  };
 
   const onSubmit = async (values: RegistrationFormValues) => {
     if (selectedPlan?.requires_end_date && !values.subscription_end_date) {
@@ -209,8 +287,34 @@ export const TenantRegistrationPage = () => {
     }
 
     setSubmitError(null);
+    const offeringGrants: NonNullable<TenantRegistrationPayload["offering_grants"]> = [];
+    for (const offeringId of values.offering_ids) {
+      const window = offeringWindows[offeringId];
+      if (!window) {
+        setSubmitError("Configure a validity window for every selected offering.");
+        return;
+      }
+      const startsAt = new Date(window.starts_at);
+      const endsAt = new Date(window.ends_at);
+      if (
+        !Number.isFinite(startsAt.getTime()) ||
+        !Number.isFinite(endsAt.getTime()) ||
+        endsAt <= startsAt ||
+        endsAt <= new Date()
+      ) {
+        setSubmitError("Every offering must have a future end date after its start date.");
+        return;
+      }
+      offeringGrants.push({
+        offering_id: offeringId,
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+      });
+    }
     const payload: TenantRegistrationPayload = {
       ...values,
+      offering_ids: undefined,
+      offering_grants: offeringGrants,
       tenant_code: values.tenant_code.toUpperCase(),
       workspace_slug: values.workspace_slug.toLowerCase(),
       subscription_ends_at: values.subscription_end_date
@@ -288,14 +392,7 @@ export const TenantRegistrationPage = () => {
             type="button"
             variant="secondary"
             disabled={isSubmitting}
-            onClick={() =>
-              reset({
-                ...emptyDefaults,
-                status: options.defaults.status,
-                subscription_plan_code: options.defaults.subscription_plan_code,
-                database_mode: options.defaults.database_mode,
-              })
-            }
+            onClick={resetRegistration}
           >
             Reset
           </Button>
@@ -486,36 +583,132 @@ export const TenantRegistrationPage = () => {
           </div>
         </section>
 
-        <section className={styles.section}>
-          <div className={styles.sectionHeading}>
-            <PackageCheck size={19} aria-hidden="true" />
-            <div>
-              <h2>Licensed offerings</h2>
-              <p>Only selected modules will appear in this tenant’s portal.</p>
+        <section className={`${styles.section} ${styles.offeringsSection}`}>
+          <div className={styles.offeringToolbar}>
+            <div className={styles.sectionHeading}>
+              <PackageCheck size={19} aria-hidden="true" />
+              <div>
+                <h2>Licensed offerings</h2>
+                <p>Select the products this tenant can access, then set their access periods.</p>
+              </div>
             </div>
+            <span className={styles.selectionCount} aria-live="polite">
+              {selectedOfferings.length} selected
+            </span>
           </div>
-          <div className={styles.offerings}>
-            {options.offerings.map((offering) => (
-              <label className={styles.offering} key={offering.offering_id}>
-                <input
-                  type="checkbox"
-                  value={offering.offering_id}
-                  {...register("offering_ids")}
-                />
-                <span className={styles.checkbox}><Check size={13} aria-hidden="true" /></span>
-                <span>
-                  <strong>{offering.display_name}</strong>
-                  <small>{offering.description}</small>
-                </span>
-              </label>
-            ))}
+          <div className={styles.offeringCatalog}>
+            {options.offerings.map((offering) => {
+              const isSelected = selectedOfferingIds.includes(offering.offering_id);
+              return (
+                <label
+                  className={`${styles.offeringCard} ${isSelected ? styles.selectedOffering : ""}`}
+                  key={offering.offering_id}
+                >
+                  <input
+                    type="checkbox"
+                    value={offering.offering_id}
+                    aria-label={`Select ${offering.display_name}`}
+                    {...register("offering_ids")}
+                  />
+                  <span className={styles.checkbox}>
+                    <Check size={13} aria-hidden="true" />
+                  </span>
+                  <span className={styles.offeringCopy}>
+                    <strong>{offering.display_name}</strong>
+                    <small>{offering.description}</small>
+                  </span>
+                  {isSelected && <span className={styles.selectedMark}>Selected</span>}
+                </label>
+              );
+            })}
           </div>
           {fieldError("offering_ids") && (
             <p className={styles.sectionError} role="alert">{fieldError("offering_ids")}</p>
           )}
+          <div className={styles.validityPanel}>
+            <div className={styles.validityHeader}>
+              <span className={styles.validityIcon}>
+                <Clock3 size={18} aria-hidden="true" />
+              </span>
+              <div>
+                <h3>Configure access windows</h3>
+                <p>Start and expiry are required. Enter local times; they are securely saved as UTC.</p>
+              </div>
+              <span className={styles.windowCount}>
+                {selectedOfferings.length} {selectedOfferings.length === 1 ? "module" : "modules"}
+              </span>
+            </div>
+            {selectedOfferings.length === 0 ? (
+              <div className={styles.validityEmpty}>
+                <Clock3 size={20} aria-hidden="true" />
+                <div>
+                  <strong>No offerings selected</strong>
+                  <span>Select a module above to configure its access period.</span>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.validityList}>
+                {selectedOfferings.map((offering, index) => {
+                  const window = offeringWindows[offering.offering_id];
+                  return (
+                    <article className={styles.validityRow} key={offering.offering_id}>
+                      <div className={styles.validityIdentity}>
+                        <span>{index + 1}</span>
+                        <div>
+                          <strong>{offering.display_name}</strong>
+                          <small>Licensed module</small>
+                        </div>
+                      </div>
+                      <div className={styles.windowFields}>
+                        <label>
+                          <span>Access starts</span>
+                          <input
+                            required
+                            type="datetime-local"
+                            aria-label={`${offering.display_name} access starts`}
+                            value={window?.starts_at ?? ""}
+                            onChange={(event) => updateOfferingWindow(
+                              offering.offering_id,
+                              "starts_at",
+                              event.target.value,
+                            )}
+                          />
+                        </label>
+                        <span className={styles.rangeConnector} aria-hidden="true">→</span>
+                        <label>
+                          <span>Access expires</span>
+                          <input
+                            required
+                            type="datetime-local"
+                            min={window?.starts_at}
+                            aria-label={`${offering.display_name} access expires`}
+                            value={window?.ends_at ?? ""}
+                            onChange={(event) => updateOfferingWindow(
+                              offering.offering_id,
+                              "ends_at",
+                              event.target.value,
+                            )}
+                          />
+                        </label>
+                      </div>
+                      <span className={styles.durationBadge}>{accessDuration(window)}</span>
+                      <button
+                        type="button"
+                        className={styles.removeOffering}
+                        aria-label={`Remove ${offering.display_name}`}
+                        onClick={() => removeOffering(offering.offering_id)}
+                      >
+                        <X size={16} aria-hidden="true" />
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </section>
 
-        <section className={styles.section}>
+        <section className={`${styles.section} ${styles.workspaceSection}`}>
           <div className={styles.sectionHeading}>
             <KeyRound size={19} aria-hidden="true" />
             <div>

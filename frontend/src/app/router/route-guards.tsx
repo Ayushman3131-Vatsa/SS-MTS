@@ -23,10 +23,12 @@ export const PublicOnlyRoute = () => {
 interface ProtectedRouteProps {
   area?: "platform" | "tenant";
   roles?: TenantRole[];
+  allowSuspendedTenant?: boolean;
 }
 
 export const ProtectedRoute = ({
   area,
+  allowSuspendedTenant = false,
   roles,
 }: ProtectedRouteProps) => {
   const { principal, status } = useSession();
@@ -45,6 +47,15 @@ export const ProtectedRoute = ({
 
   if (area === "tenant" && principal.principal_type !== "tenant_user") {
     return <Navigate to="/forbidden" replace />;
+  }
+
+  if (
+    area === "tenant" &&
+    principal.principal_type === "tenant_user" &&
+    principal.tenant.status === "SUSPENDED" &&
+    !allowSuspendedTenant
+  ) {
+    return <Navigate to="/app/suspended" replace />;
   }
 
   if (

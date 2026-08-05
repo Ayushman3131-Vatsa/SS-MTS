@@ -6,7 +6,7 @@ so a tenant never sees categories or templates for offerings it has not licensed
 
 import uuid
 
-from sqlalchemy import delete, select, func
+from sqlalchemy import delete, select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.config_category import ConfigCategory
@@ -51,6 +51,11 @@ async def get_categories_for_tenant(
             & (TenantOffering.tenant_id == tenant_id),
         )
         .where(ConfigCategory.status == "ACTIVE")
+        .where(
+            TenantOffering.status == "ACTIVE",
+            TenantOffering.starts_at <= func.now(),
+            or_(TenantOffering.ends_at.is_(None), TenantOffering.ends_at > func.now()),
+        )
         .order_by(ConfigCategory.sort_order, ConfigCategory.display_name)
     )
     result = await db.execute(stmt)
@@ -99,7 +104,12 @@ async def verify_category_belongs_to_tenant(
             (TenantOffering.offering_id == Offering.offering_id)
             & (TenantOffering.tenant_id == tenant_id),
         )
-        .where(ConfigCategory.category_id == category_id)
+        .where(
+            ConfigCategory.category_id == category_id,
+            TenantOffering.status == "ACTIVE",
+            TenantOffering.starts_at <= func.now(),
+            or_(TenantOffering.ends_at.is_(None), TenantOffering.ends_at > func.now()),
+        )
     )
     result = await db.execute(stmt)
     return (result.scalar() or 0) > 0

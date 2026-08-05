@@ -11,6 +11,7 @@ import { TenantLandingPage } from "../../pages/TenantLandingPage/TenantLandingPa
 import { TenantModuleComingSoonPage } from "../../pages/TenantModuleComingSoonPage/TenantModuleComingSoonPage";
 import { TenantRegistrationPage } from "../../pages/TenantRegistrationPage/TenantRegistrationPage";
 import { TenantShell } from "../../pages/TenantShell/TenantShell";
+import { SuspendedTenantPage } from "../../pages/SuspendedTenantPage/SuspendedTenantPage";
 import { RouteLoader } from "../../shared/ui/RouteLoader/RouteLoader";
 import { NotFoundRoute, RootRoute } from "./redirect-routes";
 import { ProtectedRoute, PublicOnlyRoute } from "./route-guards";
@@ -78,6 +79,15 @@ export const router = createBrowserRouter([
             element: <TenantDetailPage />,
           },
         ],
+      },
+    ],
+  },
+  {
+    element: <ProtectedRoute area="tenant" allowSuspendedTenant />,
+    children: [
+      {
+        path: "/app/suspended",
+        element: <SuspendedTenantPage />,
       },
     ],
   },

@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     auth_lockout_minutes: int = Field(default=15, ge=1, le=1440)
 
     max_request_body_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+    deactivated_offering_retention_days: int = Field(default=90, ge=1, le=3650)
 
     @property
     def is_development(self) -> bool:

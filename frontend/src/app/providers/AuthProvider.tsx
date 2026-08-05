@@ -16,9 +16,30 @@ import type {
 import { sessionApi } from "../../features/auth/api/session-api";
 import { ApiError } from "../../shared/api/errors";
 import { SESSION_EXPIRED_EVENT } from "../../shared/api/session-events";
+import { TENANT_ACCESS_CHANGED_EVENT } from "../../shared/api/session-events";
 
 const SESSION_EXPIRED_NOTICE =
   "Your session has expired. Sign in again to continue.";
+
+const accessNotice = (code: string | undefined) => {
+  switch (code) {
+    case "TENANT_SUSPENDED":
+      return "This workspace is suspended by the platform administrator. Contact support to restore access.";
+    case "OFFERING_EXPIRED":
+      return "This module entitlement has expired. Contact your platform administrator for a re-grant.";
+    case "OFFERING_SUSPENDED":
+      return "This module entitlement is suspended. Contact your platform administrator to resume it.";
+    case "OFFERING_DEACTIVATED":
+      return "This module entitlement has been deactivated. Contact your platform administrator for a new grant.";
+    case "OFFERING_NOT_STARTED":
+      return "This module entitlement has not started yet.";
+    case "OFFERING_NOT_ENTITLED":
+    case "OFFERING_NOT_EFFECTIVE":
+      return "This module is not currently enabled for your workspace.";
+    default:
+      return null;
+  }
+};
 
 export const AuthProvider = ({ children }: PropsWithChildren) => {
   const [status, setStatus] = useState<SessionStatus>("bootstrapping");
@@ -32,6 +53,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       const restoredPrincipal = await sessionApi.restore(signal);
       setPrincipal(restoredPrincipal);
       setStatus("authenticated");
+      setNotice(null);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         return;
@@ -40,7 +62,10 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       setPrincipal(null);
       setStatus("unauthenticated");
 
-      if (!(error instanceof ApiError && error.status === 401)) {
+      const accessMessage = error instanceof ApiError ? accessNotice(error.code) : null;
+      if (accessMessage) {
+        setNotice(accessMessage);
+      } else if (!(error instanceof ApiError && error.status === 401)) {
         setNotice(
           "We could not verify an existing session. You can still sign in.",
         );
@@ -64,6 +89,61 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     window.addEventListener(SESSION_EXPIRED_EVENT, handleExpiry);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpiry);
   }, []);
+
+  useEffect(() => {
+    const handleAccessChange = (event: Event) => {
+      const code = (event as CustomEvent<{ code?: string }>).detail?.code;
+      const message = accessNotice(code);
+      if (message) setNotice(message);
+      void bootstrap();
+    };
+    window.addEventListener(TENANT_ACCESS_CHANGED_EVENT, handleAccessChange);
+    return () => window.removeEventListener(TENANT_ACCESS_CHANGED_EVENT, handleAccessChange);
+  }, [bootstrap]);
+
+  const tenantStatus =
+    principal?.principal_type === "tenant_user"
+      ? principal.tenant.status
+      : null;
+
+  useEffect(() => {
+    if (tenantStatus === null) return;
+
+    let disposed = false;
+    const refreshTenantSession = async () => {
+      try {
+        const refreshedPrincipal = await sessionApi.restore();
+        if (disposed) return;
+        setPrincipal(refreshedPrincipal);
+        setStatus("authenticated");
+        if (
+          refreshedPrincipal.principal_type !== "tenant_user" ||
+          refreshedPrincipal.tenant.status === "ACTIVE"
+        ) {
+          setNotice(null);
+        }
+      } catch (error) {
+        if (disposed || !(error instanceof ApiError && error.status === 401)) {
+          return;
+        }
+        setPrincipal(null);
+        setStatus("unauthenticated");
+        setNotice(SESSION_EXPIRED_NOTICE);
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      void refreshTenantSession();
+    }, tenantStatus === "SUSPENDED" ? 10_000 : 30_000);
+    const handleFocus = () => void refreshTenantSession();
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [tenantStatus]);
 
   const loginTenant = useCallback(
     async (credentials: TenantLoginCredentials) => {

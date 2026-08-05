@@ -37,7 +37,7 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     headers = {"Cache-Control": "no-store"} if exc.status_code in {401, 403} else None
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.message},
+        content={"code": exc.code, "detail": exc.message},
         headers=headers,
     )
 

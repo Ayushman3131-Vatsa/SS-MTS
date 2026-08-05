@@ -4,6 +4,14 @@ import { apiRequest } from "../../../shared/api/client";
 import { InvalidApiResponseError } from "../../../shared/api/errors";
 import type {
   TenantRecord,
+  TenantListResponse,
+  TenantOfferingActionPayload,
+  TenantOfferingGrantPayload,
+  TenantOfferingRemovalPayload,
+  TenantOfferingEntitlement,
+  TenantOfferingEvent,
+  TenantStatusActionPayload,
+  OfferingCatalogEntry,
   TenantRegistrationOptions,
   TenantRegistrationPayload,
 } from "../model/tenants";
@@ -16,6 +24,34 @@ const offeringSchema = z.object({
   icon_key: z.string().min(1),
   route_slug: z.string().min(1),
   sort_order: z.number().int().nonnegative(),
+});
+
+const catalogOfferingSchema = offeringSchema.extend({
+  status: z.string().min(1),
+});
+
+const entitlementSchema = offeringSchema.extend({
+  entitlement_id: z.string().uuid(),
+  status: z.string().min(1),
+  starts_at: z.string(),
+  ends_at: z.string().nullable(),
+  suspended_at: z.string().nullable(),
+  deactivated_at: z.string().nullable(),
+  reason: z.string().nullable(),
+  version: z.number().int().positive(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+const eventSchema = z.object({
+  event_id: z.string().uuid(),
+  entitlement_id: z.string().uuid(),
+  tenant_id: z.string().uuid(),
+  event_type: z.string().min(1),
+  actor_admin_id: z.string().uuid().nullable(),
+  occurred_at: z.string(),
+  old_value: z.record(z.unknown()).nullable(),
+  new_value: z.record(z.unknown()).nullable(),
 });
 
 const decimalSchema = z
@@ -49,10 +85,18 @@ const tenantSchema = z.object({
   database_mode: z.string().min(1),
   database_provisioning_state: z.string().min(1),
   user_count: z.number().int().nonnegative(),
-  offerings: z.array(offeringSchema),
+  offerings: z.array(entitlementSchema),
   created_by_admin_id: z.string().uuid(),
   created_at: z.string(),
   updated_at: z.string(),
+  version: z.number().int().positive(),
+});
+
+const tenantListSchema = z.object({
+  items: z.array(tenantSchema),
+  page: z.number().int().positive(),
+  page_size: z.number().int().positive(),
+  total: z.number().int().nonnegative(),
 });
 
 const optionsSchema = z.object({
@@ -88,6 +132,11 @@ const parse = <T>(schema: z.ZodType<T>, payload: unknown): T => {
   return result.data;
 };
 
+const idempotencyKey = () =>
+  typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 export const tenantsApi = {
   getRegistrationOptions: async (
     signal?: AbortSignal,
@@ -105,10 +154,21 @@ export const tenantsApi = {
     };
   },
 
-  list: async (signal?: AbortSignal): Promise<TenantRecord[]> =>
+  list: async (
+    params: { page?: number; pageSize?: number; query?: string; status?: string } = {},
+    signal?: AbortSignal,
+  ): Promise<TenantListResponse> =>
     parse(
-      z.array(tenantSchema),
-      await apiRequest<unknown>("/tenants", { signal }),
+      tenantListSchema,
+      await apiRequest<unknown>(
+        `/tenants?${new URLSearchParams({
+          page: String(params.page ?? 1),
+          page_size: String(params.pageSize ?? 25),
+          ...(params.query ? { query: params.query } : {}),
+          ...(params.status ? { status: params.status } : {}),
+        })}`,
+        { signal },
+      ),
     ),
 
   get: async (tenantId: string, signal?: AbortSignal): Promise<TenantRecord> =>
@@ -126,5 +186,87 @@ export const tenantsApi = {
         method: "POST",
         body: payload,
       }),
+    ),
+
+  catalog: async (signal?: AbortSignal): Promise<OfferingCatalogEntry[]> =>
+    parse(z.array(catalogOfferingSchema), await apiRequest<unknown>("/tenants/offering-catalog", { signal })),
+
+  entitlements: async (
+    tenantId: string,
+    signal?: AbortSignal,
+  ): Promise<TenantOfferingEntitlement[]> =>
+    parse(
+      z.array(entitlementSchema),
+      await apiRequest<unknown>(`/tenants/${tenantId}/offering-entitlements`, { signal }),
+    ),
+
+  history: async (
+    tenantId: string,
+    signal?: AbortSignal,
+  ): Promise<TenantOfferingEvent[]> =>
+    parse(
+      z.array(eventSchema),
+      await apiRequest<unknown>(
+        `/tenants/${tenantId}/offering-entitlements/history`,
+        { signal },
+      ),
+    ),
+
+  grant: async (
+    tenantId: string,
+    payload: TenantOfferingGrantPayload,
+  ): Promise<TenantOfferingEntitlement> =>
+    parse(
+      entitlementSchema,
+      await apiRequest<unknown>(`/tenants/${tenantId}/offering-entitlements`, {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey() },
+        body: payload,
+      }),
+    ),
+
+  tenantAction: async (
+    tenantId: string,
+    action: "suspend" | "activate",
+    payload: TenantStatusActionPayload,
+  ): Promise<TenantRecord> =>
+    parse(
+      tenantSchema,
+      await apiRequest<unknown>(`/tenants/${tenantId}/${action}`, {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey() },
+        body: payload,
+      }),
+    ),
+
+  offeringAction: async (
+    tenantId: string,
+    entitlementId: string,
+    action: "suspend" | "resume" | "deactivate",
+    payload: TenantOfferingActionPayload,
+  ): Promise<TenantOfferingEntitlement> =>
+    parse(
+      entitlementSchema,
+      await apiRequest<unknown>(
+        `/tenants/${tenantId}/offering-entitlements/${entitlementId}/${action}`,
+        {
+          method: "POST",
+          headers: { "Idempotency-Key": idempotencyKey() },
+          body: payload,
+        },
+      ),
+    ),
+
+  removeEntitlement: async (
+    tenantId: string,
+    entitlementId: string,
+    payload: TenantOfferingRemovalPayload,
+  ): Promise<void> =>
+    apiRequest<void>(
+      `/tenants/${tenantId}/offering-entitlements/${entitlementId}`,
+      {
+        method: "DELETE",
+        body: payload,
+      },
     ),
 };

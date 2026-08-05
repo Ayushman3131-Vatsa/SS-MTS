@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKeyConstraint, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKeyConstraint, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import ForeignKey
@@ -31,6 +31,7 @@ class TenantConfigOverride(Base):
             name="fk_override_updated_by",
             ondelete="RESTRICT",
         ),
+        Index("ix_tenant_config_overrides_tenant_id", "tenant_id"),
     )
 
     override_id: Mapped[uuid.UUID] = mapped_column(

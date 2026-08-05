@@ -21,6 +21,35 @@ from app.models.enums import (
 from app.schemas.base import StrictRequestModel
 
 
+class TenantOfferingGrantRequest(StrictRequestModel):
+    offering_id: uuid.UUID
+    starts_at: datetime
+    ends_at: datetime
+    expected_tenant_version: int = Field(default=1, ge=1)
+    reason: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    @model_validator(mode="after")
+    def validate_window(self) -> Self:
+        for field_name, value in (("starts_at", self.starts_at), ("ends_at", self.ends_at)):
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError(f"{field_name} must include a timezone")
+            if value.utcoffset() != timezone.utc.utcoffset(value):
+                raise ValueError(f"{field_name} must be expressed in UTC")
+        if self.ends_at <= self.starts_at:
+            raise ValueError("ends_at must be later than starts_at")
+        if self.ends_at <= datetime.now(timezone.utc):
+            raise ValueError("ends_at must be in the future")
+        return self
+
+
 class TenantCreateRequest(StrictRequestModel):
     org_name: str = Field(min_length=1, max_length=255)
     tenant_code: str | None = Field(
@@ -73,6 +102,7 @@ class TenantCreateRequest(StrictRequestModel):
         pattern=r"^[0-9+().\-\s]+$",
     )
     offering_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
+    offering_grants: list[TenantOfferingGrantRequest] = Field(default_factory=list, max_length=50)
     tenant_admin_name: str = Field(min_length=1, max_length=255)
     tenant_admin_email: EmailStr = Field(max_length=254)
     tenant_admin_password: str = Field(min_length=12, max_length=128)
@@ -153,6 +183,11 @@ class TenantCreateRequest(StrictRequestModel):
     def enforce_creation_policies(self) -> Self:
         if len(set(self.offering_ids)) != len(self.offering_ids):
             raise ValueError("offering_ids must not contain duplicates")
+        grant_ids = [grant.offering_id for grant in self.offering_grants]
+        if len(set(grant_ids)) != len(grant_ids):
+            raise ValueError("offering_grants must not contain duplicates")
+        if self.offering_ids and self.offering_grants:
+            raise ValueError("Use offering_grants instead of offering_ids")
         plan_code = self.resolved_subscription_plan_code
         if self.subscription_ends_at is not None:
             if (
@@ -216,6 +251,75 @@ class OfferingResponse(BaseModel):
     sort_order: int
 
 
+class TenantOfferingResponse(OfferingResponse):
+    entitlement_id: uuid.UUID
+    status: str
+    starts_at: datetime
+    ends_at: datetime | None
+    suspended_at: datetime | None
+    deactivated_at: datetime | None
+    reason: str | None
+    version: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class TenantOfferingEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    event_id: uuid.UUID
+    entitlement_id: uuid.UUID
+    tenant_id: uuid.UUID
+    event_type: str
+    actor_admin_id: uuid.UUID | None
+    occurred_at: datetime
+    old_value: dict | None
+    new_value: dict | None
+
+
+class OfferingCatalogResponse(OfferingResponse):
+    status: str
+
+
+class TenantOfferingActionRequest(StrictRequestModel):
+    expected_version: int = Field(ge=1)
+    reason: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
+class TenantOfferingRemovalRequest(StrictRequestModel):
+    expected_version: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class TenantStatusActionRequest(StrictRequestModel):
+    expected_version: int = Field(ge=1)
+    reason: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
 class SubscriptionPlanOptionResponse(BaseModel):
     code: SubscriptionPlanCode
     display_name: str
@@ -269,7 +373,15 @@ class TenantResponse(BaseModel):
     database_mode: DatabaseIsolationMode
     database_provisioning_state: DatabaseProvisioningState
     user_count: int
-    offerings: list[OfferingResponse]
+    offerings: list[TenantOfferingResponse]
     created_by_admin_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
+    version: int
+
+
+class TenantListResponse(BaseModel):
+    items: list[TenantResponse]
+    page: int
+    page_size: int
+    total: int

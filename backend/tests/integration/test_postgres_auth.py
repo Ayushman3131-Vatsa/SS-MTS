@@ -1052,6 +1052,60 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 },
             )
 
+    def test_57_suspended_tenant_has_a_restricted_reactivatable_session(self) -> None:
+        self._db_execute(
+            "UPDATE tenants SET status = 'SUSPENDED' WHERE tenant_id = :tenant_id",
+            {"tenant_id": TENANT_ONE_ID},
+        )
+        try:
+            login = self._request(
+                "POST",
+                "/auth/session/tenant",
+                payload={
+                    "workspace_slug": "acme-labs",
+                    "email": SHARED_MEMBER_EMAIL,
+                    "password": SHARED_MEMBER_PASSWORD,
+                },
+            )
+            self.assertEqual(login.status, 200, login.body)
+            self.assertEqual(login.json()["tenant"]["status"], "SUSPENDED")
+            cookies = self._cookies_from(login)
+
+            restored = self._request("GET", "/auth/session", cookies=cookies)
+            self.assertEqual(restored.status, 200, restored.body)
+            self.assertEqual(restored.json()["tenant"]["status"], "SUSPENDED")
+
+            blocked = self._request("GET", "/users", cookies=cookies)
+            self.assertEqual(blocked.status, 403, blocked.body)
+            self.assertEqual(blocked.json()["code"], "TENANT_SUSPENDED")
+
+            self._db_execute(
+                "UPDATE tenants SET status = 'ACTIVE' WHERE tenant_id = :tenant_id",
+                {"tenant_id": TENANT_ONE_ID},
+            )
+
+            reactivated = self._request("GET", "/auth/session", cookies=cookies)
+            self.assertEqual(reactivated.status, 200, reactivated.body)
+            self.assertEqual(reactivated.json()["tenant"]["status"], "ACTIVE")
+            self.assertEqual(
+                self._request("GET", "/users", cookies=cookies).status,
+                200,
+            )
+
+            csrf_token = cookies["mt_csrf"]
+            logout = self._request(
+                "DELETE",
+                "/auth/session",
+                cookies=cookies,
+                headers={"X-CSRF-Token": csrf_token},
+            )
+            self.assertEqual(logout.status, 204, logout.body)
+        finally:
+            self._db_execute(
+                "UPDATE tenants SET status = 'ACTIVE' WHERE tenant_id = :tenant_id",
+                {"tenant_id": TENANT_ONE_ID},
+            )
+
     def test_60_existing_platform_and_tenant_bearer_flows_work(self) -> None:
         admin_login = self._request(
             "POST",

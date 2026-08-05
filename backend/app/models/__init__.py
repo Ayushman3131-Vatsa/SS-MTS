@@ -14,6 +14,7 @@ from app.models.enums import (
     SubscriptionPlanCode,
     SubscriptionPlanStatus,
     TenantStatus,
+    TenantOfferingStatus,
     TenantSubscriptionStatus,
 )
 from app.models.platform_activity_event import PlatformActivityEvent
@@ -25,7 +26,7 @@ from app.models.task import Task
 from app.models.task_comment import TaskComment
 from app.models.tenant import Tenant
 from app.models.tenant_config_override import TenantConfigOverride
-from app.models.tenant_offering import TenantOffering
+from app.models.tenant_offering import TenantOffering, TenantOfferingEvent
 from app.models.tenant_database_allocation import TenantDatabaseAllocation
 from app.models.tenant_subscription import TenantSubscription
 from app.models.user import User
@@ -55,6 +56,8 @@ __all__ = [
     "Tenant",
     "TenantConfigOverride",
     "TenantOffering",
+    "TenantOfferingEvent",
+    "TenantOfferingStatus",
     "TenantDatabaseAllocation",
     "TenantStatus",
     "TenantSubscription",

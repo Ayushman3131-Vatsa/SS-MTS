@@ -2,16 +2,17 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import SubscriptionPlanCode
+from app.models.enums import SubscriptionPlanCode, TenantOfferingStatus
 from app.models.offering import Offering
+from app.models.platform_activity_event import PlatformActivityEvent
 from app.models.subscription_plan import SubscriptionPlan
 from app.models.tenant import Tenant
 from app.models.tenant_database_allocation import TenantDatabaseAllocation
+from app.models.tenant_offering import TenantOffering, TenantOfferingEvent
 from app.models.tenant_subscription import TenantSubscription
-from app.models.tenant_offering import TenantOffering
 from app.models.user import User
 
 
@@ -24,6 +25,16 @@ class OfferingReadModel:
     icon_key: str
     route_slug: str
     sort_order: int
+    entitlement_id: uuid.UUID | None = None
+    status: str = TenantOfferingStatus.ACTIVE.value
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    suspended_at: datetime | None = None
+    deactivated_at: datetime | None = None
+    reason: str | None = None
+    version: int = 1
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -58,6 +69,15 @@ class TenantReadModel:
     created_by_admin_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
+    version: int
+
+
+@dataclass(frozen=True)
+class TenantPage:
+    items: tuple[TenantReadModel, ...]
+    total: int
+    page: int
+    page_size: int
 
 
 def _tenant_details_statement():
@@ -93,13 +113,12 @@ def _tenant_details_statement():
             TenantSubscription.ends_at.label("subscription_ends_at"),
             Tenant.status,
             TenantDatabaseAllocation.mode.label("database_mode"),
-            TenantDatabaseAllocation.provisioning_state.label(
-                "database_provisioning_state"
-            ),
+            TenantDatabaseAllocation.provisioning_state.label("database_provisioning_state"),
             user_count.label("user_count"),
             Tenant.created_by_admin_id,
             Tenant.created_at,
             Tenant.updated_at,
+            Tenant.version,
         )
         .join(
             TenantSubscription,
@@ -108,19 +127,18 @@ def _tenant_details_statement():
                 TenantSubscription.is_current.is_(True),
             ),
         )
-        .join(
-            SubscriptionPlan,
-            SubscriptionPlan.plan_id == TenantSubscription.plan_id,
-        )
-        .join(
-            TenantDatabaseAllocation,
-            TenantDatabaseAllocation.tenant_id == Tenant.tenant_id,
-        )
+        .join(SubscriptionPlan, SubscriptionPlan.plan_id == TenantSubscription.plan_id)
+        .join(TenantDatabaseAllocation, TenantDatabaseAllocation.tenant_id == Tenant.tenant_id)
     )
 
 
 async def get_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant | None:
     return await db.get(Tenant, tenant_id)
+
+
+async def get_tenant_for_update(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant | None:
+    result = await db.execute(select(Tenant).where(Tenant.tenant_id == tenant_id).with_for_update())
+    return result.scalar_one_or_none()
 
 
 async def get_tenant_by_workspace_slug(db: AsyncSession, workspace_slug: str) -> Tenant | None:
@@ -133,13 +151,8 @@ async def get_tenant_by_code(db: AsyncSession, tenant_code: str) -> Tenant | Non
     return result.scalar_one_or_none()
 
 
-async def get_subscription_plan(
-    db: AsyncSession,
-    code: SubscriptionPlanCode,
-) -> SubscriptionPlan | None:
-    result = await db.execute(
-        select(SubscriptionPlan).where(SubscriptionPlan.code == code.value)
-    )
+async def get_subscription_plan(db: AsyncSession, code: SubscriptionPlanCode) -> SubscriptionPlan | None:
+    result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.code == code.value))
     return result.scalar_one_or_none()
 
 
@@ -154,103 +167,283 @@ async def list_active_subscription_plans(db: AsyncSession) -> list[SubscriptionP
 
 async def list_active_offerings(db: AsyncSession) -> list[Offering]:
     result = await db.execute(
-        select(Offering)
-        .where(Offering.status == "ACTIVE")
-        .order_by(Offering.sort_order, Offering.display_name)
+        select(Offering).where(Offering.status == "ACTIVE").order_by(Offering.sort_order, Offering.display_name)
     )
     return list(result.scalars().all())
 
 
-async def get_active_offerings_by_ids(
-    db: AsyncSession,
-    offering_ids: set[uuid.UUID],
-) -> list[Offering]:
+async def list_all_offerings(db: AsyncSession) -> list[Offering]:
+    result = await db.execute(select(Offering).order_by(Offering.status.desc(), Offering.sort_order, Offering.display_name))
+    return list(result.scalars().all())
+
+
+async def get_active_offerings_by_ids(db: AsyncSession, offering_ids: set[uuid.UUID]) -> list[Offering]:
     if not offering_ids:
         return []
     result = await db.execute(
-        select(Offering).where(
-            Offering.offering_id.in_(offering_ids),
-            Offering.status == "ACTIVE",
-        )
+        select(Offering).where(Offering.offering_id.in_(offering_ids), Offering.status == "ACTIVE")
     )
     return list(result.scalars().all())
+
+
+def _offering_projection():
+    return (
+        Offering.offering_id,
+        Offering.code,
+        Offering.display_name,
+        Offering.description,
+        Offering.icon_key,
+        Offering.route_slug,
+        Offering.sort_order,
+        TenantOffering.entitlement_id,
+        case(
+            (
+                and_(
+                    TenantOffering.status.in_(
+                        (
+                            TenantOfferingStatus.ACTIVE.value,
+                            TenantOfferingStatus.SUSPENDED.value,
+                        )
+                    ),
+                    TenantOffering.ends_at.is_not(None),
+                    TenantOffering.ends_at <= func.now(),
+                ),
+                TenantOfferingStatus.EXPIRED.value,
+            ),
+            else_=TenantOffering.status,
+        ).label("status"),
+        TenantOffering.starts_at,
+        TenantOffering.ends_at,
+        TenantOffering.suspended_at,
+        TenantOffering.deactivated_at,
+        TenantOffering.reason,
+        TenantOffering.version,
+        TenantOffering.created_at,
+        TenantOffering.updated_at,
+    )
 
 
 async def list_tenant_offerings(
     db: AsyncSession,
     tenant_id: uuid.UUID,
+    *,
+    effective_only: bool = True,
 ) -> list[OfferingReadModel]:
-    result = await db.execute(
-        select(
-            Offering.offering_id,
-            Offering.code,
-            Offering.display_name,
-            Offering.description,
-            Offering.icon_key,
-            Offering.route_slug,
-            Offering.sort_order,
+    conditions = [TenantOffering.tenant_id == tenant_id]
+    if effective_only:
+        conditions.extend(
+            [
+                TenantOffering.status == TenantOfferingStatus.ACTIVE.value,
+                TenantOffering.starts_at <= func.now(),
+                or_(TenantOffering.ends_at.is_(None), TenantOffering.ends_at > func.now()),
+            ]
         )
-        .join(TenantOffering, TenantOffering.offering_id == Offering.offering_id)
-        .where(TenantOffering.tenant_id == tenant_id, Offering.status == "ACTIVE")
-        .order_by(Offering.sort_order, Offering.display_name)
+    result = await db.execute(
+        select(*_offering_projection())
+        .join(Offering, Offering.offering_id == TenantOffering.offering_id)
+        .where(*conditions)
+        .order_by(Offering.sort_order, Offering.display_name, TenantOffering.created_at.desc())
     )
     return [OfferingReadModel(**row) for row in result.mappings().all()]
 
 
-async def get_tenant_details(
+async def get_entitlement(
     db: AsyncSession,
     tenant_id: uuid.UUID,
-) -> TenantReadModel | None:
+    entitlement_id: uuid.UUID,
+    *,
+    for_update: bool = False,
+) -> TenantOffering | None:
+    statement = select(TenantOffering).where(
+        TenantOffering.tenant_id == tenant_id,
+        TenantOffering.entitlement_id == entitlement_id,
+    )
+    if for_update:
+        statement = statement.with_for_update()
+    result = await db.execute(statement)
+    return result.scalar_one_or_none()
+
+
+async def get_entitlement_read_model(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    entitlement_id: uuid.UUID,
+) -> OfferingReadModel | None:
     result = await db.execute(
-        _tenant_details_statement().where(Tenant.tenant_id == tenant_id)
+        select(*_offering_projection())
+        .join(Offering, Offering.offering_id == TenantOffering.offering_id)
+        .where(
+            TenantOffering.tenant_id == tenant_id,
+            TenantOffering.entitlement_id == entitlement_id,
+        )
     )
     row = result.mappings().one_or_none()
-    if row is None:
-        return None
-    offerings = await list_tenant_offerings(db, tenant_id)
-    return TenantReadModel(**row, offerings=tuple(offerings))
+    return OfferingReadModel(**row) if row is not None else None
 
 
-async def list_tenants(db: AsyncSession) -> list[TenantReadModel]:
-    result = await db.execute(
-        _tenant_details_statement().order_by(Tenant.created_at.desc(), Tenant.tenant_id)
+async def get_open_entitlement(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    offering_id: uuid.UUID,
+    *,
+    for_update: bool = False,
+) -> TenantOffering | None:
+    statement = select(TenantOffering).where(
+        TenantOffering.tenant_id == tenant_id,
+        TenantOffering.offering_id == offering_id,
+        TenantOffering.status.in_((TenantOfferingStatus.ACTIVE.value, TenantOfferingStatus.SUSPENDED.value)),
     )
-    rows = result.mappings().all()
-    if not rows:
-        return []
+    if for_update:
+        statement = statement.with_for_update()
+    result = await db.execute(statement)
+    return result.scalar_one_or_none()
 
-    tenant_ids = [row["tenant_id"] for row in rows]
-    offering_result = await db.execute(
+
+async def get_event_by_idempotency_key(db: AsyncSession, key: str) -> TenantOfferingEvent | None:
+    result = await db.execute(select(TenantOfferingEvent).where(TenantOfferingEvent.idempotency_key == key))
+    return result.scalar_one_or_none()
+
+
+async def list_tenant_offering_events(
+    db: AsyncSession, tenant_id: uuid.UUID
+) -> list[TenantOfferingEvent]:
+    result = await db.execute(
+        select(TenantOfferingEvent)
+        .where(TenantOfferingEvent.tenant_id == tenant_id)
+        .order_by(TenantOfferingEvent.occurred_at.desc(), TenantOfferingEvent.event_id.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_platform_activity_by_idempotency_key(
+    db: AsyncSession, key: str
+) -> PlatformActivityEvent | None:
+    result = await db.execute(
+        select(PlatformActivityEvent).where(
+            PlatformActivityEvent.idempotency_key == key
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def tenant_has_effective_offering(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    offering_code: str,
+) -> bool:
+    result = await db.execute(
+        select(func.count())
+        .select_from(TenantOffering)
+        .join(Offering, Offering.offering_id == TenantOffering.offering_id)
+        .where(
+            TenantOffering.tenant_id == tenant_id,
+            Offering.code == offering_code,
+            TenantOffering.status == TenantOfferingStatus.ACTIVE.value,
+            TenantOffering.starts_at <= func.now(),
+            or_(TenantOffering.ends_at.is_(None), TenantOffering.ends_at > func.now()),
+        )
+    )
+    return bool(result.scalar_one())
+
+
+async def get_offering_access_denial_code(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    offering_code: str,
+) -> str | None:
+    """Return a stable authorization error code, or None when access is valid."""
+    rows = await db.execute(
         select(
-            TenantOffering.tenant_id,
-            Offering.offering_id,
-            Offering.code,
-            Offering.display_name,
-            Offering.description,
-            Offering.icon_key,
-            Offering.route_slug,
-            Offering.sort_order,
+            TenantOffering.status,
+            TenantOffering.starts_at,
+            TenantOffering.ends_at,
+            TenantOffering.created_at,
+            (
+                TenantOffering.ends_at.is_not(None)
+                & (TenantOffering.ends_at <= func.now())
+            ).label("is_expired"),
         )
         .join(Offering, Offering.offering_id == TenantOffering.offering_id)
         .where(
-            TenantOffering.tenant_id.in_(tenant_ids),
-            Offering.status == "ACTIVE",
+            TenantOffering.tenant_id == tenant_id,
+            Offering.code == offering_code,
         )
-        .order_by(TenantOffering.tenant_id, Offering.sort_order, Offering.display_name)
+        .order_by(
+            case(
+                (
+                    TenantOffering.status.in_(
+                        (
+                            TenantOfferingStatus.ACTIVE.value,
+                            TenantOfferingStatus.SUSPENDED.value,
+                        )
+                    ),
+                    0,
+                ),
+                else_=1,
+            ),
+            TenantOffering.created_at.desc(),
+        )
     )
-    offerings_by_tenant: dict[uuid.UUID, list[OfferingReadModel]] = {
-        tenant_id: [] for tenant_id in tenant_ids
-    }
-    for offering_row in offering_result.mappings().all():
-        tenant_id = offering_row["tenant_id"]
-        offering_values = {
-            key: value for key, value in offering_row.items() if key != "tenant_id"
-        }
-        offerings_by_tenant[tenant_id].append(OfferingReadModel(**offering_values))
-    return [
-        TenantReadModel(
-            **row,
-            offerings=tuple(offerings_by_tenant[row["tenant_id"]]),
+    entitlement_rows = rows.all()
+    if not entitlement_rows:
+        return "OFFERING_NOT_ENTITLED"
+
+    now = await db.scalar(select(func.now()))
+    if now is None:
+        raise RuntimeError("Database did not return its current timestamp")
+    for row in entitlement_rows:
+        if row.status == TenantOfferingStatus.EXPIRED.value:
+            return "OFFERING_EXPIRED"
+        if row.is_expired:
+            return "OFFERING_EXPIRED"
+        if row.status == TenantOfferingStatus.SUSPENDED.value:
+            return "OFFERING_SUSPENDED"
+        if row.status == TenantOfferingStatus.DEACTIVATED.value:
+            return "OFFERING_DEACTIVATED"
+        if row.status == TenantOfferingStatus.ACTIVE.value:
+            if row.starts_at > now:
+                return "OFFERING_NOT_STARTED"
+            return None
+    return "OFFERING_NOT_EFFECTIVE"
+
+
+async def get_tenant_details(db: AsyncSession, tenant_id: uuid.UUID) -> TenantReadModel | None:
+    result = await db.execute(_tenant_details_statement().where(Tenant.tenant_id == tenant_id))
+    row = result.mappings().one_or_none()
+    if row is None:
+        return None
+    offerings = await list_tenant_offerings(db, tenant_id, effective_only=False)
+    return TenantReadModel(**row, offerings=tuple(offerings))
+
+
+async def list_tenants(
+    db: AsyncSession,
+    *,
+    page: int = 1,
+    page_size: int = 25,
+    query: str | None = None,
+    status: str | None = None,
+) -> TenantPage:
+    base = _tenant_details_statement()
+    filters = []
+    if query:
+        pattern = f"%{query.strip()}%"
+        filters.append(
+            or_(Tenant.org_name.ilike(pattern), Tenant.tenant_code.ilike(pattern), Tenant.workspace_slug.ilike(pattern))
         )
-        for row in rows
-    ]
+    if status:
+        filters.append(Tenant.status == status)
+    count_result = await db.execute(select(func.count()).select_from(base.where(*filters).subquery()))
+    total = int(count_result.scalar_one())
+    result = await db.execute(
+        base.where(*filters)
+        .order_by(Tenant.created_at.desc(), Tenant.tenant_id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    rows = result.mappings().all()
+    items = []
+    for row in rows:
+        offerings = await list_tenant_offerings(db, row["tenant_id"], effective_only=False)
+        items.append(TenantReadModel(**row, offerings=tuple(offerings)))
+    return TenantPage(items=tuple(items), total=total, page=page, page_size=page_size)

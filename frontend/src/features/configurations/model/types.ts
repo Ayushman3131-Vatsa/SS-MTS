@@ -66,5 +66,5 @@ export interface TemplatePreviewRequest {
 
 export interface TemplatePreviewResponse {
   subject: string | null;
-  rendered_body: str;
+  rendered_body: string;
 }

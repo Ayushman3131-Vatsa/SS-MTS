@@ -305,7 +305,6 @@ async def _authenticate_tenant_user(
         not verified
         or user.status != "Active"
         or tenant is None
-        or tenant.status != "ACTIVE"
     ):
         await _authentication_failed(db, account_key, ip_key, now=now)
 
@@ -342,6 +341,7 @@ async def _tenant_principal(
             tenant_id=tenant.tenant_id,
             org_name=tenant.org_name,
             workspace_slug=tenant.workspace_slug,
+            status=tenant.status,
             offerings=[
                 SessionOfferingResponse.model_validate(offering)
                 for offering in offerings
@@ -594,7 +594,6 @@ async def session_response_for_principal(
         user is None
         or user.status != "Active"
         or tenant is None
-        or tenant.status != "ACTIVE"
     ):
         raise UnauthorizedError("Authentication required")
     return await _tenant_principal(db, user, tenant)

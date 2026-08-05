@@ -1,16 +1,19 @@
 export class ApiError extends Error {
   readonly status: number;
   readonly retryAfterSeconds: number | null;
+  readonly code: string;
 
   constructor(
     message: string,
     status: number,
     retryAfterSeconds: number | null = null,
+    code = "APP_ERROR",
   ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.retryAfterSeconds = retryAfterSeconds;
+    this.code = code;
   }
 }
 

@@ -101,6 +101,17 @@
   font-size: 0.75rem;
 }
 
+.toolbar select {
+  min-height: 2.55rem;
+  border: 1px solid var(--color-slate-300);
+  border-radius: var(--radius-md);
+  padding: 0 .7rem;
+  color: var(--color-slate-700);
+  background: var(--color-white);
+  font: inherit;
+  font-size: .72rem;
+}
+
 .toolbar > div {
   display: flex;
   align-items: center;
@@ -207,6 +218,28 @@
   place-items: center;
   color: var(--color-slate-500);
   font-size: 0.78rem;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--color-slate-100);
+  padding: .8rem 1rem;
+  color: var(--color-slate-500);
+  font-size: .68rem;
+}
+
+.pagination > div {
+  display: flex;
+  gap: .5rem;
+}
+
+.pagination button {
+  min-height: 2.2rem;
+  padding: .45rem .65rem;
+  font-size: .68rem;
 }
 
 .loading {

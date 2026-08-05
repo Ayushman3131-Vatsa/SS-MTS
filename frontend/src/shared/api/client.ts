@@ -4,7 +4,7 @@ import {
   InvalidApiResponseError,
   NetworkError,
 } from "./errors";
-import { announceSessionExpiry } from "./session-events";
+import { announceSessionExpiry, announceTenantAccessChanged } from "./session-events";
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 const API_BASE_URL = (configuredBaseUrl || "/api").replace(/\/$/, "");
@@ -17,11 +17,12 @@ type RequestOptions = Omit<RequestInit, "body" | "credentials"> & {
   notifyOnUnauthorized?: boolean;
 };
 
-const extractErrorMessage = async (response: Response): Promise<string> => {
+const extractError = async (response: Response): Promise<{ message: string; code: string }> => {
   try {
-    const payload = (await response.json()) as { detail?: unknown };
+    const payload = (await response.json()) as { code?: unknown; detail?: unknown };
+    const code = typeof payload.code === "string" ? payload.code : "APP_ERROR";
     if (typeof payload.detail === "string" && payload.detail.length > 0) {
-      return payload.detail;
+      return { message: payload.detail, code };
     }
     if (Array.isArray(payload.detail)) {
       const messages = payload.detail
@@ -54,14 +55,14 @@ const extractErrorMessage = async (response: Response): Promise<string> => {
         })
         .filter((message): message is string => Boolean(message));
       if (messages.length > 0) {
-        return messages.slice(0, 3).join(" ");
+        return { message: messages.slice(0, 3).join(" "), code };
       }
     }
   } catch {
     // A generic status message is safer and more useful than a JSON parse error.
   }
 
-  return response.statusText || "The request could not be completed.";
+  return { message: response.statusText || "The request could not be completed.", code: "APP_ERROR" };
 };
 
 const parseRetryAfter = (response: Response): number | null => {
@@ -121,11 +122,11 @@ export const apiRequest = async <T>(
       announceSessionExpiry();
     }
 
-    throw new ApiError(
-      await extractErrorMessage(response),
-      response.status,
-      parseRetryAfter(response),
-    );
+    const apiError = await extractError(response);
+    if (["TENANT_SUSPENDED", "OFFERING_NOT_EFFECTIVE", "OFFERING_NOT_ENTITLED", "OFFERING_NOT_STARTED", "OFFERING_DEACTIVATED", "OFFERING_EXPIRED", "OFFERING_SUSPENDED"].includes(apiError.code)) {
+      announceTenantAccessChanged(apiError.code);
+    }
+    throw new ApiError(apiError.message, response.status, parseRetryAfter(response), apiError.code);
   }
 
   if (response.status === 204) {

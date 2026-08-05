@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import ForeignKey
@@ -25,6 +25,7 @@ class ConfigCategory(Base):
             name="check_config_categories_status",
         ),
         CheckConstraint("sort_order >= 0", name="check_config_categories_sort_order"),
+        Index("ix_config_categories_offering_id", "offering_id"),
     )
 
     category_id: Mapped[uuid.UUID] = mapped_column(
