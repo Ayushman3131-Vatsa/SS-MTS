@@ -1,8 +1,10 @@
 import {
   Building2,
+  FileStack,
   LayoutDashboard,
   LogOut,
   Menu,
+  Package,
   PlusCircle,
   ShieldCheck,
   X,
@@ -34,6 +36,18 @@ const navigation = [
     icon: PlusCircle,
     label: "Register Tenant",
     to: "/platform/tenants/register",
+  },
+  {
+    end: true,
+    icon: Package,
+    label: "Offerings",
+    to: "/platform/offerings",
+  },
+  {
+    end: false,
+    icon: FileStack,
+    label: "Default Templates",
+    to: "/platform/default-templates",
   },
 ] as const;
 

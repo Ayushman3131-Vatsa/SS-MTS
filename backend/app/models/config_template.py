@@ -22,12 +22,13 @@ class ConfigTemplate(Base):
 
     __tablename__ = "config_templates"
     __table_args__ = (
-        UniqueConstraint("category_id", "code", name="uq_config_templates_category_code"),
+        UniqueConstraint("code", name="uq_config_templates_code"),
         CheckConstraint(
             "template_type IN ('EMAIL', 'LETTER', 'NOTIFICATION', 'OTHER')",
             name="check_config_templates_type",
         ),
         CheckConstraint("sort_order >= 0", name="check_config_templates_sort_order"),
+        CheckConstraint("version >= 1", name="check_config_templates_version"),
         Index("ix_config_templates_category_id", "category_id"),
     )
 
@@ -52,7 +53,12 @@ class ConfigTemplate(Base):
     )
     subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
     body: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    placeholders: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="'[]'::jsonb")
+    placeholders: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default="'[]'::jsonb",
+    )
     metadata_: Mapped[dict] = mapped_column(
         "metadata",
         JSONB,
@@ -61,6 +67,12 @@ class ConfigTemplate(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

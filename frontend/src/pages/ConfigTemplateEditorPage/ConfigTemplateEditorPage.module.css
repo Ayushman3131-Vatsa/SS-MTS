@@ -155,6 +155,10 @@
   font-size: 0.875rem;
 }
 
+.editorFields {
+  display: contents;
+}
+
 .editorGrid {
   display: grid;
   grid-template-columns: 1fr 300px;

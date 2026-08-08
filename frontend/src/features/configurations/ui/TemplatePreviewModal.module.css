@@ -65,6 +65,12 @@
   color: #0f172a;
 }
 
+.closeButton:focus-visible,
+.doneButton:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.22);
+  outline-offset: 2px;
+}
+
 .bodyGrid {
   display: grid;
   grid-template-columns: 280px 1fr;
@@ -197,4 +203,48 @@
 
 .doneButton:hover {
   background-color: #1d4ed8;
+}
+
+.sourceNote {
+  margin: -0.5rem 0 0;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 48rem) {
+  .overlay {
+    align-items: stretch;
+    padding: 0.5rem;
+  }
+
+  .modal {
+    max-height: calc(100dvh - 1rem);
+  }
+
+  .header,
+  .footer {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .header h3 {
+    font-size: 1rem;
+  }
+
+  .bodyGrid {
+    display: block;
+    overflow-y: auto;
+  }
+
+  .sampleDataPanel {
+    border-right: 0;
+    border-bottom: 1px solid #e2e8f0;
+    overflow: visible;
+  }
+
+  .renderedPanel {
+    min-height: 18rem;
+    overflow: visible;
+  }
 }

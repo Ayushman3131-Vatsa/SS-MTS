@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -22,15 +22,35 @@ import {
 } from "../../features/configurations/api/configuration-api";
 import type { ConfigTemplateDetailResponse } from "../../features/configurations/model/types";
 import { TemplatePreviewModal } from "../../features/configurations/ui/TemplatePreviewModal";
+import { useWindowFocusRefresh } from "../../shared/model/useWindowFocusRefresh";
 import styles from "./ConfigTemplateEditorPage.module.css";
+
+interface TemplateDraft {
+  subject: string;
+  body: string;
+}
+
+const toTemplateDraft = (data: ConfigTemplateDetailResponse): TemplateDraft => ({
+  subject: data.subject ?? "",
+  body: data.body,
+});
+
+const toSampleData = (data: ConfigTemplateDetailResponse): Record<string, string> =>
+  Object.fromEntries(
+    data.placeholders.map((placeholder) => [placeholder.key, placeholder.sample_value || ""]),
+  );
 
 export const ConfigTemplateEditorPage: React.FC = () => {
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
+  const focusRefreshKey = useWindowFocusRefresh();
 
   const [template, setTemplate] = useState<ConfigTemplateDetailResponse | null>(null);
   const [subject, setSubject] = useState<string>("");
   const [body, setBody] = useState<string>("");
+  const loadedTemplateIdRef = useRef<string | null>(null);
+  const draftRef = useRef<TemplateDraft>({ subject: "", body: "" });
+  const baselineRef = useRef<TemplateDraft>({ subject: "", body: "" });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -51,22 +71,30 @@ export const ConfigTemplateEditorPage: React.FC = () => {
     if (!templateId) return;
 
     let isMounted = true;
+    const isDifferentTemplate = loadedTemplateIdRef.current !== templateId;
     const loadTemplate = async () => {
-      setLoading(true);
+      if (isDifferentTemplate) {
+        setLoading(true);
+        setTemplate(null);
+      }
       setError(null);
       try {
         const data = await fetchTemplateDetail(templateId);
         if (isMounted) {
-          setTemplate(data);
-          setSubject(data.subject || "");
-          setBody(data.body || "");
+          const nextDraft = toTemplateDraft(data);
+          const hasUnsavedDraft =
+            draftRef.current.subject !== baselineRef.current.subject ||
+            draftRef.current.body !== baselineRef.current.body;
 
-          // Initialize sample data from placeholders
-          const initSample: Record<string, string> = {};
-          data.placeholders.forEach((ph) => {
-            initSample[ph.key] = ph.sample_value || "";
-          });
-          setSampleData(initSample);
+          setTemplate(data);
+          if (isDifferentTemplate || !hasUnsavedDraft) {
+            setSubject(nextDraft.subject);
+            setBody(nextDraft.body);
+            setSampleData(toSampleData(data));
+            draftRef.current = nextDraft;
+          }
+          baselineRef.current = nextDraft;
+          loadedTemplateIdRef.current = templateId;
         }
       } catch (err) {
         if (isMounted) {
@@ -81,11 +109,15 @@ export const ConfigTemplateEditorPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [templateId]);
+  }, [focusRefreshKey, templateId]);
 
   const handleInsertPlaceholder = (key: string) => {
     const token = `{{${key}}}`;
-    setBody((prev) => prev + token);
+    setBody((previousBody) => {
+      const nextBody = previousBody + token;
+      draftRef.current = { ...draftRef.current, body: nextBody };
+      return nextBody;
+    });
   };
 
   const handleSave = async () => {
@@ -99,7 +131,12 @@ export const ConfigTemplateEditorPage: React.FC = () => {
         subject: subject.trim() || null,
         body: body,
       });
+      const savedDraft = toTemplateDraft(updated);
       setTemplate(updated);
+      setSubject(savedDraft.subject);
+      setBody(savedDraft.body);
+      draftRef.current = savedDraft;
+      baselineRef.current = savedDraft;
       setSuccessMessage("Customization saved successfully!");
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
@@ -118,9 +155,13 @@ export const ConfigTemplateEditorPage: React.FC = () => {
 
     try {
       const resetData = await resetTemplateOverride(templateId);
+      const resetDraft = toTemplateDraft(resetData);
       setTemplate(resetData);
-      setSubject(resetData.subject || "");
-      setBody(resetData.body || "");
+      setSubject(resetDraft.subject);
+      setBody(resetDraft.body);
+      setSampleData(toSampleData(resetData));
+      draftRef.current = resetDraft;
+      baselineRef.current = resetDraft;
       setSuccessMessage("Template reset to platform default.");
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
@@ -211,6 +252,7 @@ export const ConfigTemplateEditorPage: React.FC = () => {
             type="button"
             className={styles.secondaryButton}
             onClick={handleOpenPreview}
+            disabled={saving || resetting}
           >
             <Eye size={16} />
             Preview
@@ -221,7 +263,7 @@ export const ConfigTemplateEditorPage: React.FC = () => {
               type="button"
               className={styles.dangerButton}
               onClick={() => setIsResetConfirmOpen(true)}
-              disabled={resetting}
+              disabled={saving || resetting}
             >
               <RotateCcw size={16} />
               Reset to Default
@@ -232,7 +274,7 @@ export const ConfigTemplateEditorPage: React.FC = () => {
             type="button"
             className={styles.primaryButton}
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || resetting}
           >
             {saving ? (
               <Loader2 size={16} className={styles.spinner} />
@@ -260,6 +302,11 @@ export const ConfigTemplateEditorPage: React.FC = () => {
       )}
 
       {/* Editor Grid */}
+      <fieldset
+        className={styles.editorFields}
+        disabled={saving || resetting}
+        aria-busy={saving || resetting}
+      >
       <div className={styles.editorGrid}>
         {/* Main Editor Panel */}
         <div className={styles.mainPanel}>
@@ -283,7 +330,7 @@ export const ConfigTemplateEditorPage: React.FC = () => {
           </div>
 
           {/* Subject Field (if applicable) */}
-          {template.subject !== null && (
+          {(template.subject !== null || template.default_subject !== null) && (
             <div className={styles.fieldGroup}>
               <label htmlFor="template-subject" className={styles.fieldLabel}>
                 Subject Line
@@ -293,7 +340,11 @@ export const ConfigTemplateEditorPage: React.FC = () => {
                 type="text"
                 className={styles.subjectInput}
                 value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                onChange={(event) => {
+                  const nextSubject = event.target.value;
+                  draftRef.current = { ...draftRef.current, subject: nextSubject };
+                  setSubject(nextSubject);
+                }}
                 placeholder="Enter email subject..."
               />
             </div>
@@ -313,7 +364,11 @@ export const ConfigTemplateEditorPage: React.FC = () => {
               id="template-body"
               className={styles.bodyTextarea}
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(event) => {
+                const nextBody = event.target.value;
+                draftRef.current = { ...draftRef.current, body: nextBody };
+                setBody(nextBody);
+              }}
               rows={16}
               placeholder="Write template body in Markdown..."
             />
@@ -361,6 +416,7 @@ export const ConfigTemplateEditorPage: React.FC = () => {
           </div>
         </aside>
       </div>
+      </fieldset>
 
       {/* Live Preview Modal */}
       <TemplatePreviewModal

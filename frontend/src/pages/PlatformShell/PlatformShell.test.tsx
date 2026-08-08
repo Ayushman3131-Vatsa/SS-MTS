@@ -39,6 +39,8 @@ const renderShell = () => {
             <Route index element={<h1>Dashboard content</h1>} />
             <Route path="tenants" element={<h1>Tenant content</h1>} />
             <Route path="tenants/register" element={<h1>Register content</h1>} />
+            <Route path="offerings" element={<h1>Offering content</h1>} />
+            <Route path="default-templates" element={<h1>Default templates content</h1>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -49,14 +51,14 @@ const renderShell = () => {
 };
 
 describe("PlatformShell", () => {
-  it("renders exactly three navigable modules and marks the active route", () => {
+  it("renders platform navigation and marks the active route", () => {
     renderShell();
 
     const navigation = screen.getByRole("navigation", {
       name: "Platform navigation",
     });
     const links = navigation.querySelectorAll("a");
-    expect(links).toHaveLength(3);
+    expect(links).toHaveLength(5);
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -64,6 +66,10 @@ describe("PlatformShell", () => {
 
     fireEvent.click(screen.getByRole("link", { name: "All Tenants" }));
     expect(screen.getByRole("heading", { name: "Tenant content" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Default Templates" })).toHaveAttribute(
+      "href",
+      "/platform/default-templates",
+    );
   });
 
   it("closes the mobile drawer with Escape and restores focus", () => {

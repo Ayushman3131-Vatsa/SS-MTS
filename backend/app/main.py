@@ -15,8 +15,10 @@ from app.modules.auth.router import router as auth_router
 from app.modules.comments.router import router as comments_router
 from app.modules.configurations.router import router as configurations_router
 from app.modules.daily_logs.router import router as daily_logs_router
+from app.modules.offerings.router import router as offerings_router
 from app.modules.projects.router import router as projects_router
 from app.modules.platform_dashboard.router import router as platform_dashboard_router
+from app.modules.platform_default_templates.router import router as platform_default_templates_router
 from app.modules.tasks.router import router as tasks_router
 from app.modules.tenants.router import router as tenants_router
 from app.modules.users.router import router as users_router
@@ -32,9 +34,19 @@ app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 
+def _is_default_template_request(request: Request) -> bool:
+    path = request.url.path
+    return path == "/platform/default-templates" or path.startswith(
+        "/platform/default-templates/"
+    )
+
+
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-    headers = {"Cache-Control": "no-store"} if exc.status_code in {401, 403} else None
+    if _is_default_template_request(request):
+        headers = {"Cache-Control": "private, no-store"}
+    else:
+        headers = {"Cache-Control": "no-store"} if exc.status_code in {401, 403} else None
     return JSONResponse(
         status_code=exc.status_code,
         content={"code": exc.code, "detail": exc.message},
@@ -60,7 +72,15 @@ async def request_validation_error_handler(
     return JSONResponse(
         status_code=422,
         content={"detail": jsonable_encoder(sanitized_errors)},
-        headers={"Cache-Control": "no-store"} if request.url.path.startswith("/auth/") else None,
+        headers=(
+            {"Cache-Control": "private, no-store"}
+            if _is_default_template_request(request)
+            else (
+                {"Cache-Control": "no-store"}
+                if request.url.path.startswith("/auth/")
+                else None
+            )
+        ),
     )
 
 
@@ -71,9 +91,11 @@ async def health() -> dict:
 
 app.include_router(auth_router)
 app.include_router(tenants_router)
+app.include_router(offerings_router)
 app.include_router(users_router)
 app.include_router(projects_router)
 app.include_router(platform_dashboard_router)
+app.include_router(platform_default_templates_router)
 app.include_router(tasks_router)
 app.include_router(comments_router)
 app.include_router(configurations_router)

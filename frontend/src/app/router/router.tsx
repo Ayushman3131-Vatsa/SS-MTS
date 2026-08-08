@@ -4,6 +4,7 @@ import { createBrowserRouter } from "react-router-dom";
 import { ForbiddenPage } from "../../pages/ForbiddenPage/ForbiddenPage";
 import { AllTenantsPage } from "../../pages/AllTenantsPage/AllTenantsPage";
 import { LoginPage } from "../../pages/LoginPage/LoginPage";
+import { OfferingsPage } from "../../pages/OfferingsPage/OfferingsPage";
 import { PlatformLoginPage } from "../../pages/PlatformLoginPage/PlatformLoginPage";
 import { PlatformShell } from "../../pages/PlatformShell/PlatformShell";
 import { TenantDetailPage } from "../../pages/TenantDetailPage/TenantDetailPage";
@@ -35,6 +36,20 @@ const ConfigTemplateEditorPage = lazy(async () => {
     "../../pages/ConfigTemplateEditorPage/ConfigTemplateEditorPage"
   );
   return { default: page.ConfigTemplateEditorPage };
+});
+
+const DefaultTemplatesPage = lazy(async () => {
+  const page = await import(
+    "../../pages/DefaultTemplatesPage/DefaultTemplatesPage"
+  );
+  return { default: page.DefaultTemplatesPage };
+});
+
+const DefaultTemplateEditorPage = lazy(async () => {
+  const page = await import(
+    "../../pages/DefaultTemplateEditorPage/DefaultTemplateEditorPage"
+  );
+  return { default: page.DefaultTemplateEditorPage };
 });
 
 export const router = createBrowserRouter([
@@ -73,6 +88,34 @@ export const router = createBrowserRouter([
           {
             path: "tenants/register",
             element: <TenantRegistrationPage />,
+          },
+          {
+            path: "offerings",
+            element: <OfferingsPage />,
+          },
+          {
+            path: "default-templates",
+            element: (
+              <Suspense fallback={<RouteLoader label="Loading default templates&hellip;" />}>
+                <DefaultTemplatesPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: "default-templates/new",
+            element: (
+              <Suspense fallback={<RouteLoader label="Loading template editor&hellip;" />}>
+                <DefaultTemplateEditorPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: "default-templates/:templateId",
+            element: (
+              <Suspense fallback={<RouteLoader label="Loading template editor&hellip;" />}>
+                <DefaultTemplateEditorPage />
+              </Suspense>
+            ),
           },
           {
             path: "tenants/:tenantId",

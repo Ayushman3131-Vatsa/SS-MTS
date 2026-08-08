@@ -50,7 +50,9 @@ class TenantConfigOverride(Base):
         nullable=False,
     )
     subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # An override row owns a complete content snapshot. This keeps later
+    # platform edits from leaking into a tenant-customized template.
+    body: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_: Mapped[dict | None] = mapped_column(
         "metadata",
         JSONB,

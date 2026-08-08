@@ -11,12 +11,10 @@ import re
 import uuid
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
-from app.models.config_template import ConfigTemplate
-from app.models.tenant_config_override import TenantConfigOverride
+from app.modules.configurations import repository as configuration_repository
 
 PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
 
@@ -56,39 +54,33 @@ async def render_template(
         RenderedTemplate containing the final subject, body, and metadata.
 
     Raises:
-        NotFoundError: If no template exists with the given template_code.
+        NotFoundError: If no template exists with the given code for a
+            currently entitled offering.
     """
-    # 1. Look up platform default template by code
-    stmt_tmpl = select(ConfigTemplate).where(ConfigTemplate.code == template_code)
-    res_tmpl = await db.execute(stmt_tmpl)
-    default = res_tmpl.scalar_one_or_none()
+    # 1. Look up the platform default through the tenant's current offering
+    # entitlement. This prevents expired or unlicensed tenants from resolving
+    # catalog templates by guessing their globally unique code.
+    default = await configuration_repository.get_entitled_template_by_code(
+        db,
+        tenant_id,
+        template_code,
+    )
 
     if default is None:
         raise NotFoundError(f"Template with code '{template_code}' not found")
 
     # 2. Check if tenant has an override for this template
-    stmt_override = select(TenantConfigOverride).where(
-        TenantConfigOverride.tenant_id == tenant_id,
-        TenantConfigOverride.template_id == default.template_id,
+    override = await configuration_repository.get_tenant_override(
+        db, tenant_id, default.template_id,
     )
-    res_override = await db.execute(stmt_override)
-    override = res_override.scalar_one_or_none()
 
-    # 3. Determine effective subject, body, and metadata
-    if override is not None:
-        raw_subject = override.subject if override.subject is not None else default.subject
-        raw_body = override.body if override.body is not None else default.body
-        effective_metadata = (
-            {**(default.metadata_ or {}), **(override.metadata_ or {})}
-            if override.metadata_ is not None
-            else (default.metadata_ or {})
+    # 3. Determine effective subject, body, and metadata using the same
+    # precedence as the tenant-facing configuration API.
+    effective = configuration_repository.resolve_template_values(default, override)
+    if not effective.is_active:
+        raise NotFoundError(
+            f"Template with code '{template_code}' is inactive for this tenant"
         )
-        is_customized = True
-    else:
-        raw_subject = default.subject
-        raw_body = default.body
-        effective_metadata = default.metadata_ or {}
-        is_customized = False
 
     # Stringify context values
     string_context = {
@@ -98,19 +90,19 @@ async def render_template(
 
     # 4. Interpolate placeholders
     rendered_subject = (
-        _interpolate_placeholders(raw_subject, string_context)
-        if raw_subject is not None
+        _interpolate_placeholders(effective.subject, string_context)
+        if effective.subject is not None
         else None
     )
-    rendered_body = _interpolate_placeholders(raw_body, string_context)
+    rendered_body = _interpolate_placeholders(effective.body, string_context)
 
     return RenderedTemplate(
         template_code=default.code,
         template_type=default.template_type,
         subject=rendered_subject,
         body=rendered_body,
-        metadata=effective_metadata,
-        is_customized=is_customized,
+        metadata=effective.metadata,
+        is_customized=effective.is_customized,
     )
 
 

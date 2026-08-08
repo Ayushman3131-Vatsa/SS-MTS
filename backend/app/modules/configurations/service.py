@@ -90,23 +90,7 @@ async def get_effective_template(
     override = await repository.get_tenant_override(
         db, principal.tenant_id, template_id,
     )
-
-    if override is not None:
-        effective_subject = override.subject if override.subject is not None else default.subject
-        effective_body = override.body if override.body is not None else default.body
-        effective_metadata = (
-            {**(default.metadata_ or {}), **(override.metadata_ or {})}
-            if override.metadata_ is not None
-            else (default.metadata_ or {})
-        )
-        effective_is_active = override.is_active
-        is_customized = True
-    else:
-        effective_subject = default.subject
-        effective_body = default.body
-        effective_metadata = default.metadata_ or {}
-        effective_is_active = default.is_active
-        is_customized = False
+    effective = repository.resolve_template_values(default, override)
 
     return ConfigTemplateDetailResponse(
         template_id=default.template_id,
@@ -115,13 +99,13 @@ async def get_effective_template(
         display_name=default.display_name,
         description=default.description,
         template_type=default.template_type,
-        subject=effective_subject,
-        body=effective_body,
+        subject=effective.subject,
+        body=effective.body,
         placeholders=default.placeholders if isinstance(default.placeholders, list) else [],
-        metadata=effective_metadata,
-        is_active=effective_is_active,
+        metadata=effective.metadata,
+        is_active=effective.is_active,
         sort_order=default.sort_order,
-        is_customized=is_customized,
+        is_customized=effective.is_customized,
         default_subject=default.subject,
         default_body=default.body,
     )
@@ -146,17 +130,40 @@ async def save_override(
     if not has_access:
         raise NotFoundError("Template not found")
 
-    # Validate that required placeholders are still present in the body
-    if payload.body is not None:
-        _validate_placeholders(default, payload.body)
+    # Serialize by tenant/template even when this is the first override insert;
+    # the subsequent row lock then protects merge-and-write updates. This keeps
+    # two disjoint partial edits from overwriting one another's snapshots.
+    await repository.lock_override_slot(
+        db,
+        principal.tenant_id,
+        template_id,
+    )
+    existing_override = await repository.get_tenant_override(
+        db,
+        principal.tenant_id,
+        template_id,
+        for_update=True,
+    )
+    current = repository.resolve_template_values(default, existing_override)
+    supplied_fields = payload.model_fields_set
+    merged_subject = (
+        payload.subject if "subject" in supplied_fields else current.subject
+    )
+    merged_body = payload.body if "body" in supplied_fields else current.body
+    if merged_body is None:
+        raise BusinessRuleError("Template body cannot be null")
+
+    # Required placeholders may live in either field. Validate the complete
+    # effective snapshot so a partial request cannot accidentally remove one.
+    _validate_placeholders(default, merged_subject, merged_body)
 
     await repository.upsert_override(
         db,
         tenant_id=principal.tenant_id,
         template_id=template_id,
         user_id=principal.id,
-        subject=payload.subject,
-        body=payload.body,
+        subject=merged_subject,
+        body=merged_body,
         metadata=payload.metadata,
         is_active=payload.is_active,
     )
@@ -168,7 +175,7 @@ async def save_override(
         entity_id=template_id,
         action="UPSERT",
         changed_by_user_id=principal.id,
-        new_value=payload.model_dump(exclude_none=True, mode="json"),
+        new_value=payload.model_dump(exclude_unset=True, mode="json"),
     )
     await db.commit()
 
@@ -194,6 +201,11 @@ async def reset_override(
     if not has_access:
         raise NotFoundError("Template not found")
 
+    await repository.lock_override_slot(
+        db,
+        principal.tenant_id,
+        template_id,
+    )
     deleted = await repository.delete_override(
         db, principal.tenant_id, template_id,
     )
@@ -207,7 +219,8 @@ async def reset_override(
             action="DELETE",
             changed_by_user_id=principal.id,
         )
-        await db.commit()
+    # Also release the transaction-scoped serialization lock on a no-op reset.
+    await db.commit()
 
     return await get_effective_template(db, principal, template_id)
 
@@ -241,8 +254,12 @@ async def preview_template(
 # ── Helpers ──────────────────────────────────────────────────────
 
 
-def _validate_placeholders(default: object, body: str) -> None:
-    """Ensure the override body still contains all required placeholders."""
+def _validate_placeholders(
+    default: object,
+    subject: str | None,
+    body: str,
+) -> None:
+    """Ensure the merged override still contains all required placeholders."""
     placeholders = getattr(default, "placeholders", [])
     if not isinstance(placeholders, list):
         return
@@ -253,12 +270,13 @@ def _validate_placeholders(default: object, body: str) -> None:
         if isinstance(ph, dict) and ph.get("required") is True
     }
 
-    body_keys = set(PLACEHOLDER_RE.findall(body))
-    missing = required_keys - body_keys
+    content_keys = set(PLACEHOLDER_RE.findall(f"{subject or ''}\n{body}"))
+    missing = required_keys - content_keys
 
     if missing:
         raise BusinessRuleError(
-            f"Template body is missing required placeholders: {', '.join(sorted(missing))}"
+            "Template subject and body are missing required placeholders: "
+            f"{', '.join(sorted(missing))}"
         )
 
 

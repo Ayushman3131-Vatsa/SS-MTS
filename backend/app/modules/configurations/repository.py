@@ -4,9 +4,11 @@ All tenant-scoped queries filter by tenant_id through the tenant_offerings join
 so a tenant never sees categories or templates for offerings it has not licensed.
 """
 
+from dataclasses import dataclass
+import hashlib
 import uuid
 
-from sqlalchemy import delete, select, func, or_
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.config_category import ConfigCategory
@@ -14,6 +16,47 @@ from app.models.config_template import ConfigTemplate
 from app.models.offering import Offering
 from app.models.tenant_config_override import TenantConfigOverride
 from app.models.tenant_offering import TenantOffering
+
+
+@dataclass(frozen=True)
+class EffectiveTemplateValues:
+    """Tenant-visible values after applying an optional override."""
+
+    subject: str | None
+    body: str
+    metadata: dict
+    is_active: bool
+    is_customized: bool
+
+
+def resolve_template_values(
+    default: ConfigTemplate,
+    override: TenantConfigOverride | None,
+) -> EffectiveTemplateValues:
+    """Apply the shared default/override precedence used by API and runtime reads."""
+    if override is None:
+        return EffectiveTemplateValues(
+            subject=default.subject,
+            body=default.body,
+            metadata=default.metadata_ or {},
+            is_active=default.is_active,
+            is_customized=False,
+        )
+
+    return EffectiveTemplateValues(
+        # The existence of an override row means the tenant owns a complete
+        # subject/body snapshot. In particular, a NULL subject is an explicit
+        # "no subject" value and must not begin inheriting a future default.
+        subject=override.subject,
+        body=override.body,
+        metadata=(
+            {**(default.metadata_ or {}), **(override.metadata_ or {})}
+            if override.metadata_ is not None
+            else (default.metadata_ or {})
+        ),
+        is_active=override.is_active,
+        is_customized=True,
+    )
 
 
 async def get_categories_for_tenant(
@@ -125,19 +168,13 @@ async def get_templates_by_category(
     Each dict includes the template fields plus ``is_customized`` (bool)
     indicating whether the tenant has an override row.
     """
-    override_exists_subq = (
-        select(func.count(TenantConfigOverride.override_id))
-        .where(
-            TenantConfigOverride.template_id == ConfigTemplate.template_id,
-            TenantConfigOverride.tenant_id == tenant_id,
-        )
-        .correlate(ConfigTemplate)
-        .scalar_subquery()
-        .label("override_count")
-    )
-
     stmt = (
-        select(ConfigTemplate, override_exists_subq)
+        select(ConfigTemplate, TenantConfigOverride)
+        .outerjoin(
+            TenantConfigOverride,
+            (TenantConfigOverride.template_id == ConfigTemplate.template_id)
+            & (TenantConfigOverride.tenant_id == tenant_id),
+        )
         .where(
             ConfigTemplate.category_id == category_id,
             ConfigTemplate.is_active.is_(True),
@@ -150,6 +187,7 @@ async def get_templates_by_category(
     templates = []
     for row in rows:
         tmpl = row[0]
+        effective = resolve_template_values(tmpl, row[1])
         templates.append(
             {
                 "template_id": tmpl.template_id,
@@ -158,10 +196,10 @@ async def get_templates_by_category(
                 "display_name": tmpl.display_name,
                 "description": tmpl.description,
                 "template_type": tmpl.template_type,
-                "subject": tmpl.subject,
-                "is_active": tmpl.is_active,
+                "subject": effective.subject,
+                "is_active": effective.is_active,
                 "sort_order": tmpl.sort_order,
-                "is_customized": (row.override_count or 0) > 0,
+                "is_customized": effective.is_customized,
             }
         )
     return templates
@@ -174,17 +212,65 @@ async def get_template_by_id(
     return await db.get(ConfigTemplate, template_id)
 
 
+async def get_entitled_template_by_code(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    template_code: str,
+) -> ConfigTemplate | None:
+    """Resolve a runtime template only through a current active entitlement."""
+    stmt = (
+        select(ConfigTemplate)
+        .join(
+            ConfigCategory,
+            ConfigCategory.category_id == ConfigTemplate.category_id,
+        )
+        .join(
+            TenantOffering,
+            TenantOffering.offering_id == ConfigCategory.offering_id,
+        )
+        .where(
+            ConfigTemplate.code == template_code,
+            ConfigTemplate.is_active.is_(True),
+            ConfigCategory.status == "ACTIVE",
+            TenantOffering.tenant_id == tenant_id,
+            TenantOffering.status == "ACTIVE",
+            TenantOffering.starts_at <= func.now(),
+            or_(TenantOffering.ends_at.is_(None), TenantOffering.ends_at > func.now()),
+        )
+    )
+    result = await db.execute(stmt)
+    return result.scalars().unique().one_or_none()
+
+
 async def get_tenant_override(
     db: AsyncSession,
     tenant_id: uuid.UUID,
     template_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> TenantConfigOverride | None:
     stmt = select(TenantConfigOverride).where(
         TenantConfigOverride.tenant_id == tenant_id,
         TenantConfigOverride.template_id == template_id,
     )
+    if for_update:
+        stmt = stmt.with_for_update()
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def lock_override_slot(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    template_id: uuid.UUID,
+) -> None:
+    """Serialize writes even before the tenant/template override row exists."""
+    digest = hashlib.blake2b(
+        f"{tenant_id}:{template_id}".encode(),
+        digest_size=8,
+    ).digest()
+    lock_key = int.from_bytes(digest, byteorder="big", signed=True)
+    await db.execute(select(func.pg_advisory_xact_lock(lock_key)))
 
 
 async def upsert_override(
@@ -194,18 +280,24 @@ async def upsert_override(
     user_id: uuid.UUID,
     *,
     subject: str | None,
-    body: str | None,
+    body: str,
     metadata: dict | None,
     is_active: bool | None,
 ) -> TenantConfigOverride:
     """Create or update a tenant's template override."""
-    existing = await get_tenant_override(db, tenant_id, template_id)
+    existing = await get_tenant_override(
+        db,
+        tenant_id,
+        template_id,
+        for_update=True,
+    )
 
     if existing is not None:
-        if subject is not None:
-            existing.subject = subject
-        if body is not None:
-            existing.body = body
+        # Service callers pass the fully merged content snapshot so omitted
+        # request fields retain their current effective value while explicit
+        # NULL subjects remain meaningful.
+        existing.subject = subject
+        existing.body = body
         if metadata is not None:
             existing.metadata_ = metadata
         if is_active is not None:
@@ -214,6 +306,10 @@ async def upsert_override(
         await db.flush()
         await db.refresh(existing)
         return existing
+
+    default = await get_template_by_id(db, template_id)
+    if default is None:
+        raise ValueError("Cannot create an override for a missing template")
 
     override = TenantConfigOverride(
         tenant_id=tenant_id,

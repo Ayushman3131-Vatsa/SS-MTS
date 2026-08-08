@@ -12,10 +12,12 @@ import type {
 } from "../../features/configurations/model/types";
 import { CategoryTabs } from "../../features/configurations/ui/CategoryTabs";
 import { TemplateCard } from "../../features/configurations/ui/TemplateCard";
+import { useWindowFocusRefresh } from "../../shared/model/useWindowFocusRefresh";
 import styles from "./ConfigurationsPage.module.css";
 
 export const ConfigurationsPage: React.FC = () => {
   const navigate = useNavigate();
+  const focusRefreshKey = useWindowFocusRefresh();
   const [categories, setCategories] = useState<ConfigCategoryResponse[]>([]);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<ConfigTemplateListItem[]>([]);
@@ -34,9 +36,15 @@ export const ConfigurationsPage: React.FC = () => {
         const data = await fetchConfigCategories();
         if (isMounted) {
           setCategories(data);
-          if (data.length > 0) {
-            setActiveCategoryId(data[0].category_id);
-          }
+          setActiveCategoryId((currentCategoryId) => {
+            if (
+              currentCategoryId &&
+              data.some((category) => category.category_id === currentCategoryId)
+            ) {
+              return currentCategoryId;
+            }
+            return data[0]?.category_id ?? null;
+          });
         }
       } catch (err) {
         if (isMounted) {
@@ -51,7 +59,7 @@ export const ConfigurationsPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [focusRefreshKey]);
 
   // 2. Fetch templates whenever active category changes
   useEffect(() => {
@@ -76,7 +84,7 @@ export const ConfigurationsPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [activeCategoryId]);
+  }, [activeCategoryId, focusRefreshKey]);
 
   const activeCategory = categories.find((c) => c.category_id === activeCategoryId);
 

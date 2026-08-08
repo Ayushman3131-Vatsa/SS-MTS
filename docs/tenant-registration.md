@@ -45,6 +45,27 @@ Platform admins manage entitlements with:
   permanently remove a deactivated or expired entitlement with a required
   reason and expected version.
 
+Platform admins manage the offering catalog separately with:
+
+- `GET /offerings` to list every active and inactive offering and its usage;
+- `POST /offerings` to create a catalog offering;
+- `PATCH /offerings/{offering_id}` to edit its metadata (the stable code is immutable);
+- `POST /offerings/{offering_id}/activate` and `/deactivate` to control new licensing;
+- `DELETE /offerings/{offering_id}` to permanently remove an unused offering.
+
+Catalog deactivation hides an offering from tenant registration and rejects new
+grants, while preserving existing tenant entitlements. Deletion is blocked if
+the offering has historical tenant entitlements or configuration categories.
+Creating a catalog entry does not create a product module: its frontend and
+backend functionality must be delivered separately and bound to the stable
+offering code.
+
+Platform default templates are managed at `/platform/default-templates`.
+Publishing changes updates tenants that still inherit the default on their
+next read or render. The first tenant customization stores a complete
+subject/body snapshot, so later platform edits do not leak into customized
+content; resetting deletes only that override and reveals the newest default.
+
 Grant and transition requests carry an `expected_version` where applicable
 and should carry an `Idempotency-Key`. The backend writes entitlement event,
 platform activity, and audit rows in the same transaction. A re-grant creates

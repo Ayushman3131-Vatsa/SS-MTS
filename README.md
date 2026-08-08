@@ -173,6 +173,17 @@ authentication by database-backed dependencies and service rules.
 | GET | `/tenants` | Paginated tenant list with search and `status` filtering |
 | GET | `/tenants/{tenant_id}` | Get one tenant |
 | GET | `/tenants/offering-catalog` | List active and inactive offering catalog entries |
+| GET | `/offerings` | List and inspect all platform offering catalog entries |
+| POST | `/offerings` | Create an offering catalog entry |
+| PATCH | `/offerings/{offering_id}` | Update offering metadata (code is immutable) |
+| POST | `/offerings/{offering_id}/activate` | Make an offering available for new licensing |
+| POST | `/offerings/{offering_id}/deactivate` | Remove an offering from new licensing without revoking tenants |
+| DELETE | `/offerings/{offering_id}` | Delete an unused offering catalog entry |
+| GET | `/platform/default-templates?offering_id={offering_id}` | List an offering's platform defaults and tenant impact |
+| GET | `/platform/default-templates/{template_id}` | Get one editable platform default |
+| POST | `/platform/default-templates` | Create and immediately publish a platform default |
+| PATCH | `/platform/default-templates/{template_id}` | Publish safe edits using `expected_version` |
+| POST | `/platform/default-templates/preview` | Validate and render an unsaved default-template draft |
 | POST | `/tenants/{tenant_id}/suspend` | Suspend tenant access using an expected tenant version |
 | POST | `/tenants/{tenant_id}/activate` | Activate tenant access using an expected tenant version |
 | GET | `/tenants/{tenant_id}/offering-entitlements` | List current and historical grants |
