@@ -1,7 +1,7 @@
 """add time-bound tenant offering entitlements
 
 Revision ID: 0010
-Revises: 0009
+Revises: 0009_user_accounts_sessions_roles_hrms
 Create Date: 2026-08-05
 """
 
@@ -12,7 +12,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0010"
-down_revision: Union[str, None] = "0009"
+down_revision: Union[str, None] = "0009_user_accounts_sessions_roles_hrms"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

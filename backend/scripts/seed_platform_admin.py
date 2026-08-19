@@ -19,9 +19,9 @@ from typing import Annotated
 from pydantic import EmailStr, Field, TypeAdapter, ValidationError
 from sqlalchemy import select
 
-from app.core.security import hash_password, normalize_email, validate_password
-from app.db.session import db_manager
-from app.models.platform_admin import PlatformAdmin
+from app.common.security import hash_password, normalize_email, validate_password
+from app.common.db.session import db_manager
+from app.auth.models.platform_admin import PlatformAdmin
 
 _EMAIL_ADAPTER = TypeAdapter(Annotated[EmailStr, Field(max_length=254)])
 

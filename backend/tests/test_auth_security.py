@@ -9,20 +9,20 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.common.deps import Principal, require_tenant_user
-from app.core.config import Settings
-from app.core.exceptions import ForbiddenError
-from app.middleware.auth_middleware import (
+from app.auth.deps import Principal, require_tenant_user
+from app.common.config import Settings
+from app.common.exceptions import ForbiddenError
+from app.auth.middleware import (
     AuthenticationMiddleware,
     PUBLIC_ROUTES,
     db_manager,
 )
-from app.middleware.security_middleware import (
+from app.common.middleware.security_middleware import (
     RequestSizeLimitMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.modules.auth import router as auth_router
-from app.modules.auth.service import (
+from app.auth.login import router as auth_router
+from app.auth.login.service import (
     BrowserAuthenticationResult,
     _authenticate_tenant_user,
     _create_browser_session,
@@ -30,7 +30,7 @@ from app.modules.auth.service import (
     digest_secret,
     platform_account_throttle_key,
 )
-from app.schemas.auth import (
+from app.auth.schemas.auth import (
     PlatformSessionLoginRequest,
     SessionPrincipalResponse,
     TenantSessionLoginRequest,
@@ -193,23 +193,19 @@ class SessionSecurityTests(unittest.TestCase):
 class SuspendedTenantAuthenticationTests(unittest.IsolatedAsyncioTestCase):
     async def test_valid_suspended_tenant_credentials_still_authenticate(self) -> None:
         tenant = SimpleNamespace(tenant_id=uuid.uuid4(), status="SUSPENDED")
-        user = SimpleNamespace(password_hash="password-hash", status="Active")
+        user = SimpleNamespace(
+            password_hash="password-hash",
+            status="Active",
+            is_active=True,
+            locked_until=None,
+            failed_login_count=0,
+        )
         result = SimpleNamespace(scalar_one_or_none=lambda: user)
         db = SimpleNamespace(execute=AsyncMock(return_value=result))
 
-        with (
-            patch(
-                "app.modules.auth.service._ensure_login_allowed",
-                new=AsyncMock(),
-            ),
-            patch(
-                "app.modules.auth.service.verify_password_and_update",
-                return_value=(True, None),
-            ),
-            patch(
-                "app.modules.auth.service._clear_account_failures",
-                new=AsyncMock(),
-            ),
+        with patch(
+            "app.auth.login.service.verify_password_and_update",
+            return_value=(True, None),
         ):
             authenticated = await _authenticate_tenant_user(
                 db,
@@ -322,7 +318,7 @@ class TransportMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(db_manager, "session_for", new=fake_session_for),
             patch(
-                "app.middleware.auth_middleware.auth_service.get_active_browser_session",
+                "app.auth.middleware.auth_service.get_active_browser_session",
                 new=AsyncMock(return_value=session),
             ),
         ):
@@ -369,11 +365,11 @@ class TransportMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(db_manager, "session_for", new=fake_session_for),
             patch(
-                "app.middleware.auth_middleware.auth_service.get_active_browser_session",
+                "app.auth.middleware.auth_service.get_active_browser_session",
                 new=AsyncMock(return_value=session),
             ),
             patch(
-                "app.middleware.auth_middleware.auth_service.touch_browser_session",
+                "app.auth.middleware.auth_service.touch_browser_session",
                 new=touch,
             ),
         ):
@@ -431,7 +427,7 @@ class TransportMiddlewareTests(unittest.IsolatedAsyncioTestCase):
             await send({"type": "http.response.body", "body": b"{}"})
 
         with patch(
-            "app.middleware.security_middleware.get_settings",
+            "app.common.middleware.security_middleware.get_settings",
             return_value=Settings(_env_file=None, environment="development"),
         ):
             app = SecurityHeadersMiddleware(downstream)

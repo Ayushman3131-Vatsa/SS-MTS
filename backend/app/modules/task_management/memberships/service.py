@@ -2,6 +2,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.roles import get_active_role_name
 from app.common.audit import record_audit
 from app.common.deps import Principal
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
@@ -30,12 +31,18 @@ async def validate_member_user(
     role: str,
 ):
     user = await repository.get_user(db, tenant_id, user_id)
-    if user is None or user.status != "Active":
+    if user is None or not user.is_active:
         raise BusinessRuleError(
             "Only an active tenant user can be added to a project",
             code=errors.INVALID_PROJECT_MEMBER,
         )
-    if role == ProjectMemberRole.MANAGER and user.role not in {
+    user_role = await get_active_role_name(db, user.id)
+    if user_role is None:
+        raise BusinessRuleError(
+            "Only an active tenant user can be added to a project",
+            code=errors.INVALID_PROJECT_MEMBER,
+        )
+    if role == ProjectMemberRole.MANAGER and user_role not in {
         "Tenant Admin",
         "Project Manager",
     }:

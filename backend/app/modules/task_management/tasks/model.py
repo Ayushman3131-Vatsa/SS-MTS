@@ -42,27 +42,27 @@ class Task(Base):
         ),
         ForeignKeyConstraint(
             ["tenant_id", "assignee_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_task_assignee",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "technical_lead_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_task_tech_lead",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "functional_lead_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_task_func_lead",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "reporter_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_task_reporter",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "created_by_user_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_task_created_by",
         ),
         UniqueConstraint(
@@ -152,7 +152,7 @@ class TaskLink(Base):
         ),
         ForeignKeyConstraint(
             ["tenant_id", "created_by_user_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_task_link_creator",
         ),
         UniqueConstraint(

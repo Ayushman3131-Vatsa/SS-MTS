@@ -28,7 +28,7 @@ class TaskAttachment(Base):
         ),
         ForeignKeyConstraint(
             ["tenant_id", "uploaded_by_user_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_task_attachment_uploader",
         ),
         UniqueConstraint("storage_key", name="uq_task_attachments_storage_key"),

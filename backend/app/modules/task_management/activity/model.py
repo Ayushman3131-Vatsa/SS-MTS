@@ -19,7 +19,7 @@ class TaskActivityEvent(Base):
         ),
         ForeignKeyConstraint(
             ["tenant_id", "actor_user_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_task_activity_actor",
         ),
         Index("idx_task_activity_task", "tenant_id", "task_id", "occurred_at"),

@@ -20,7 +20,7 @@ class DailyProgressLog(Base):
         ),
         ForeignKeyConstraint(
             ["tenant_id", "updated_by_user_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_log_author",
         ),
         CheckConstraint("hours_worked > 0 AND hours_worked <= 24", name="check_daily_log_hours"),

@@ -1,6 +1,6 @@
 """add configuration tables and seed default templates
 
-Revision ID: 0009
+Revision ID: 0009_configurations
 Revises: 0008
 Create Date: 2026-08-04
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0009"
+revision: str = "0009_configurations"
 down_revision: Union[str, None] = "0008"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

@@ -19,12 +19,12 @@ class ProjectMember(Base):
         ),
         ForeignKeyConstraint(
             ["tenant_id", "user_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_project_member_user",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "added_by_user_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_project_member_added_by",
         ),
         UniqueConstraint("tenant_id", "project_id", "user_id", name="uq_project_members_user"),

@@ -59,7 +59,10 @@ async def list_members(
 
 
 async def get_user(db: AsyncSession, tenant_id: uuid.UUID, user_id: uuid.UUID) -> User | None:
-    return await db.get(User, {"tenant_id": tenant_id, "user_id": user_id})
+    user = await db.get(User, user_id)
+    if user is None or user.tenant_id != tenant_id:
+        return None
+    return user
 
 
 async def has_active_assignments(

@@ -25,12 +25,12 @@ class Project(Base):
     __table_args__ = (
         ForeignKeyConstraint(
             ["tenant_id", "pm_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_project_pm",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "dm_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_project_dm",
         ),
         UniqueConstraint("tenant_id", "project_key", name="uq_projects_tenant_key"),

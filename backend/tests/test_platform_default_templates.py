@@ -20,7 +20,7 @@ from app.models.platform_activity_event import PlatformActivityEvent
 from app.models.tenant import Tenant
 from app.models.tenant_config_override import TenantConfigOverride
 from app.models.tenant_offering import TenantOffering
-from app.models.user import User
+from app.auth.models.user_account import UserAccount
 from app.modules.configurations import service as tenant_configuration_service
 from app.modules.platform_default_templates import repository, service
 from app.modules.platform_default_templates import router as platform_template_router
@@ -511,7 +511,7 @@ async def test_global_code_conflict_spans_offerings_and_template_types(
 @pytest.mark.asyncio
 async def test_counts_and_updates_propagate_only_to_inheriting_tenants(
     db_session: AsyncSession,
-    test_user: User,
+    test_user: UserAccount,
 ) -> None:
     suffix = uuid.uuid4().hex[:10]
     customized_tenant = await db_session.get(Tenant, test_user.tenant_id)
@@ -529,13 +529,13 @@ async def test_counts_and_updates_propagate_only_to_inheriting_tenants(
         status="ACTIVE",
         created_by_admin_id=customized_tenant.created_by_admin_id,
     )
-    inheriting_user = User(
+    inheriting_user = UserAccount(
         tenant_id=inheriting_tenant_id,
-        name="Inheriting Admin",
+        id=uuid.uuid4(),
+        display_name="Inheriting Admin",
         email=f"inheriting-{suffix}@example.test",
         password_hash="test-only",
-        role="Tenant Admin",
-        status="Active",
+        is_active=True,
     )
     offering = Offering(
         offering_id=offering_id,

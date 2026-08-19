@@ -2,18 +2,22 @@ import asyncio
 import io
 import tempfile
 import unittest
+import uuid
 from datetime import date
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 from pydantic import ValidationError
 from starlette.datastructures import Headers, UploadFile
 
 from app.core.config import Settings
 from app.core.exceptions import BusinessRuleError
+from app.db.base import Base
 from app.db.session import DatabaseSessionManager
 from app.main import app
 from app.models.project import Project as LegacyProject
 from app.models.task import Task as LegacyTask
+from app.models.user import User
 from app.modules.task_management.attachments.local_storage import LocalAttachmentStorage
 from app.modules.task_management.attachments.service import _safe_filename
 from app.modules.task_management.domain.enums import ProjectMemberRole, TaskStatus
@@ -26,6 +30,8 @@ from app.modules.task_management.domain.policies import (
     can_view_project,
 )
 from app.modules.task_management.domain.transitions import can_transition_task
+from app.modules.task_management.memberships import repository as membership_repository
+from app.modules.task_management.memberships import service as membership_service
 from app.modules.task_management.projects.model import Project
 from app.modules.task_management.projects.schemas import ProjectCreateRequest
 from app.modules.task_management.tasks.model import Task
@@ -38,6 +44,37 @@ class TaskManagementDomainTests(unittest.TestCase):
         self.assertIs(Task, LegacyTask)
         self.assertEqual(Project.__tablename__, "projects")
         self.assertEqual(Task.__tablename__, "tasks")
+
+    def test_user_foreign_keys_resolve_to_user_accounts(self) -> None:
+        expected_constraint_names = {
+            "fk_project_pm",
+            "fk_project_dm",
+            "fk_task_assignee",
+            "fk_task_tech_lead",
+            "fk_task_func_lead",
+            "fk_task_reporter",
+            "fk_task_created_by",
+            "fk_task_link_creator",
+            "fk_project_member_user",
+            "fk_project_member_added_by",
+            "fk_comment_author",
+            "fk_log_author",
+            "fk_task_attachment_uploader",
+            "fk_task_activity_actor",
+        }
+        resolved_constraint_names = set()
+
+        for table in Base.metadata.tables.values():
+            for constraint in table.foreign_key_constraints:
+                if constraint.name not in expected_constraint_names:
+                    continue
+                targets = {element.column.table.name for element in constraint.elements}
+                target_columns = {element.column.name for element in constraint.elements}
+                self.assertEqual(targets, {"user_accounts"})
+                self.assertEqual(target_columns, {"tenant_id", "id"})
+                resolved_constraint_names.add(constraint.name)
+
+        self.assertEqual(resolved_constraint_names, expected_constraint_names)
 
     def test_fixed_workflow_accepts_only_documented_transitions(self) -> None:
         self.assertTrue(can_transition_task(TaskStatus.NEW, TaskStatus.ASSIGNED))
@@ -127,6 +164,61 @@ class TaskManagementDomainTests(unittest.TestCase):
             migration_database_url="postgresql+asyncpg://owner:secret@db/app",
         )
         self.assertFalse(valid.is_development)
+
+
+class TaskManagementMembershipTests(unittest.IsolatedAsyncioTestCase):
+    async def test_member_lookup_uses_current_user_account_primary_key(self) -> None:
+        tenant_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        user = User(
+            id=user_id,
+            tenant_id=tenant_id,
+            email="member@example.test",
+            password_hash="test-only",
+            display_name="Project member",
+            is_active=True,
+        )
+        db = AsyncMock()
+        db.get.return_value = user
+
+        result = await membership_repository.get_user(db, tenant_id, user_id)
+
+        self.assertIs(result, user)
+        db.get.assert_awaited_once_with(User, user_id)
+
+    async def test_member_validation_loads_role_from_role_assignment(self) -> None:
+        tenant_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        user = User(
+            id=user_id,
+            tenant_id=tenant_id,
+            email="manager@example.test",
+            password_hash="test-only",
+            display_name="Project manager",
+            is_active=True,
+        )
+        db = AsyncMock()
+
+        with (
+            patch.object(
+                membership_service.repository,
+                "get_user",
+                AsyncMock(return_value=user),
+            ),
+            patch.object(
+                membership_service,
+                "get_active_role_name",
+                AsyncMock(return_value="Project Manager"),
+            ),
+        ):
+            result = await membership_service.validate_member_user(
+                db,
+                tenant_id,
+                user_id,
+                ProjectMemberRole.MANAGER,
+            )
+
+        self.assertIs(result, user)
 
 
 class LocalAttachmentStorageTests(unittest.IsolatedAsyncioTestCase):

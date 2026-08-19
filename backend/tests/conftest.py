@@ -19,7 +19,7 @@ from sqlalchemy.pool import NullPool
 from app.core.config import get_settings
 from app.models.platform_admin import PlatformAdmin
 from app.models.tenant import Tenant
-from app.models.user import User
+from app.auth.models.user_account import UserAccount
 
 
 @pytest_asyncio.fixture
@@ -50,7 +50,7 @@ async def db_session() -> AsyncSession:
 
 
 @pytest_asyncio.fixture
-async def test_user(db_session: AsyncSession) -> User:
+async def test_user(db_session: AsyncSession) -> UserAccount:
     admin_id = uuid.uuid4()
     tenant_id = uuid.uuid4()
     admin = PlatformAdmin(
@@ -68,15 +68,18 @@ async def test_user(db_session: AsyncSession) -> User:
         status="ACTIVE",
         created_by_admin_id=admin_id,
     )
-    user = User(
+    user = UserAccount(
         tenant_id=tenant_id,
-        user_id=uuid.uuid4(),
-        name="Configuration Test User",
+        id=uuid.uuid4(),
+        display_name="Configuration Test User",
         email=f"user-{tenant_id.hex}@example.test",
         password_hash="test-only",
-        role="Tenant Admin",
-        status="Active",
+        is_active=True,
     )
-    db_session.add_all([admin, tenant, user])
+    # UserAccount has a database FK to tenants. Flush the parent rows first;
+    # these models intentionally do not define ORM relationships.
+    db_session.add_all([admin, tenant])
+    await db_session.flush()
+    db_session.add(user)
     await db_session.flush()
     return user

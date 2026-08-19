@@ -4,24 +4,22 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
-from app.core.config import get_settings
-from app.core.exceptions import AppError
-from app.middleware.auth_middleware import AuthenticationMiddleware, PUBLIC_ROUTES
-from app.middleware.security_middleware import (
+from app.common.config import get_settings
+from app.common.exceptions import AppError
+from app.auth.middleware import AuthenticationMiddleware, PUBLIC_ROUTES
+from app.common.middleware.security_middleware import (
     RequestSizeLimitMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.modules.auth.router import router as auth_router
+from app.auth.router import router as auth_router
 from app.modules.configurations.router import router as configurations_router
 from app.modules.offerings.router import router as offerings_router
-from app.modules.platform_dashboard.router import router as platform_dashboard_router
-from app.modules.platform_default_templates.router import router as platform_default_templates_router
-from app.modules.task_management.compat.legacy_router import (
-    router as legacy_task_management_router,
+from app.modules.platform_default_templates.router import (
+    router as platform_default_templates_router,
 )
-from app.modules.task_management.router import router as task_management_router
-from app.modules.tenants.router import router as tenants_router
-from app.modules.users.router import router as users_router
+from app.modules.task_management.router import router as task_management_legacy_router
+from app.task_management.router import router as task_management_router
+from app.tenant_management.router import router as tenant_management_router
 
 app = FastAPI(title="Multi-Tenant Task Management POC", version="0.1.0")
 
@@ -90,14 +88,12 @@ async def health() -> dict:
 
 
 app.include_router(auth_router)
-app.include_router(tenants_router)
+app.include_router(tenant_management_router)
 app.include_router(offerings_router)
-app.include_router(users_router)
-app.include_router(legacy_task_management_router)
-app.include_router(platform_dashboard_router)
-app.include_router(platform_default_templates_router)
+app.include_router(task_management_legacy_router)
 app.include_router(task_management_router)
 app.include_router(configurations_router)
+app.include_router(platform_default_templates_router)
 
 
 def custom_openapi() -> dict:

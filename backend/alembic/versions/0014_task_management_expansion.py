@@ -317,10 +317,10 @@ def upgrade() -> None:
         "fk_task_blocked_by", "tasks", "tasks", ["tenant_id", "blocked_by_id"], ["tenant_id", "task_id"]
     )
     op.create_foreign_key(
-        "fk_task_reporter", "tasks", "users", ["tenant_id", "reporter_id"], ["tenant_id", "user_id"]
+        "fk_task_reporter", "tasks", "user_accounts", ["tenant_id", "reporter_id"], ["tenant_id", "id"]
     )
     op.create_foreign_key(
-        "fk_task_created_by", "tasks", "users", ["tenant_id", "created_by_user_id"], ["tenant_id", "user_id"]
+        "fk_task_created_by", "tasks", "user_accounts", ["tenant_id", "created_by_user_id"], ["tenant_id", "id"]
     )
     op.create_index("idx_tasks_project_status", "tasks", ["tenant_id", "project_id", "status"])
     op.create_index("idx_tasks_due_lookup", "tasks", ["tenant_id", "end_date"])
@@ -346,10 +346,10 @@ def upgrade() -> None:
             name="fk_project_member_project", ondelete="CASCADE"
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id", "user_id"], ["users.tenant_id", "users.user_id"], name="fk_project_member_user"
+            ["tenant_id", "user_id"], ["user_accounts.tenant_id", "user_accounts.id"], name="fk_project_member_user"
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id", "added_by_user_id"], ["users.tenant_id", "users.user_id"], name="fk_project_member_added_by"
+            ["tenant_id", "added_by_user_id"], ["user_accounts.tenant_id", "user_accounts.id"], name="fk_project_member_added_by"
         ),
         sa.PrimaryKeyConstraint("tenant_id", "membership_id"),
         sa.UniqueConstraint("tenant_id", "project_id", "user_id", name="uq_project_members_user"),
@@ -401,7 +401,7 @@ def upgrade() -> None:
             name="fk_task_link_target", ondelete="CASCADE"
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id", "created_by_user_id"], ["users.tenant_id", "users.user_id"],
+            ["tenant_id", "created_by_user_id"], ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_task_link_creator"
         ),
         sa.PrimaryKeyConstraint("tenant_id", "link_id"),
@@ -442,7 +442,7 @@ def upgrade() -> None:
             name="fk_task_attachment_task", ondelete="CASCADE"
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id", "uploaded_by_user_id"], ["users.tenant_id", "users.user_id"],
+            ["tenant_id", "uploaded_by_user_id"], ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_task_attachment_uploader"
         ),
         sa.PrimaryKeyConstraint("tenant_id", "attachment_id"),
@@ -467,7 +467,7 @@ def upgrade() -> None:
             name="fk_task_activity_task", ondelete="CASCADE"
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id", "actor_user_id"], ["users.tenant_id", "users.user_id"],
+            ["tenant_id", "actor_user_id"], ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_task_activity_actor"
         ),
         sa.PrimaryKeyConstraint("tenant_id", "event_id"),

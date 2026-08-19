@@ -19,7 +19,7 @@ class TaskComment(Base):
         ),
         ForeignKeyConstraint(
             ["tenant_id", "commented_by_user_id"],
-            ["users.tenant_id", "users.user_id"],
+            ["user_accounts.tenant_id", "user_accounts.id"],
             name="fk_comment_author",
         ),
         Index("idx_task_comments_task_lookup", "tenant_id", "task_id"),
