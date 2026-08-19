@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, PropsWithChildren } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type PropsWithChildren } from "react";
 
 import styles from "./Button.module.css";
 
@@ -12,17 +12,18 @@ interface ButtonProps
   variant?: ButtonVariant;
 }
 
-export const Button = ({
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   children,
   className = "",
   disabled,
   fullWidth = false,
   loading = false,
-  loadingLabel = "Please wait…",
+  loadingLabel = "Please wait...",
   variant = "primary",
   ...props
-}: ButtonProps) => (
+}, ref) => (
   <button
+    ref={ref}
     className={`${styles.button} ${styles[variant]} ${
       fullWidth ? styles.fullWidth : ""
     } ${className}`}
@@ -33,4 +34,6 @@ export const Button = ({
     {loading && <span className={styles.spinner} aria-hidden="true" />}
     <span>{loading ? loadingLabel : children}</span>
   </button>
-);
+));
+
+Button.displayName = "Button";

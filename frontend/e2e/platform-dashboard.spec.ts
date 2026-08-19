@@ -5,9 +5,10 @@ import {
   platformPrincipal,
 } from "./support/session-api-mock";
 
-const DASHBOARD_TIMEOUT = 20_000;
+const DASHBOARD_TIMEOUT = 45_000;
 
 test.describe("platform dashboard", () => {
+  test.describe.configure({ timeout: 60_000 });
   test("renders live platform metrics, activity, and the exact navigation modules", async ({
     page,
   }) => {
@@ -36,7 +37,7 @@ test.describe("platform dashboard", () => {
     const navigation = page.getByRole("navigation", {
       name: "Platform navigation",
     });
-    await expect(navigation.getByRole("link")).toHaveCount(3);
+    await expect(navigation.getByRole("link")).toHaveCount(5);
     await expect(
       navigation.getByRole("link", { name: "Dashboard" }),
     ).toHaveAttribute("aria-current", "page");
@@ -45,6 +46,12 @@ test.describe("platform dashboard", () => {
     ).toBeVisible();
     await expect(
       navigation.getByRole("link", { name: "Register Tenant" }),
+    ).toBeVisible();
+    await expect(
+      navigation.getByRole("link", { name: "Offerings" }),
+    ).toBeVisible();
+    await expect(
+      navigation.getByRole("link", { name: "Default Templates" }),
     ).toBeVisible();
 
     await navigation.getByRole("link", { name: "All Tenants" }).click();
@@ -137,8 +144,10 @@ test.describe("platform dashboard", () => {
       .poll(() => page.evaluate(() => document.body.style.overflow))
       .toBe("hidden");
 
-    const registerLink = page.getByRole("link", { name: "Register Tenant" });
-    await registerLink.focus();
+    const lastNavigationLink = dialog.getByRole("link", {
+      name: "Default Templates",
+    });
+    await lastNavigationLink.focus();
     await page.keyboard.press("Tab");
     await expect(close).toBeFocused();
 

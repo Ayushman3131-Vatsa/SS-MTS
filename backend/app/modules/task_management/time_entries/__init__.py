@@ -1,0 +1,2 @@
+"""Task time-entry aggregate."""
+

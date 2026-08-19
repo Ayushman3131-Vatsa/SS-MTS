@@ -53,14 +53,10 @@ const dashboardSchema = z.object({
   recent_activity: z.array(
     z.object({
       activity_id: z.string().uuid(),
-      event_type: z.enum([
-        "TENANT_CREATED",
-        "PLAN_CHANGED",
-        "TENANT_SUSPENDED",
-        "TENANT_REACTIVATED",
-        "DATABASE_ALLOCATION_READY",
-        "DATABASE_ALLOCATION_FAILED",
-      ]),
+      // Event codes are an append-only backend catalog. Keep structural
+      // validation strict without making a newly deployed event type take the
+      // entire dashboard offline; the activity UI has a safe fallback label.
+      event_type: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
       occurred_at: utcDateTime,
       tenant: z.object({
         tenant_id: z.string().uuid().nullable(),

@@ -8,9 +8,9 @@ from app.common.schemas.base import StrictRequestModel
 
 
 class DailyLogCreateRequest(StrictRequestModel):
-    hours_worked: Decimal = Field(gt=0)
-    progress_notes: str | None = None
-    attachment_url: str | None = None
+    hours_worked: Decimal = Field(gt=0, le=24, max_digits=5, decimal_places=2)
+    progress_notes: str | None = Field(default=None, max_length=20_000)
+    attachment_url: str | None = Field(default=None, max_length=2000)
 
 
 class DailyLogResponse(BaseModel):

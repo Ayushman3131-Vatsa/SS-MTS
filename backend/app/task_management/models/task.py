@@ -21,10 +21,14 @@ class Task(Base):
     __tablename__ = "tasks"
     __table_args__ = (
         ForeignKeyConstraint(
-            ["tenant_id", "project_id"], ["projects.tenant_id", "projects.project_id"], name="fk_task_project"
+            ["tenant_id", "project_id"],
+            ["projects.tenant_id", "projects.project_id"],
+            name="fk_task_project",
         ),
         ForeignKeyConstraint(
-            ["tenant_id", "parent_task_id"], ["tasks.tenant_id", "tasks.task_id"], name="fk_parent_task"
+            ["tenant_id", "parent_task_id"],
+            ["tasks.tenant_id", "tasks.task_id"],
+            name="fk_parent_task",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "assignee_id"],
@@ -42,8 +46,7 @@ class Task(Base):
             name="fk_task_func_lead",
         ),
         CheckConstraint(
-            "status IN ('New', 'Assigned', 'In Progress', 'Blocked', 'On Hold', 'Under Review', "
-            "'Completed', 'Cancelled')",
+            "status IN ('New', 'Assigned', 'In Progress', 'Blocked', 'On Hold', 'Under Review', 'Completed', 'Cancelled')",
             name="check_task_status",
         ),
         Index("idx_tasks_project_lookup", "tenant_id", "project_id"),

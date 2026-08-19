@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from app.models.enums import PlatformActivityType
+
 
 class GrowthMonths(IntEnum):
     SIX = 6
@@ -19,16 +21,6 @@ class RegistrationDays(IntEnum):
 
 
 PlanCode = Literal["FREE", "BASIC", "PRO", "ENTERPRISE"]
-PlatformActivityType = Literal[
-    "TENANT_CREATED",
-    "PLAN_CHANGED",
-    "TENANT_SUSPENDED",
-    "TENANT_REACTIVATED",
-    "DATABASE_ALLOCATION_READY",
-    "DATABASE_ALLOCATION_FAILED",
-]
-
-
 class StrictResponseModel(BaseModel):
     """Response contract that cannot silently grow or drift."""
 

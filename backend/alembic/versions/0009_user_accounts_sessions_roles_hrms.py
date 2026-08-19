@@ -1,6 +1,6 @@
 """migrate to user_accounts sessions roles and hrms models
 
-Revision ID: 0009
+Revision ID: 0009_user_accounts_sessions_roles_hrms
 Revises: 0008
 Create Date: 2026-07-31
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0009"
-down_revision: Union[str, None] = "0008"
+revision: str = "0009_user_accounts_sessions_roles_hrms"
+down_revision: Union[str, None] = "0009_configurations"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -219,6 +219,7 @@ def upgrade() -> None:
         ("tasks", "fk_task_func_lead"),
         ("task_comments", "fk_comment_author"),
         ("daily_progress_logs", "fk_log_author"),
+        ("tenant_config_overrides", "fk_override_updated_by"),
     ):
         op.drop_constraint(constraint, table, type_="foreignkey")
 
@@ -270,6 +271,14 @@ def upgrade() -> None:
         "user_accounts",
         ["tenant_id", "updated_by_user_id"],
         ["tenant_id", "id"],
+    )
+    op.create_foreign_key(
+        "fk_override_updated_by",
+        "tenant_config_overrides",
+        "user_accounts",
+        ["tenant_id", "updated_by_user_id"],
+        ["tenant_id", "id"],
+        ondelete="RESTRICT",
     )
 
     # --- user_sessions (replaces browser_sessions) ---

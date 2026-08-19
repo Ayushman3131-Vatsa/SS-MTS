@@ -27,6 +27,7 @@ const tenantPrincipalSchema = z.object({
     tenant_id: z.string().uuid(),
     org_name: z.string().min(1),
     workspace_slug: z.string().min(3).max(63),
+    status: z.enum(["ACTIVE", "SUSPENDED"]),
     offerings: z.array(
       z.object({
         offering_id: z.string().uuid(),

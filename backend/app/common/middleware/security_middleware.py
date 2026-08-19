@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -22,7 +24,18 @@ class RequestSizeLimitMiddleware:
 
     def __init__(self, app: ASGIApp, max_body_bytes: int | None = None):
         self.app = app
-        self.max_body_bytes = max_body_bytes or get_settings().max_request_body_bytes
+        settings = get_settings()
+        self.max_body_bytes = max_body_bytes or settings.max_request_body_bytes
+        self.attachment_body_bytes = settings.attachment_max_bytes + 1_048_576
+
+    def _limit_for_scope(self, scope: Scope) -> int:
+        path = str(scope.get("path", ""))
+        method = str(scope.get("method", "GET")).upper()
+        if method == "POST" and re.fullmatch(
+            r"/task-management/tasks/[0-9a-fA-F-]{36}/attachments", path
+        ):
+            return max(self.max_body_bytes, self.attachment_body_bytes)
+        return self.max_body_bytes
 
     async def _respond(
         self,
@@ -42,6 +55,8 @@ class RequestSizeLimitMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+
+        request_limit = self._limit_for_scope(scope)
 
         content_length = Headers(scope=scope).get("content-length")
         if content_length is not None:
@@ -65,7 +80,7 @@ class RequestSizeLimitMiddleware:
                     detail="Invalid Content-Length header",
                 )
                 return
-            if declared_length > self.max_body_bytes:
+            if declared_length > request_limit:
                 await self._respond(
                     scope,
                     receive,
@@ -83,7 +98,7 @@ class RequestSizeLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 consumed += len(message.get("body", b""))
-                if consumed > self.max_body_bytes:
+                if consumed > request_limit:
                     raise _RequestBodyTooLarge
             return message
 

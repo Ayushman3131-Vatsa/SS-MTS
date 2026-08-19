@@ -21,6 +21,7 @@ export interface TenantPrincipal {
     tenant_id: string;
     org_name: string;
     workspace_slug: string;
+    status: "ACTIVE" | "SUSPENDED";
     offerings: Array<{
       offering_id: string;
       code: string;
@@ -128,6 +129,7 @@ export const tenantPrincipal = (role: TenantRole): TenantPrincipal => ({
     tenant_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     org_name: "Northstar Labs",
     workspace_slug: "northstar-labs",
+    status: "ACTIVE",
     offerings: [],
   },
 });
@@ -172,6 +174,59 @@ export const installSessionApiMock = async (
         status: "healthy",
         checked_at: "2026-07-23T12:30:00Z",
         checks: { api: "healthy", database: "healthy" },
+      },
+    });
+  });
+
+  await page.route(/\/api\/tenants(?:\?.*)?$/, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    calls.push({
+      headers: request.headers(),
+      method: request.method(),
+      path: url.pathname,
+      payload: null,
+      search: url.search,
+    });
+    await route.fulfill({
+      status: 200,
+      headers: JSON_HEADERS,
+      json: { items: [], page: 1, page_size: 25, total: 0 },
+    });
+  });
+
+  await page.route(/\/api\/tenants\/registration-options$/, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    calls.push({
+      headers: request.headers(),
+      method: request.method(),
+      path: url.pathname,
+      payload: null,
+    });
+    await route.fulfill({
+      status: 200,
+      headers: JSON_HEADERS,
+      json: {
+        plans: [
+          {
+            code: "FREE",
+            display_name: "Free",
+            price: "0.00",
+            currency: "USD",
+            billing_interval: "MONTHLY",
+            max_users: null,
+            requires_end_date: false,
+          },
+        ],
+        offerings: [],
+        statuses: ["ACTIVE", "SUSPENDED"],
+        database_modes: ["SHARED", "DEDICATED"],
+        defaults: {
+          subscription_plan_code: "FREE",
+          status: "ACTIVE",
+          database_mode: "SHARED",
+        },
       },
     });
   });

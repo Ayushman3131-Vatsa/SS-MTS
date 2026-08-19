@@ -46,7 +46,7 @@ backend/
     task_comment.py, daily_progress_log.py, audit_log.py,
     browser_session.py, auth_rate_limit.py, subscription_plan.py,
     tenant_subscription.py, tenant_database_allocation.py,
-    platform_activity_event.py
+    tenant_offering.py, platform_activity_event.py
 
   schemas/               # Pydantic request/response models, one file per domain
     auth.py, tenant.py, platform_dashboard.py, user.py, project.py, task.py,
@@ -75,6 +75,7 @@ backend/
     tasks/                 task/sub-task CRUD, closure guard, actual_hours calc
     comments/               task comments (append-only)
     daily_logs/            daily progress logs (hours worked)
+    task_management/       cohesive task-management offering and canonical API
 
     each module's:
       router.py    HTTP layer — path, method, Depends() for auth, calls service
@@ -170,8 +171,46 @@ authentication by database-backed dependencies and service rules.
 | Method | Path | Description |
 |---|---|---|
 | POST | `/tenants` | Create a tenant + seed its first Tenant Admin, one transaction |
-| GET | `/tenants` | List all tenants |
+| GET | `/tenants` | Paginated tenant list with search and `status` filtering |
 | GET | `/tenants/{tenant_id}` | Get one tenant |
+| GET | `/tenants/offering-catalog` | List active and inactive offering catalog entries |
+| GET | `/offerings` | List and inspect all platform offering catalog entries |
+| POST | `/offerings` | Create an offering catalog entry |
+| PATCH | `/offerings/{offering_id}` | Update offering metadata (code is immutable) |
+| POST | `/offerings/{offering_id}/activate` | Make an offering available for new licensing |
+| POST | `/offerings/{offering_id}/deactivate` | Remove an offering from new licensing without revoking tenants |
+| DELETE | `/offerings/{offering_id}` | Delete an unused offering catalog entry |
+| GET | `/platform/default-templates?offering_id={offering_id}` | List an offering's platform defaults and tenant impact |
+| GET | `/platform/default-templates/{template_id}` | Get one editable platform default |
+| POST | `/platform/default-templates` | Create and immediately publish a platform default |
+| PATCH | `/platform/default-templates/{template_id}` | Publish safe edits using `expected_version` |
+| POST | `/platform/default-templates/preview` | Validate and render an unsaved default-template draft |
+| POST | `/tenants/{tenant_id}/suspend` | Suspend tenant access using an expected tenant version |
+| POST | `/tenants/{tenant_id}/activate` | Activate tenant access using an expected tenant version |
+| GET | `/tenants/{tenant_id}/offering-entitlements` | List current and historical grants |
+| GET | `/tenants/{tenant_id}/offering-entitlements/history` | List immutable grant transition events |
+| POST | `/tenants/{tenant_id}/offering-entitlements` | Grant an offering with UTC start/end timestamps |
+| POST | `/tenants/{tenant_id}/offering-entitlements/{entitlement_id}/suspend` | Suspend one grant |
+| POST | `/tenants/{tenant_id}/offering-entitlements/{entitlement_id}/resume` | Resume one grant without extending its end date |
+| POST | `/tenants/{tenant_id}/offering-entitlements/{entitlement_id}/deactivate` | Terminally deactivate one grant |
+| DELETE | `/tenants/{tenant_id}/offering-entitlements/{entitlement_id}` | Permanently remove a deactivated or expired grant with version and reason |
+
+Offering entitlements are independent historical records. Access is effective
+only when the tenant is `ACTIVE`, the grant is `ACTIVE`, and database time is
+within `[starts_at, ends_at)`. New grants require UTC timestamps and an
+`Idempotency-Key`; destructive transitions require a reason and all mutations
+use optimistic versions. Existing pre-migration assignments are grandfathered
+with no expiry. A globally `INACTIVE` catalog offering blocks new grants but
+does not revoke existing valid entitlements.
+
+Schedule the idempotent entitlement reconciler in the deployment platform.
+It marks elapsed grants as expired and permanently purges deactivated or
+expired grants after `DEACTIVATED_OFFERING_RETENTION_DAYS` (90 days by default):
+
+```powershell
+Set-Location backend
+python -m scripts.reconcile_offering_entitlements
+```
 
 ### Platform dashboard — platform admin only
 
@@ -191,6 +230,10 @@ definitions, filters, persistence, and frontend refresh behavior.
 | GET | `/users` | any | List users in your tenant |
 | GET | `/users/{user_id}` | any | Get one user in your tenant |
 | PATCH | `/users/{user_id}` | Tenant Admin | Update name/status (optimistic lock via `version`) |
+
+The routes below are retained compatibility APIs. New integrations should use the
+paginated `/task-management/*` API described in
+[docs/task-management.md](docs/task-management.md).
 
 ### Projects (`/projects`) — tenant-scoped
 

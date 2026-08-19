@@ -2,16 +2,19 @@ import {
   BookOpen,
   BriefcaseBusiness,
   CalendarDays,
+  ChevronDown,
   ChartNoAxesCombined,
   ChartSpline,
   ClipboardCheck,
   Clock,
   Headphones,
   LayoutDashboard,
+  ListChecks,
   LogOut,
   Menu,
   Monitor,
   ReceiptText,
+  SlidersHorizontal,
   UserRound,
   Users,
   UserSearch,
@@ -47,17 +50,40 @@ const iconByKey: Record<string, LucideIcon> = {
 };
 
 export const TenantShell = () => {
-  const { logout, principal } = useSession();
+  const { clearNotice, logout, notice, principal } = useSession();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const taskRouteActive = location.pathname.startsWith("/app/task-management");
+  const taskTenantId = principal?.principal_type === "tenant_user" ? principal.tenant.tenant_id : "unknown";
+  const hasTaskOffering = principal?.principal_type === "tenant_user" && principal.tenant.offerings.some((offering) => offering.code === "TASK_MANAGEMENT");
+  const taskExpansionKey = `task-management-navigation:${taskTenantId}`;
+  const [taskExpanded, setTaskExpanded] = useState(() => taskRouteActive);
 
   useEffect(() => setDrawerOpen(false), [location.pathname]);
+
+  useEffect(() => {
+    if (taskRouteActive) {
+      setTaskExpanded(true);
+      return;
+    }
+    setTaskExpanded(hasTaskOffering && window.localStorage.getItem(taskExpansionKey) === "expanded");
+  }, [hasTaskOffering, taskExpansionKey, taskRouteActive]);
+
+  useEffect(() => {
+    if (taskTenantId !== "unknown" && hasTaskOffering) {
+      window.localStorage.setItem(taskExpansionKey, taskExpanded ? "expanded" : "collapsed");
+    }
+  }, [hasTaskOffering, taskExpanded, taskExpansionKey, taskTenantId]);
 
   if (!principal || principal.principal_type !== "tenant_user") {
     return null;
   }
+
+  const taskOffering = principal.tenant.offerings.find(
+    (offering) => offering.code === "TASK_MANAGEMENT",
+  );
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -133,8 +159,48 @@ export const TenantShell = () => {
             <LayoutDashboard size={17} />
             <span>{principal.role === "Employee" ? "My work" : "Overview"}</span>
           </NavLink>
+          {principal.role === "Tenant Admin" && (
+            <NavLink
+              to="/app/configurations"
+              className={({ isActive }) => isActive ? styles.active : ""}
+            >
+              <SlidersHorizontal size={17} />
+              <span>Configurations</span>
+            </NavLink>
+          )}
           {principal.tenant.offerings.length > 0 && <p>Licensed offerings</p>}
-          {principal.tenant.offerings.map((offering) => {
+          {taskOffering && (
+            <div className={styles.navGroup}>
+              <button
+                type="button"
+                className={`${styles.groupToggle} ${taskRouteActive ? styles.groupActive : ""}`}
+                aria-expanded={taskExpanded}
+                aria-controls="task-management-navigation"
+                onClick={() => setTaskExpanded((expanded) => !expanded)}
+              >
+                <ClipboardCheck size={17} />
+                <span>{taskOffering.display_name}</span>
+                <ChevronDown className={taskExpanded ? styles.chevronOpen : ""} size={15} />
+              </button>
+              {taskExpanded && (
+                <div id="task-management-navigation" className={styles.subnav}>
+                  <NavLink end to="/app/task-management" className={({ isActive }) => isActive ? styles.active : ""}>
+                    <LayoutDashboard size={15} /><span>Overview</span>
+                  </NavLink>
+                  <NavLink to="/app/task-management/projects" className={({ isActive }) => isActive ? styles.active : ""}>
+                    <BriefcaseBusiness size={15} /><span>Projects</span>
+                  </NavLink>
+                  <NavLink to="/app/task-management/my-work" className={({ isActive }) => isActive ? styles.active : ""}>
+                    <UserRound size={15} /><span>My Work</span>
+                  </NavLink>
+                  <NavLink to="/app/task-management/tasks" className={({ isActive }) => isActive ? styles.active : ""}>
+                    <ListChecks size={15} /><span>All Tasks</span>
+                  </NavLink>
+                </div>
+              )}
+            </div>
+          )}
+          {principal.tenant.offerings.filter((offering) => offering.code !== "TASK_MANAGEMENT").map((offering) => {
             const Icon = iconByKey[offering.icon_key] ?? BriefcaseBusiness;
             return (
               <NavLink
@@ -159,6 +225,7 @@ export const TenantShell = () => {
       </aside>
 
       <main className={styles.main}>
+        {notice && <div className={styles.accessNotice} role="status"><span>{notice}</span><button type="button" onClick={clearNotice}>Dismiss</button></div>}
         {logoutError && <div className={styles.error} role="alert">{logoutError}</div>}
         <Outlet />
       </main>

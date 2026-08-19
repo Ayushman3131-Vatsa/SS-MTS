@@ -7,7 +7,7 @@ from app.common.schemas.base import StrictRequestModel
 
 
 class CommentCreateRequest(StrictRequestModel):
-    comment_text: str = Field(min_length=1)
+    comment_text: str = Field(min_length=1, max_length=20_000)
 
 
 class CommentResponse(BaseModel):

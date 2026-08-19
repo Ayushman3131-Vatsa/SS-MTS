@@ -20,7 +20,13 @@ class PlatformActivityEvent(Base):
             "event_type IN ("
             "'TENANT_CREATED', 'PLAN_CHANGED', 'TENANT_SUSPENDED', "
             "'TENANT_REACTIVATED', 'DATABASE_ALLOCATION_READY', "
-            "'DATABASE_ALLOCATION_FAILED')",
+            "'DATABASE_ALLOCATION_FAILED', 'TENANT_ACTIVATED', "
+            "'OFFERING_GRANTED', 'OFFERING_SUSPENDED', 'OFFERING_RESUMED', "
+            "'OFFERING_DEACTIVATED', 'OFFERING_EXPIRED', "
+            "'OFFERING_CATALOG_CREATED', 'OFFERING_CATALOG_UPDATED', "
+            "'OFFERING_CATALOG_ACTIVATED', 'OFFERING_CATALOG_DEACTIVATED', "
+            "'OFFERING_CATALOG_DELETED', 'DEFAULT_TEMPLATE_CREATED', "
+            "'DEFAULT_TEMPLATE_UPDATED')",
             name="check_platform_activity_events_type",
         ),
         CheckConstraint(

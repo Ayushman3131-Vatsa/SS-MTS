@@ -5,6 +5,7 @@ import type { SessionPrincipal } from "./session";
 
 const tenantPrincipal = (
   role: "Tenant Admin" | "Project Manager" | "Employee",
+  status: "ACTIVE" | "SUSPENDED" = "ACTIVE",
 ): SessionPrincipal => ({
   principal_type: "tenant_user",
   principal_id: "d94f8e58-05d0-4df1-868b-69a843c5d3a7",
@@ -15,6 +16,7 @@ const tenantPrincipal = (
     tenant_id: "63e6c159-3c6c-43bb-856a-8ed53e21dabe",
     org_name: "Northstar Labs",
     workspace_slug: "northstar-labs",
+    status,
     offerings: [],
   },
 });
@@ -29,6 +31,12 @@ describe("getPrincipalHome", () => {
 
   it("routes employees to My Work", () => {
     expect(getPrincipalHome(tenantPrincipal("Employee"))).toBe("/app/my-work");
+  });
+
+  it("routes every suspended tenant user to the restricted status page", () => {
+    expect(getPrincipalHome(tenantPrincipal("Tenant Admin", "SUSPENDED"))).toBe(
+      "/app/suspended",
+    );
   });
 
   it("routes platform administrators to the platform console", () => {

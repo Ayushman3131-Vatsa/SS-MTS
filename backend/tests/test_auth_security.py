@@ -9,7 +9,9 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.auth.deps import Principal, require_tenant_user
 from app.common.config import Settings
+from app.common.exceptions import ForbiddenError
 from app.auth.middleware import (
     AuthenticationMiddleware,
     PUBLIC_ROUTES,
@@ -22,6 +24,7 @@ from app.common.middleware.security_middleware import (
 from app.auth.login import router as auth_router
 from app.auth.login.service import (
     BrowserAuthenticationResult,
+    _authenticate_tenant_user,
     _create_browser_session,
     browser_session_csrf_is_valid,
     digest_secret,
@@ -175,6 +178,8 @@ class SessionSecurityTests(unittest.TestCase):
             _env_file=None,
             environment="production",
             jwt_secret_key="x" * 32,
+            database_url="postgresql+asyncpg://app:secret@db/app",
+            migration_database_url="postgresql+asyncpg://owner:secret@db/app",
         )
         self.assertTrue(settings.secure_cookies)
 
@@ -183,6 +188,50 @@ class SessionSecurityTests(unittest.TestCase):
         self.assertIn(("POST", "/auth/session/tenant"), PUBLIC_ROUTES)
         self.assertNotIn(("GET", "/auth/session"), PUBLIC_ROUTES)
         self.assertFalse(any(path == "/auth" for _, path in PUBLIC_ROUTES))
+
+
+class SuspendedTenantAuthenticationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_valid_suspended_tenant_credentials_still_authenticate(self) -> None:
+        tenant = SimpleNamespace(tenant_id=uuid.uuid4(), status="SUSPENDED")
+        user = SimpleNamespace(
+            password_hash="password-hash",
+            status="Active",
+            is_active=True,
+            locked_until=None,
+            failed_login_count=0,
+        )
+        result = SimpleNamespace(scalar_one_or_none=lambda: user)
+        db = SimpleNamespace(execute=AsyncMock(return_value=result))
+
+        with patch(
+            "app.auth.login.service.verify_password_and_update",
+            return_value=(True, None),
+        ):
+            authenticated = await _authenticate_tenant_user(
+                db,
+                tenant=tenant,
+                tenant_reference=str(tenant.tenant_id),
+                email="member@example.com",
+                password="correct-password",
+                ip_address="127.0.0.1",
+            )
+
+        self.assertIs(authenticated, user)
+
+    async def test_suspended_tenant_is_denied_feature_authorization(self) -> None:
+        principal = Principal(
+            type="user",
+            id=uuid.uuid4(),
+            email="member@example.com",
+            tenant_id=uuid.uuid4(),
+            role="Tenant Admin",
+            tenant_status="SUSPENDED",
+        )
+
+        with self.assertRaises(ForbiddenError) as raised:
+            await require_tenant_user(principal)
+
+        self.assertEqual(raised.exception.code, "TENANT_SUSPENDED")
 
 
 async def _collect_asgi_response(app, scope, receive_messages):

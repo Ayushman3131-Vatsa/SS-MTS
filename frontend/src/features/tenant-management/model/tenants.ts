@@ -8,6 +8,34 @@ export interface LicensedOffering {
   sort_order: number;
 }
 
+export interface OfferingCatalogEntry extends LicensedOffering {
+  status: string;
+}
+
+export interface TenantOfferingEntitlement extends LicensedOffering {
+  entitlement_id: string;
+  status: string;
+  starts_at: string;
+  ends_at: string | null;
+  suspended_at: string | null;
+  deactivated_at: string | null;
+  reason: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenantOfferingEvent {
+  event_id: string;
+  entitlement_id: string;
+  tenant_id: string;
+  event_type: string;
+  actor_admin_id: string | null;
+  occurred_at: string;
+  old_value: Record<string, unknown> | null;
+  new_value: Record<string, unknown> | null;
+}
+
 export interface SubscriptionPlanOption {
   code: string;
   display_name: string;
@@ -50,6 +78,9 @@ export interface TenantRecord {
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  alternate_contact_name?: string | null;
+  alternate_contact_email?: string | null;
+  alternate_contact_phone?: string | null;
   subscription_plan: string;
   subscription_plan_code: string;
   subscription_ends_at: string | null;
@@ -57,10 +88,18 @@ export interface TenantRecord {
   database_mode: string;
   database_provisioning_state: string;
   user_count: number;
-  offerings: LicensedOffering[];
+  offerings: TenantOfferingEntitlement[];
   created_by_admin_id: string;
   created_at: string;
   updated_at: string;
+  version: number;
+}
+
+export interface TenantListResponse {
+  items: TenantRecord[];
+  page: number;
+  page_size: number;
+  total: number;
 }
 
 export interface TenantRegistrationPayload {
@@ -86,8 +125,38 @@ export interface TenantRegistrationPayload {
   contact_name: string;
   contact_email: string;
   contact_phone: string;
-  offering_ids: string[];
+  alternate_contact_name: string | null;
+  alternate_contact_email: string | null;
+  alternate_contact_phone: string | null;
+  offering_ids?: string[];
+  offering_grants?: Array<{
+    offering_id: string;
+    starts_at: string;
+    ends_at: string;
+    expected_tenant_version?: number;
+    reason?: string | null;
+  }>;
   tenant_admin_name: string;
   tenant_admin_email: string;
   tenant_admin_password: string;
 }
+
+export interface TenantOfferingActionPayload {
+  expected_version: number;
+  reason?: string | null;
+}
+
+export interface TenantOfferingRemovalPayload {
+  expected_version: number;
+  reason: string;
+}
+
+export interface TenantOfferingGrantPayload {
+  offering_id: string;
+  starts_at: string;
+  ends_at: string;
+  expected_tenant_version: number;
+  reason?: string | null;
+}
+
+export type TenantStatusActionPayload = TenantOfferingActionPayload;

@@ -1,49 +1,35 @@
+"""Compatibility service for legacy daily progress logs."""
+
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.audit import record_audit
 from app.auth.deps import Principal
-from app.common.exceptions import ForbiddenError
-from app.task_management.models.daily_progress_log import DailyProgressLog
-from app.task_management.daily_logs import repository
-from app.task_management.tasks import service as task_service
+from app.modules.task_management.time_entries import service as canonical_service
+from app.modules.task_management.time_entries.model import DailyProgressLog
+from app.modules.task_management.time_entries.schemas import TimeEntryCreateRequest
 from app.task_management.schemas.daily_log import DailyLogCreateRequest
 
 
 async def create_log(
-    db: AsyncSession, principal: Principal, task_id: uuid.UUID, payload: DailyLogCreateRequest
+    db: AsyncSession,
+    principal: Principal,
+    task_id: uuid.UUID,
+    payload: DailyLogCreateRequest,
 ) -> DailyProgressLog:
-    task = await task_service.get_task_for_principal(db, principal, task_id)
-
-    if principal.role == "Employee" and task.assignee_id != principal.id:
-        raise ForbiddenError("Only the assigned Employee may log hours against this task")
-
-    log = DailyProgressLog(
-        tenant_id=principal.tenant_id,
-        task_id=task.task_id,
-        updated_by_user_id=principal.id,
-        hours_worked=payload.hours_worked,
-        progress_notes=payload.progress_notes,
-        attachment_url=payload.attachment_url,
-    )
-    db.add(log)
-    await db.flush()
-
-    await record_audit(
+    return await canonical_service.create_entry(
         db,
-        tenant_id=principal.tenant_id,
-        entity_type="daily_progress_log",
-        entity_id=log.log_id,
-        action="CREATE",
-        changed_by_user_id=principal.id,
-        new_value={"task_id": str(task.task_id), "hours_worked": str(payload.hours_worked)},
+        principal,
+        task_id,
+        TimeEntryCreateRequest(
+            hours_worked=payload.hours_worked,
+            progress_notes=payload.progress_notes,
+        ),
+        legacy_attachment_url=payload.attachment_url,
     )
-    await db.commit()
-    await db.refresh(log)
-    return log
 
 
-async def list_logs(db: AsyncSession, principal: Principal, task_id: uuid.UUID) -> list[DailyProgressLog]:
-    await task_service.get_task_for_principal(db, principal, task_id)
-    return await repository.list_logs_for_task(db, principal.tenant_id, task_id)
+async def list_logs(
+    db: AsyncSession, principal: Principal, task_id: uuid.UUID
+) -> list[DailyProgressLog]:
+    return await canonical_service.list_entries_legacy(db, principal, task_id)

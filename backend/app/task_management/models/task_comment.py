@@ -12,7 +12,9 @@ class TaskComment(Base):
     __tablename__ = "task_comments"
     __table_args__ = (
         ForeignKeyConstraint(
-            ["tenant_id", "task_id"], ["tasks.tenant_id", "tasks.task_id"], name="fk_comment_task"
+            ["tenant_id", "task_id"],
+            ["tasks.tenant_id", "tasks.task_id"],
+            name="fk_comment_task",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "commented_by_user_id"],
@@ -30,7 +32,5 @@ class TaskComment(Base):
     commented_by_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     comment_text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )

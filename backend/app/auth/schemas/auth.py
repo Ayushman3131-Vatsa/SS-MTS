@@ -86,6 +86,7 @@ class SessionTenantResponse(BaseModel):
     tenant_id: uuid.UUID
     org_name: str
     workspace_slug: str
+    status: Literal["ACTIVE", "SUSPENDED"]
     offerings: list[SessionOfferingResponse]
 
 

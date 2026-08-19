@@ -164,6 +164,26 @@ test.describe("secure multi-tenant login", () => {
     });
   }
 
+  test("authenticates a suspended tenant into a sign-out-only session", async ({
+    page,
+  }) => {
+    const suspendedPrincipal = tenantPrincipal("Tenant Admin");
+    suspendedPrincipal.tenant.status = "SUSPENDED";
+    await installSessionApiMock(page, { loginPrincipal: suspendedPrincipal });
+
+    await page.goto("/login");
+    await submitTenantLogin(page);
+
+    await expect(page).toHaveURL("/app/suspended");
+    await expect(
+      page.getByRole("heading", { name: /temporarily suspended/i }),
+    ).toBeVisible();
+    await expect(page.getByText(/signed in successfully/i)).toBeVisible();
+    await expect(page.getByRole("button")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+    await expect(page.getByRole("navigation")).toHaveCount(0);
+  });
+
   test("shows a generic, focused invalid-credentials alert", async ({
     page,
   }) => {

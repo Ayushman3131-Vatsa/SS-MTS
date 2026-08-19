@@ -154,6 +154,19 @@ class DashboardSchemaTests(unittest.TestCase):
                 metadata={},
             )
 
+    def test_response_contract_accepts_current_offering_event_codes(self) -> None:
+        activity = RecentActivity(
+            activity_id=ACTIVITY_ID,
+            event_type="OFFERING_GRANTED",
+            occurred_at=NOW,
+            tenant=ActivityTenant(
+                tenant_id=TENANT_ID,
+                tenant_name="Northstar",
+            ),
+            metadata={"offering": {"display_name": "Payroll"}},
+        )
+        self.assertEqual(activity.event_type.value, "OFFERING_GRANTED")
+
 
 class DashboardAuthorizationTests(unittest.IsolatedAsyncioTestCase):
     async def test_tenant_principal_is_forbidden(self) -> None:

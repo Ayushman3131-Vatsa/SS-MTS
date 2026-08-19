@@ -23,10 +23,27 @@ export const PublicOnlyRoute = () => {
 interface ProtectedRouteProps {
   area?: "platform" | "tenant";
   roles?: TenantRole[];
+  allowSuspendedTenant?: boolean;
 }
+
+interface OfferingRouteProps {
+  code: string;
+}
+
+export const OfferingRoute = ({ code }: OfferingRouteProps) => {
+  const { principal, status } = useSession();
+
+  if (status === "bootstrapping") return <FullPageLoader />;
+  if (!principal) return <Navigate to="/login" replace />;
+  if (principal.principal_type !== "tenant_user") return <Navigate to="/forbidden" replace />;
+
+  const isEffective = principal.tenant.offerings.some((offering) => offering.code === code);
+  return isEffective ? <Outlet /> : <Navigate to={getPrincipalHome(principal)} replace />;
+};
 
 export const ProtectedRoute = ({
   area,
+  allowSuspendedTenant = false,
   roles,
 }: ProtectedRouteProps) => {
   const { principal, status } = useSession();
@@ -45,6 +62,15 @@ export const ProtectedRoute = ({
 
   if (area === "tenant" && principal.principal_type !== "tenant_user") {
     return <Navigate to="/forbidden" replace />;
+  }
+
+  if (
+    area === "tenant" &&
+    principal.principal_type === "tenant_user" &&
+    principal.tenant.status === "SUSPENDED" &&
+    !allowSuspendedTenant
+  ) {
+    return <Navigate to="/app/suspended" replace />;
   }
 
   if (

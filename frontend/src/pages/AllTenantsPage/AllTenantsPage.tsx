@@ -1,9 +1,9 @@
-import { Building2, Eye, Plus, RefreshCw, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Building2, ChevronLeft, ChevronRight, Eye, Plus, RefreshCw, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 import { tenantsApi } from "../../features/tenant-management/api/tenants-api";
-import type { TenantRecord } from "../../features/tenant-management/model/tenants";
+import type { TenantListResponse } from "../../features/tenant-management/model/tenants";
 import { Alert } from "../../shared/ui/Alert/Alert";
 import { Button } from "../../shared/ui/Button/Button";
 import styles from "./AllTenantsPage.module.css";
@@ -18,20 +18,39 @@ interface LocationState {
   notice?: string;
 }
 
+const offeringSummary = (tenant: TenantListResponse["items"][number]) => {
+  const now = Date.now();
+  const effective = tenant.offerings.filter((offering) =>
+    offering.status === "ACTIVE" &&
+    new Date(offering.starts_at).getTime() <= now &&
+    (offering.ends_at === null || new Date(offering.ends_at).getTime() > now),
+  );
+  const nextExpiry = tenant.offerings
+    .map((offering) => offering.ends_at)
+    .filter((value): value is string => value !== null && new Date(value).getTime() > now)
+    .sort()[0];
+  const expiryLabel = nextExpiry
+    ? `next expiry ${dateFormatter.format(new Date(nextExpiry))}`
+    : "no scheduled expiry";
+  return `${effective.length}/${tenant.offerings.length} effective · ${expiryLabel}`;
+};
+
 export const AllTenantsPage = () => {
   const location = useLocation();
   const notice = (location.state as LocationState | null)?.notice;
-  const [tenants, setTenants] = useState<TenantRecord[] | null>(null);
+  const [result, setResult] = useState<TenantListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     setError(null);
     void tenantsApi
-      .list(controller.signal)
-      .then(setTenants)
+      .list({ page, pageSize: 25, query, status: statusFilter }, controller.signal)
+      .then(setResult)
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") {
           return;
@@ -39,32 +58,19 @@ export const AllTenantsPage = () => {
         setError("Tenant data could not be loaded.");
       });
     return () => controller.abort();
-  }, [reloadKey]);
-
-  const filteredTenants = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase();
-    if (!normalized) {
-      return tenants ?? [];
-    }
-    return (tenants ?? []).filter((tenant) =>
-      [tenant.org_name, tenant.tenant_code, tenant.workspace_slug]
-        .join(" ")
-        .toLocaleLowerCase()
-        .includes(normalized),
-    );
-  }, [query, tenants]);
+  }, [page, query, reloadKey, statusFilter]);
 
   return (
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
           <p>Tenant administration</p>
-          <h1>All tenants</h1>
+          <h1>All Tenants</h1>
           <span>Review organizations, access plans, databases, and user totals.</span>
         </div>
         <Link className={styles.primaryLink} to="/platform/tenants/register">
           <Plus size={16} aria-hidden="true" />
-          Register tenant
+          Register Tenant
         </Link>
       </header>
 
@@ -90,11 +96,16 @@ export const AllTenantsPage = () => {
               aria-label="Search tenants"
             />
           </label>
+          <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }} aria-label="Filter tenants by status">
+            <option value="">All statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="SUSPENDED">Suspended</option>
+          </select>
           <div>
             <span>
-              {tenants === null
+              {result === null
                 ? "Loading tenants…"
-                : `${filteredTenants.length} of ${tenants.length} tenants`}
+                : `${result.total.toLocaleString()} tenants`}
             </span>
             <Button
               type="button"
@@ -107,9 +118,9 @@ export const AllTenantsPage = () => {
           </div>
         </div>
 
-        {tenants === null ? (
+        {result === null ? (
           <div className={styles.loading} role="status">Loading tenant registry…</div>
-        ) : tenants.length === 0 ? (
+        ) : result.items.length === 0 ? (
           <div className={styles.empty}>
             <span><Building2 size={23} aria-hidden="true" /></span>
             <h2>No tenants yet</h2>
@@ -131,7 +142,7 @@ export const AllTenantsPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredTenants.map((tenant) => (
+                {result.items.map((tenant) => (
                   <tr key={tenant.tenant_id}>
                     <td>
                       <strong>{tenant.org_name}</strong>
@@ -144,7 +155,7 @@ export const AllTenantsPage = () => {
                     </td>
                     <td>
                       <strong>{tenant.subscription_plan}</strong>
-                      <span>{tenant.offerings.length} licensed offerings</span>
+                      <span>{offeringSummary(tenant)}</span>
                     </td>
                     <td>
                       <strong>{tenant.database_mode}</strong>
@@ -166,9 +177,17 @@ export const AllTenantsPage = () => {
                 ))}
               </tbody>
             </table>
-            {filteredTenants.length === 0 && (
-              <div className={styles.noResults}>No tenants match “{query}”.</div>
-            )}
+            <div className={styles.pagination}>
+              <span>Page {result.page} of {Math.max(1, Math.ceil(result.total / result.page_size))}</span>
+              <div>
+                <Button type="button" variant="secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
+                  <ChevronLeft size={15} aria-hidden="true" /> Previous
+                </Button>
+                <Button type="button" variant="secondary" disabled={page >= Math.ceil(result.total / result.page_size)} onClick={() => setPage((value) => value + 1)}>
+                  Next <ChevronRight size={15} aria-hidden="true" />
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </section>

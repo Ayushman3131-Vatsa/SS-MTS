@@ -11,7 +11,11 @@ from app.common.db.base import Base
 class DailyProgressLog(Base):
     __tablename__ = "daily_progress_logs"
     __table_args__ = (
-        ForeignKeyConstraint(["tenant_id", "task_id"], ["tasks.tenant_id", "tasks.task_id"], name="fk_log_task"),
+        ForeignKeyConstraint(
+            ["tenant_id", "task_id"],
+            ["tasks.tenant_id", "tasks.task_id"],
+            name="fk_log_task",
+        ),
         ForeignKeyConstraint(
             ["tenant_id", "updated_by_user_id"],
             ["user_accounts.tenant_id", "user_accounts.id"],
@@ -30,7 +34,5 @@ class DailyProgressLog(Base):
     progress_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     attachment_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     log_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )

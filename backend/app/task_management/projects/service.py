@@ -1,93 +1,91 @@
+"""Compatibility service for the legacy /projects API.
+
+Business rules live in app.modules.task_management.projects.service.
+"""
+
 import uuid
 
-from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.audit import record_audit
-from app.task_management.authz import assert_can_manage_project, assert_can_view_project
 from app.auth.deps import Principal
-from app.common.exceptions import ConflictError, ForbiddenError, NotFoundError
-from app.task_management.models.project import Project
-from app.task_management.projects import repository
+from app.common.exceptions import BusinessRuleError
+from app.modules.task_management.domain.enums import Priority, ProjectStatus
+from app.modules.task_management.projects import service as canonical_service
+from app.modules.task_management.projects.model import Project
+from app.modules.task_management.projects.schemas import (
+    ProjectCreateRequest as CanonicalProjectCreateRequest,
+    ProjectUpdateRequest as CanonicalProjectUpdateRequest,
+)
 from app.task_management.schemas.project import ProjectCreateRequest, ProjectUpdateRequest
 
 
-async def create_project(db: AsyncSession, principal: Principal, payload: ProjectCreateRequest) -> Project:
-    if principal.role not in ("Tenant Admin", "Project Manager"):
-        raise ForbiddenError("Only a Tenant Admin or Project Manager can create projects")
+def _project_status(value: str | None, *, default: ProjectStatus) -> ProjectStatus:
+    try:
+        return ProjectStatus(value) if value is not None else default
+    except ValueError as exc:
+        raise BusinessRuleError("Invalid project status", code="PROJECT_STATUS_INVALID") from exc
 
-    project = Project(tenant_id=principal.tenant_id, **payload.model_dump())
-    db.add(project)
-    await db.flush()
 
-    await record_audit(
-        db,
-        tenant_id=principal.tenant_id,
-        entity_type="project",
-        entity_id=project.project_id,
-        action="CREATE",
-        changed_by_user_id=principal.id,
-        new_value=payload.model_dump(mode="json"),
+def _priority(value: str | None) -> Priority:
+    try:
+        return Priority(value) if value is not None else Priority.MEDIUM
+    except ValueError as exc:
+        raise BusinessRuleError("Invalid project priority", code="PROJECT_PRIORITY_INVALID") from exc
+
+
+async def create_project(
+    db: AsyncSession, principal: Principal, payload: ProjectCreateRequest
+) -> Project:
+    canonical = CanonicalProjectCreateRequest(
+        name=payload.name,
+        client_name=payload.client_name,
+        description=payload.description,
+        start_date=payload.start_date,
+        expected_end_date=payload.expected_end_date,
+        status=_project_status(payload.status, default=ProjectStatus.NOT_STARTED),
+        priority=_priority(payload.priority),
+        pm_id=payload.pm_id,
+        dm_id=payload.dm_id,
+        remarks=payload.remarks,
     )
-    await db.commit()
-    await db.refresh(project)
-    return project
+    return await canonical_service.create_project(db, principal, canonical)
 
 
 async def list_projects(db: AsyncSession, principal: Principal) -> list[Project]:
-    if principal.role == "Tenant Admin":
-        return await repository.list_all_projects(db, principal.tenant_id)
-    if principal.role == "Project Manager":
-        return await repository.list_projects_managed_by(db, principal.tenant_id, principal.id)
-    return await repository.list_projects_with_assigned_tasks(db, principal.tenant_id, principal.id)
+    return await canonical_service.list_projects_legacy(db, principal)
 
 
-async def get_project_or_404(db: AsyncSession, tenant_id: uuid.UUID, project_id: uuid.UUID) -> Project:
-    project = await repository.get_project(db, tenant_id, project_id)
+async def get_project_or_404(
+    db: AsyncSession, tenant_id: uuid.UUID, project_id: uuid.UUID
+) -> Project:
+    # Retained for imports used by older modules. Tenant access is still
+    # enforced by the repository lookup.
+    project = await canonical_service.repository.get_project(db, tenant_id, project_id)
     if project is None:
+        from app.core.exceptions import NotFoundError
+
         raise NotFoundError("Project not found")
     return project
 
 
-async def get_project_for_principal(db: AsyncSession, principal: Principal, project_id: uuid.UUID) -> Project:
-    project = await get_project_or_404(db, principal.tenant_id, project_id)
-    await assert_can_view_project(db, principal, project)
-    return project
+async def get_project_for_principal(
+    db: AsyncSession, principal: Principal, project_id: uuid.UUID
+) -> Project:
+    return await canonical_service.get_project_for_principal(db, principal, project_id)
 
 
 async def update_project(
-    db: AsyncSession, principal: Principal, project_id: uuid.UUID, payload: ProjectUpdateRequest
+    db: AsyncSession,
+    principal: Principal,
+    project_id: uuid.UUID,
+    payload: ProjectUpdateRequest,
 ) -> Project:
-    project = await get_project_or_404(db, principal.tenant_id, project_id)
-    assert_can_manage_project(principal, project)
-
-    old_value = {"name": project.name, "status": project.status, "priority": project.priority}
-    update_fields = payload.model_dump(exclude={"version"}, exclude_unset=True)
-
-    result = await db.execute(
-        update(Project)
-        .where(
-            Project.tenant_id == principal.tenant_id,
-            Project.project_id == project_id,
-            Project.version == payload.version,
-        )
-        .values(**update_fields, version=Project.version + 1)
-        .returning(Project)
+    values = payload.model_dump(exclude={"version"}, exclude_unset=True)
+    if "status" in values and values["status"] is not None:
+        values["status"] = _project_status(values["status"], default=ProjectStatus.NOT_STARTED)
+    if "priority" in values and values["priority"] is not None:
+        values["priority"] = _priority(values["priority"])
+    canonical = CanonicalProjectUpdateRequest.model_validate(
+        {**values, "version": payload.version}
     )
-    updated = result.scalar_one_or_none()
-    if updated is None:
-        raise ConflictError("Project was modified by someone else — refresh and retry")
-
-    await record_audit(
-        db,
-        tenant_id=principal.tenant_id,
-        entity_type="project",
-        entity_id=project_id,
-        action="UPDATE",
-        changed_by_user_id=principal.id,
-        old_value=old_value,
-        new_value=payload.model_dump(exclude={"version"}, exclude_unset=True, mode="json"),
-    )
-    await db.commit()
-    await db.refresh(updated)
-    return updated
+    return await canonical_service.update_project(db, principal, project_id, canonical)

@@ -56,12 +56,22 @@ describe("platform dashboard response parsing", () => {
           },
         ],
       },
+      recent_activity: [
+        {
+          ...dashboardPayload.recent_activity[0],
+          event_type: "OFFERING_GRANTED",
+          metadata: {
+            offering: { display_name: "Payroll" },
+          },
+        },
+      ],
     });
 
     expect(result.kpis.total_tenants).toBe(18);
     expect(result.charts.subscription_distribution[0]?.plan_code).toBe(
       "GROWTH_2027",
     );
+    expect(result.recent_activity[0]?.event_type).toBe("OFFERING_GRANTED");
   });
 
   it("rejects negative metrics and malformed chart dates", () => {
@@ -78,6 +88,14 @@ describe("platform dashboard response parsing", () => {
           ...dashboardPayload.charts,
           tenant_growth: [{ month: "July", total_tenants: 4 }],
         },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseDashboard({
+        ...dashboardPayload,
+        recent_activity: [
+          { ...dashboardPayload.recent_activity[0], event_type: "offering-granted" },
+        ],
       }),
     ).toThrow();
   });

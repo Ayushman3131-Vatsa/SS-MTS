@@ -13,6 +13,7 @@ async def record_audit(
     entity_id: uuid.UUID,
     action: str,
     changed_by_user_id: uuid.UUID | None,
+    changed_by_admin_id: uuid.UUID | None = None,
     old_value: dict | None = None,
     new_value: dict | None = None,
 ) -> None:
@@ -27,6 +28,7 @@ async def record_audit(
             entity_id=entity_id,
             action=action,
             changed_by_user_id=changed_by_user_id,
+            changed_by_admin_id=changed_by_admin_id,
             old_value=old_value,
             new_value=new_value,
         )
