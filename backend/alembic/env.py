@@ -2,7 +2,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import get_settings
@@ -10,7 +10,11 @@ from app.db.base import Base
 from app.models import *  # noqa: F401,F403  (registers all tables on Base.metadata)
 
 config = context.config
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+_settings = get_settings()
+config.set_main_option(
+    "sqlalchemy.url",
+    _settings.migration_database_url or _settings.database_url,
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -33,6 +37,12 @@ def run_migrations_offline() -> None:
 def do_run_migrations(connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
+        # The owner is subject to FORCE RLS. Set platform scope only inside
+        # Alembic's managed transaction. Executing this before
+        # begin_transaction() triggers SQLAlchemy autobegin and causes the
+        # connection context to roll the migration back on exit.
+        connection.execute(text("SELECT set_config('app.principal_type', 'admin', true)"))
+        connection.execute(text("SELECT set_config('app.tenant_id', '', true)"))
         context.run_migrations()
 
 

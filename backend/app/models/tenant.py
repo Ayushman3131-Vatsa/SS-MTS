@@ -59,6 +59,9 @@ class Tenant(Base):
     contact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     contact_email: Mapped[str | None] = mapped_column(CITEXT(), nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    alternate_contact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    alternate_contact_email: Mapped[str | None] = mapped_column(CITEXT(), nullable=True)
+    alternate_contact_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
     subscription_plan: Mapped[str] = mapped_column(
         String(50),
         nullable=False,

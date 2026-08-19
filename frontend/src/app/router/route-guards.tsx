@@ -26,6 +26,21 @@ interface ProtectedRouteProps {
   allowSuspendedTenant?: boolean;
 }
 
+interface OfferingRouteProps {
+  code: string;
+}
+
+export const OfferingRoute = ({ code }: OfferingRouteProps) => {
+  const { principal, status } = useSession();
+
+  if (status === "bootstrapping") return <FullPageLoader />;
+  if (!principal) return <Navigate to="/login" replace />;
+  if (principal.principal_type !== "tenant_user") return <Navigate to="/forbidden" replace />;
+
+  const isEffective = principal.tenant.offerings.some((offering) => offering.code === code);
+  return isEffective ? <Outlet /> : <Navigate to={getPrincipalHome(principal)} replace />;
+};
+
 export const ProtectedRoute = ({
   area,
   allowSuspendedTenant = false,

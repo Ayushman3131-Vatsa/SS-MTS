@@ -178,6 +178,8 @@ class SessionSecurityTests(unittest.TestCase):
             _env_file=None,
             environment="production",
             jwt_secret_key="x" * 32,
+            database_url="postgresql+asyncpg://app:secret@db/app",
+            migration_database_url="postgresql+asyncpg://owner:secret@db/app",
         )
         self.assertTrue(settings.secure_cookies)
 

@@ -12,7 +12,9 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
 async def _to_response(db: AsyncSession, task) -> TaskResponse:
-    actual_hours = await service.get_actual_hours(db, task.tenant_id, task.task_id)
+    actual_hours = getattr(task, "_legacy_actual_hours", None)
+    if actual_hours is None:
+        actual_hours = await service.get_actual_hours(db, task.tenant_id, task.task_id)
     return TaskResponse.model_validate(task).model_copy(update={"actual_hours": actual_hours})
 
 

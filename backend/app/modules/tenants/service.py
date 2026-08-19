@@ -181,6 +181,13 @@ async def create_tenant(
             else None
         ),
         contact_phone=payload.contact_phone,
+        alternate_contact_name=payload.alternate_contact_name,
+        alternate_contact_email=(
+            normalize_email(str(payload.alternate_contact_email))
+            if payload.alternate_contact_email is not None
+            else None
+        ),
+        alternate_contact_phone=payload.alternate_contact_phone,
         subscription_plan=plan.display_name,
         status=payload.status.value,
         created_by_admin_id=principal.id,

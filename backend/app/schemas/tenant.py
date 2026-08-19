@@ -101,6 +101,14 @@ class TenantCreateRequest(StrictRequestModel):
         max_length=40,
         pattern=r"^[0-9+().\-\s]+$",
     )
+    alternate_contact_name: str | None = Field(default=None, min_length=1, max_length=255)
+    alternate_contact_email: EmailStr | None = Field(default=None, max_length=254)
+    alternate_contact_phone: str | None = Field(
+        default=None,
+        min_length=5,
+        max_length=40,
+        pattern=r"^[0-9+().\-\s]+$",
+    )
     offering_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
     offering_grants: list[TenantOfferingGrantRequest] = Field(default_factory=list, max_length=50)
     tenant_admin_name: str = Field(min_length=1, max_length=255)
@@ -142,6 +150,8 @@ class TenantCreateRequest(StrictRequestModel):
         "postal_code",
         "contact_name",
         "contact_phone",
+        "alternate_contact_name",
+        "alternate_contact_phone",
     )
     @classmethod
     def normalize_optional_required_text(cls, value: str | None) -> str | None:
@@ -174,7 +184,12 @@ class TenantCreateRequest(StrictRequestModel):
             return value
         return value.strip().lower()
 
-    @field_validator("tenant_admin_email", "contact_email", mode="before")
+    @field_validator(
+        "tenant_admin_email",
+        "contact_email",
+        "alternate_contact_email",
+        mode="before",
+    )
     @classmethod
     def normalize_admin_email(cls, value: object) -> object:
         return normalize_email(value) if isinstance(value, str) else value
@@ -188,6 +203,17 @@ class TenantCreateRequest(StrictRequestModel):
             raise ValueError("offering_grants must not contain duplicates")
         if self.offering_ids and self.offering_grants:
             raise ValueError("Use offering_grants instead of offering_ids")
+        alternate_contact_values = (
+            self.alternate_contact_name,
+            self.alternate_contact_email,
+            self.alternate_contact_phone,
+        )
+        if any(value is not None for value in alternate_contact_values) and not all(
+            value is not None for value in alternate_contact_values
+        ):
+            raise ValueError(
+                "alternate contact name, email, and phone must be provided together"
+            )
         plan_code = self.resolved_subscription_plan_code
         if self.subscription_ends_at is not None:
             if (
@@ -366,6 +392,9 @@ class TenantResponse(BaseModel):
     contact_name: str | None
     contact_email: str | None
     contact_phone: str | None
+    alternate_contact_name: str | None
+    alternate_contact_email: str | None
+    alternate_contact_phone: str | None
     subscription_plan: str
     subscription_plan_code: SubscriptionPlanCode
     subscription_ends_at: datetime | None

@@ -1508,6 +1508,91 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             {"api": "healthy", "database": "healthy"},
         )
 
+    def test_77_task_management_rls_isolates_raw_database_access(self) -> None:
+        project_id = uuid.UUID("77777777-7777-4777-8777-777777777777")
+
+        async def exercise() -> tuple[int, int, int, int]:
+            engine = create_async_engine(self.database_url, poolclass=NullPool)
+            try:
+                async with engine.connect() as connection:
+                    bypasses_rls = bool(
+                        await connection.scalar(
+                            text(
+                                "SELECT rolsuper OR rolbypassrls "
+                                "FROM pg_roles WHERE rolname = current_user"
+                            )
+                        )
+                    )
+                if bypasses_rls:
+                    raise unittest.SkipTest(
+                        "RLS isolation requires a non-superuser, non-BYPASSRLS integration role"
+                    )
+                async with engine.begin() as connection:
+                    await connection.execute(
+                        text(
+                            "SELECT set_config('app.principal_type', 'admin', true), "
+                            "set_config('app.tenant_id', '', true)"
+                        )
+                    )
+                    await connection.execute(
+                        text(
+                            """
+                            INSERT INTO projects
+                                (tenant_id, project_id, project_key, name, status,
+                                 priority, next_task_number, version)
+                            VALUES
+                                (:tenant_id, :project_id, 'RLS', 'RLS verification',
+                                 'Not Started', 'Medium', 1, 1)
+                            """
+                        ),
+                        {"tenant_id": TENANT_ONE_ID, "project_id": project_id},
+                    )
+
+                async with engine.begin() as connection:
+                    no_context = int(
+                        await connection.scalar(text("SELECT count(*) FROM projects"))
+                    )
+
+                async with engine.begin() as connection:
+                    await connection.execute(
+                        text(
+                            "SELECT set_config('app.principal_type', 'user', true), "
+                            "set_config('app.tenant_id', :tenant_id, true)"
+                        ),
+                        {"tenant_id": str(TENANT_ONE_ID)},
+                    )
+                    own_tenant = int(
+                        await connection.scalar(
+                            text("SELECT count(*) FROM projects WHERE project_id = :project_id"),
+                            {"project_id": project_id},
+                        )
+                    )
+
+                async with engine.begin() as connection:
+                    await connection.execute(
+                        text(
+                            "SELECT set_config('app.principal_type', 'user', true), "
+                            "set_config('app.tenant_id', :tenant_id, true)"
+                        ),
+                        {"tenant_id": str(TENANT_TWO_ID)},
+                    )
+                    other_tenant = int(
+                        await connection.scalar(
+                            text("SELECT count(*) FROM projects WHERE project_id = :project_id"),
+                            {"project_id": project_id},
+                        )
+                    )
+                    update_result = await connection.execute(
+                        text("UPDATE projects SET name = 'leaked' WHERE project_id = :project_id"),
+                        {"project_id": project_id},
+                    )
+                    cross_tenant_updates = int(update_result.rowcount or 0)
+                return no_context, own_tenant, other_tenant, cross_tenant_updates
+            finally:
+                await engine.dispose()
+
+        self.assertEqual(self._run_async(exercise()), (0, 1, 0, 0))
+
     def test_80_account_throttling_locks_on_fifth_failure(self) -> None:
         payload = {"email": THROTTLE_EMAIL, "password": "wrong-password"}
         for attempt in range(1, 6):

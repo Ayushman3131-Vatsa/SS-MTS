@@ -12,14 +12,14 @@ from app.middleware.security_middleware import (
     SecurityHeadersMiddleware,
 )
 from app.modules.auth.router import router as auth_router
-from app.modules.comments.router import router as comments_router
 from app.modules.configurations.router import router as configurations_router
-from app.modules.daily_logs.router import router as daily_logs_router
 from app.modules.offerings.router import router as offerings_router
-from app.modules.projects.router import router as projects_router
 from app.modules.platform_dashboard.router import router as platform_dashboard_router
 from app.modules.platform_default_templates.router import router as platform_default_templates_router
-from app.modules.tasks.router import router as tasks_router
+from app.modules.task_management.compat.legacy_router import (
+    router as legacy_task_management_router,
+)
+from app.modules.task_management.router import router as task_management_router
 from app.modules.tenants.router import router as tenants_router
 from app.modules.users.router import router as users_router
 
@@ -93,13 +93,11 @@ app.include_router(auth_router)
 app.include_router(tenants_router)
 app.include_router(offerings_router)
 app.include_router(users_router)
-app.include_router(projects_router)
+app.include_router(legacy_task_management_router)
 app.include_router(platform_dashboard_router)
 app.include_router(platform_default_templates_router)
-app.include_router(tasks_router)
-app.include_router(comments_router)
+app.include_router(task_management_router)
 app.include_router(configurations_router)
-app.include_router(daily_logs_router)
 
 
 def custom_openapi() -> dict:

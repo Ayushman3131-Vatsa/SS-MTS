@@ -78,6 +78,9 @@ export interface TenantRecord {
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  alternate_contact_name?: string | null;
+  alternate_contact_email?: string | null;
+  alternate_contact_phone?: string | null;
   subscription_plan: string;
   subscription_plan_code: string;
   subscription_ends_at: string | null;
@@ -122,6 +125,9 @@ export interface TenantRegistrationPayload {
   contact_name: string;
   contact_email: string;
   contact_phone: string;
+  alternate_contact_name: string | null;
+  alternate_contact_email: string | null;
+  alternate_contact_phone: string | null;
   offering_ids?: string[];
   offering_grants?: Array<{
     offering_id: string;

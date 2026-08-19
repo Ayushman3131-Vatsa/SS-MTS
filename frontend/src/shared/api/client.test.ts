@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { apiRequest } from "./client";
+import { apiDownload, apiRequest } from "./client";
 import { SESSION_EXPIRED_EVENT } from "./session-events";
 
 const jsonResponse = (body: unknown, init?: ResponseInit) =>
@@ -111,5 +111,13 @@ describe("apiRequest", () => {
         "Tenant admin password: Password must include a special character.",
       status: 422,
     });
+  });
+
+  it("downloads an authorized blob and reads its server filename", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("content", { status: 200, headers: { "Content-Disposition": "attachment; filename=report.pdf" } })));
+    const result = await apiDownload("/task-management/tasks/task/files/file/download");
+    expect(result.filename).toBe("report.pdf");
+    expect(result.blob).toBeInstanceOf(Blob);
+    expect(result.blob.size).toBeGreaterThan(0);
   });
 });

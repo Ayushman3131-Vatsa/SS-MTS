@@ -10,7 +10,7 @@ import type {
   SessionPrincipal,
   TenantRole,
 } from "../../entities/session/model/session";
-import { ProtectedRoute } from "./route-guards";
+import { OfferingRoute, ProtectedRoute } from "./route-guards";
 
 const tenantPrincipal = (
   role: TenantRole,
@@ -67,6 +67,7 @@ const renderProtectedRoute = (
           <Route path="/login" element={<div>Login screen</div>} />
           <Route path="/forbidden" element={<div>Forbidden screen</div>} />
           <Route path="/app/suspended" element={<div>Suspended screen</div>} />
+          <Route path="/app/my-work" element={<div>Tenant home</div>} />
         </Routes>
       </MemoryRouter>
     </SessionContext.Provider>,
@@ -132,5 +133,29 @@ describe("ProtectedRoute", () => {
       <ProtectedRoute area="platform" />,
     );
     expect(screen.getByText("Protected content")).toBeVisible();
+  });
+});
+
+describe("OfferingRoute", () => {
+  it("allows a tenant with the effective offering", () => {
+    const principal = tenantPrincipal("Employee");
+    if (principal.principal_type === "tenant_user") {
+      principal.tenant.offerings = [{
+        offering_id: "11111111-1111-4111-8111-111111111111",
+        code: "TASK_MANAGEMENT",
+        display_name: "Task Management",
+        description: "Plan work",
+        icon_key: "clipboard-check",
+        route_slug: "task-management",
+        sort_order: 1,
+      }];
+    }
+    renderProtectedRoute(principal, <OfferingRoute code="TASK_MANAGEMENT" />);
+    expect(screen.getByText("Protected content")).toBeVisible();
+  });
+
+  it("redirects a direct URL when the offering is missing", () => {
+    renderProtectedRoute(tenantPrincipal("Employee"), <OfferingRoute code="TASK_MANAGEMENT" />);
+    expect(screen.queryByText("Protected content")).not.toBeInTheDocument();
   });
 });

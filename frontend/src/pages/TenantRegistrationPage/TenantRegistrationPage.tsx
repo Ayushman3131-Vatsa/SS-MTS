@@ -9,6 +9,7 @@ import {
   KeyRound,
   MapPin,
   PackageCheck,
+  Plus,
   Save,
   UserRound,
   X,
@@ -77,6 +78,22 @@ const registrationSchema = z.object({
     .min(5, "Phone number is required")
     .max(40)
     .regex(/^[0-9+().\-\s]+$/, "Enter a valid phone number"),
+  alternate_contact_name: z.string().trim().max(255),
+  alternate_contact_email: z
+    .string()
+    .trim()
+    .refine(
+      (value) => value.length === 0 || z.string().email().safeParse(value).success,
+      "Enter a valid alternate contact email",
+    ),
+  alternate_contact_phone: z
+    .string()
+    .trim()
+    .max(40)
+    .refine(
+      (value) => value.length === 0 || (value.length >= 5 && /^[0-9+().\-\s]+$/.test(value)),
+      "Enter a valid alternate contact phone number",
+    ),
   offering_ids: z.array(z.string().uuid()).min(1, "Select at least one offering"),
   workspace_slug: z
     .string()
@@ -143,6 +160,9 @@ const emptyDefaults: RegistrationFormValues = {
   contact_name: "",
   contact_email: "",
   contact_phone: "",
+  alternate_contact_name: "",
+  alternate_contact_email: "",
+  alternate_contact_phone: "",
   offering_ids: [],
   workspace_slug: "",
   tenant_admin_name: "",
@@ -188,9 +208,11 @@ export const TenantRegistrationPage = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [showAlternateContact, setShowAlternateContact] = useState(false);
   const [offeringWindows, setOfferingWindows] = useState<Record<string, OfferingWindow>>({});
   const {
     formState: { errors, isSubmitting },
+    clearErrors,
     handleSubmit,
     register,
     reset,
@@ -275,6 +297,7 @@ export const TenantRegistrationPage = () => {
       database_mode: options.defaults.database_mode,
     });
     setOfferingWindows(createOfferingWindows(options.offerings));
+    setShowAlternateContact(false);
     setSubmitError(null);
   };
 
@@ -284,6 +307,24 @@ export const TenantRegistrationPage = () => {
         message: "An end date is required for this plan",
       });
       return;
+    }
+
+    if (showAlternateContact) {
+      const alternateContactFields = [
+        ["alternate_contact_name", values.alternate_contact_name],
+        ["alternate_contact_email", values.alternate_contact_email],
+        ["alternate_contact_phone", values.alternate_contact_phone],
+      ] as const;
+      const missingFields = alternateContactFields.filter(([, value]) => !value.trim());
+      if (missingFields.length > 0) {
+        for (const [field] of missingFields) {
+          setError(field, {
+            type: "required",
+            message: "Complete all alternate contact fields",
+          });
+        }
+        return;
+      }
     }
 
     setSubmitError(null);
@@ -324,6 +365,9 @@ export const TenantRegistrationPage = () => {
       registration_number: textOrNull(values.registration_number),
       tax_identifier: textOrNull(values.tax_identifier),
       address_line_2: textOrNull(values.address_line_2),
+      alternate_contact_name: textOrNull(values.alternate_contact_name),
+      alternate_contact_email: textOrNull(values.alternate_contact_email),
+      alternate_contact_phone: textOrNull(values.alternate_contact_phone),
     };
     delete (payload as TenantRegistrationPayload & { subscription_end_date?: string })
       .subscription_end_date;
@@ -557,30 +601,85 @@ export const TenantRegistrationPage = () => {
         </section>
 
         <section className={styles.section}>
-          <div className={styles.sectionHeading}>
-            <UserRound size={19} aria-hidden="true" />
-            <div>
-              <h2>Contact information</h2>
-              <p>Primary business contact for the tenant.</p>
+          <div className={styles.contactHeader}>
+            <div className={styles.sectionHeading}>
+              <UserRound size={19} aria-hidden="true" />
+              <div>
+                <h2>Contact information</h2>
+                <p>Primary business contact for the tenant.</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className={styles.contactAction}
+              onClick={() => {
+                if (showAlternateContact) {
+                  setValue("alternate_contact_name", "");
+                  setValue("alternate_contact_email", "");
+                  setValue("alternate_contact_phone", "");
+                  clearErrors([
+                    "alternate_contact_name",
+                    "alternate_contact_email",
+                    "alternate_contact_phone",
+                  ]);
+                }
+                setShowAlternateContact((current) => !current);
+              }}
+              aria-expanded={showAlternateContact}
+            >
+              {showAlternateContact ? <X size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
+              {showAlternateContact ? "Remove alternate" : "Add alternate contact"}
+            </Button>
+          </div>
+          <div className={styles.contactBlock}>
+            <div className={styles.contactBlockHeading}>
+              <strong>Primary contact</strong>
+              <span>Required</span>
+            </div>
+            <div className={styles.fieldGridThree}>
+              <label>
+                <span>Contact person *</span>
+                <input {...register("contact_name")} />
+                {fieldError("contact_name") && <small>{fieldError("contact_name")}</small>}
+              </label>
+              <label>
+                <span>Contact email *</span>
+                <input type="email" {...register("contact_email")} />
+                {fieldError("contact_email") && <small>{fieldError("contact_email")}</small>}
+              </label>
+              <label>
+                <span>Phone number *</span>
+                <input type="tel" {...register("contact_phone")} />
+                {fieldError("contact_phone") && <small>{fieldError("contact_phone")}</small>}
+              </label>
             </div>
           </div>
-          <div className={styles.fieldGridThree}>
-            <label>
-              <span>Contact person *</span>
-              <input {...register("contact_name")} />
-              {fieldError("contact_name") && <small>{fieldError("contact_name")}</small>}
-            </label>
-            <label>
-              <span>Contact email *</span>
-              <input type="email" {...register("contact_email")} />
-              {fieldError("contact_email") && <small>{fieldError("contact_email")}</small>}
-            </label>
-            <label>
-              <span>Phone number *</span>
-              <input type="tel" {...register("contact_phone")} />
-              {fieldError("contact_phone") && <small>{fieldError("contact_phone")}</small>}
-            </label>
-          </div>
+          {showAlternateContact && (
+            <div className={styles.contactBlock}>
+              <div className={styles.contactBlockHeading}>
+                <strong>Alternate contact</strong>
+                <span>All fields required</span>
+              </div>
+              <div className={styles.fieldGridThree}>
+                <label>
+                  <span>Contact person *</span>
+                  <input {...register("alternate_contact_name")} />
+                  {fieldError("alternate_contact_name") && <small>{fieldError("alternate_contact_name")}</small>}
+                </label>
+                <label>
+                  <span>Contact email *</span>
+                  <input type="email" {...register("alternate_contact_email")} />
+                  {fieldError("alternate_contact_email") && <small>{fieldError("alternate_contact_email")}</small>}
+                </label>
+                <label>
+                  <span>Phone number *</span>
+                  <input type="tel" {...register("alternate_contact_phone")} />
+                  {fieldError("alternate_contact_phone") && <small>{fieldError("alternate_contact_phone")}</small>}
+                </label>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className={`${styles.section} ${styles.offeringsSection}`}>

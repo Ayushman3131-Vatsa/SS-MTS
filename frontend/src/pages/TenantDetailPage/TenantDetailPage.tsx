@@ -263,6 +263,15 @@ export const TenantDetailPage = () => {
             <div><dt>Contact</dt><dd>{tenant.contact_name || "—"}</dd></div>
             <div><dt>Email</dt><dd>{tenant.contact_email || "—"}</dd></div>
             <div><dt>Phone</dt><dd>{tenant.contact_phone || "—"}</dd></div>
+            {tenant.alternate_contact_name && (
+              <div><dt>Alternate contact</dt><dd>{tenant.alternate_contact_name}</dd></div>
+            )}
+            {tenant.alternate_contact_email && (
+              <div><dt>Alternate email</dt><dd>{tenant.alternate_contact_email}</dd></div>
+            )}
+            {tenant.alternate_contact_phone && (
+              <div><dt>Alternate phone</dt><dd>{tenant.alternate_contact_phone}</dd></div>
+            )}
           </dl>
         </section>
         <section>

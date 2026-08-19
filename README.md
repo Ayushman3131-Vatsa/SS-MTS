@@ -75,6 +75,7 @@ backend/
     tasks/                 task/sub-task CRUD, closure guard, actual_hours calc
     comments/               task comments (append-only)
     daily_logs/            daily progress logs (hours worked)
+    task_management/       cohesive task-management offering and canonical API
 
     each module's:
       router.py    HTTP layer — path, method, Depends() for auth, calls service
@@ -229,6 +230,10 @@ definitions, filters, persistence, and frontend refresh behavior.
 | GET | `/users` | any | List users in your tenant |
 | GET | `/users/{user_id}` | any | Get one user in your tenant |
 | PATCH | `/users/{user_id}` | Tenant Admin | Update name/status (optimistic lock via `version`) |
+
+The routes below are retained compatibility APIs. New integrations should use the
+paginated `/task-management/*` API described in
+[docs/task-management.md](docs/task-management.md).
 
 ### Projects (`/projects`) — tenant-scoped
 

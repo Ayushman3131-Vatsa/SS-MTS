@@ -17,6 +17,11 @@ type RequestOptions = Omit<RequestInit, "body" | "credentials"> & {
   notifyOnUnauthorized?: boolean;
 };
 
+export interface DownloadedFile {
+  blob: Blob;
+  filename: string | null;
+}
+
 const extractError = async (response: Response): Promise<{ message: string; code: string }> => {
   try {
     const payload = (await response.json()) as { code?: unknown; detail?: unknown };
@@ -90,8 +95,12 @@ export const apiRequest = async <T>(
 
   let body: BodyInit | undefined;
   if (requestBody !== undefined) {
-    headers.set("Content-Type", "application/json");
-    body = JSON.stringify(requestBody);
+    if (requestBody instanceof FormData) {
+      body = requestBody;
+    } else {
+      headers.set("Content-Type", "application/json");
+      body = JSON.stringify(requestBody);
+    }
   }
 
   if (UNSAFE_METHODS.has(method)) {
@@ -138,4 +147,50 @@ export const apiRequest = async <T>(
   } catch {
     throw new InvalidApiResponseError();
   }
+};
+
+const downloadFilename = (response: Response): string | null => {
+  const disposition = response.headers.get("Content-Disposition");
+  if (!disposition) return null;
+  const utf8 = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (utf8) {
+    try {
+      return decodeURIComponent(utf8);
+    } catch {
+      return utf8;
+    }
+  }
+  return disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? null;
+};
+
+export const apiDownload = async (
+  path: string,
+  signal?: AbortSignal,
+): Promise<DownloadedFile> => {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "GET",
+      headers: { Accept: "application/octet-stream" },
+      credentials: "include",
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new NetworkError();
+  }
+
+  if (!response.ok) {
+    if (response.status === 401) announceSessionExpiry();
+    const apiError = await extractError(response);
+    if (["TENANT_SUSPENDED", "OFFERING_NOT_EFFECTIVE", "OFFERING_NOT_ENTITLED", "OFFERING_NOT_STARTED", "OFFERING_DEACTIVATED", "OFFERING_EXPIRED", "OFFERING_SUSPENDED"].includes(apiError.code)) {
+      announceTenantAccessChanged(apiError.code);
+    }
+    throw new ApiError(apiError.message, response.status, parseRetryAfter(response), apiError.code);
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: downloadFilename(response),
+  };
 };

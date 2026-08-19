@@ -259,10 +259,6 @@ export const DefaultTemplatesPage = () => {
                       <p>{template.description}</p>
                     </span>
                     <span className={styles.impact}>
-                      <strong>{template.inheriting_tenant_count}</strong>
-                      <small>inherit</small>
-                    </span>
-                    <span className={styles.impact}>
                       <strong>{template.customized_tenant_count}</strong>
                       <small>customized</small>
                     </span>

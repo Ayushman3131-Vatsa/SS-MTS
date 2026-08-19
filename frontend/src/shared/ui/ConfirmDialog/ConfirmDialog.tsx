@@ -38,22 +38,42 @@ export const ConfirmDialog = ({
   onConfirm,
 }: ConfirmDialogProps) => {
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
   const [reasonError, setReasonError] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     previouslyFocused.current = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     setReasonError(false);
     confirmRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !busy) onCancel();
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
       previouslyFocused.current?.focus();
     };
   }, [busy, onCancel, open]);
@@ -71,6 +91,7 @@ export const ConfirmDialog = ({
   return (
     <div className={styles.backdrop} role="presentation">
       <section
+        ref={dialogRef}
         className={styles.dialog}
         role="dialog"
         aria-modal="true"

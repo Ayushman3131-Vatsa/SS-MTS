@@ -1,8 +1,10 @@
 from functools import lru_cache
 from pathlib import Path
+import tempfile
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 
 BACKEND_DIRECTORY = Path(__file__).resolve().parents[2]
@@ -15,6 +17,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "postgresql+asyncpg://postgres:admin@localhost:5432/multi_tenant_poc"
+    migration_database_url: str | None = None
 
     jwt_secret_key: str = "change-me-to-a-long-random-string"
     jwt_algorithm: str = "HS256"
@@ -43,6 +46,16 @@ class Settings(BaseSettings):
 
     max_request_body_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
     deactivated_offering_retention_days: int = Field(default=90, ge=1, le=3650)
+    attachment_storage_root: Path = Field(
+        default_factory=lambda: Path(tempfile.gettempdir()) / "multi_tenant_poc_attachments"
+    )
+    attachment_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)
+    attachment_max_per_task: int = Field(default=20, ge=1, le=100)
+    attachment_allowed_media_types: str = (
+        "image/png,image/jpeg,image/webp,application/pdf,text/plain,text/csv,"
+        "application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,"
+        "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
     @property
     def is_development(self) -> bool:
@@ -70,6 +83,18 @@ class Settings(BaseSettings):
                 "JWT_SECRET_KEY must be a unique secret of at least 32 characters "
                 "outside development and test environments"
             )
+        if not self.is_development:
+            if not self.migration_database_url:
+                raise ValueError("MIGRATION_DATABASE_URL is required outside development and test")
+            runtime_url = make_url(self.database_url)
+            migration_url = make_url(self.migration_database_url)
+            if (
+                self.migration_database_url == self.database_url
+                or runtime_url.username == migration_url.username
+            ):
+                raise ValueError(
+                    "MIGRATION_DATABASE_URL must use a different privileged role than DATABASE_URL"
+                )
         return self
 
 

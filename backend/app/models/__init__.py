@@ -24,6 +24,10 @@ from app.models.project import Project
 from app.models.subscription_plan import SubscriptionPlan
 from app.models.task import Task
 from app.models.task_comment import TaskComment
+from app.modules.task_management.activity.model import TaskActivityEvent
+from app.modules.task_management.attachments.model import TaskAttachment
+from app.modules.task_management.memberships.model import ProjectMember
+from app.modules.task_management.tasks.model import TaskLink
 from app.models.tenant import Tenant
 from app.models.tenant_config_override import TenantConfigOverride
 from app.models.tenant_offering import TenantOffering, TenantOfferingEvent
@@ -52,7 +56,10 @@ __all__ = [
     "SubscriptionPlanCode",
     "SubscriptionPlanStatus",
     "Task",
+    "TaskActivityEvent",
+    "TaskAttachment",
     "TaskComment",
+    "TaskLink",
     "Tenant",
     "TenantConfigOverride",
     "TenantOffering",
@@ -63,4 +70,5 @@ __all__ = [
     "TenantSubscription",
     "TenantSubscriptionStatus",
     "User",
+    "ProjectMember",
 ]

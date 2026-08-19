@@ -58,6 +58,9 @@ class TenantReadModel:
     contact_name: str | None
     contact_email: str | None
     contact_phone: str | None
+    alternate_contact_name: str | None
+    alternate_contact_email: str | None
+    alternate_contact_phone: str | None
     subscription_plan: str
     subscription_plan_code: str
     subscription_ends_at: datetime | None
@@ -108,6 +111,9 @@ def _tenant_details_statement():
             Tenant.contact_name,
             Tenant.contact_email,
             Tenant.contact_phone,
+            Tenant.alternate_contact_name,
+            Tenant.alternate_contact_email,
+            Tenant.alternate_contact_phone,
             Tenant.subscription_plan,
             SubscriptionPlan.code.label("subscription_plan_code"),
             TenantSubscription.ends_at.label("subscription_ends_at"),
