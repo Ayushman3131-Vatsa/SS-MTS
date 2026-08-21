@@ -13,18 +13,8 @@ const passwordSchema = z
   .max(128, "Password must be 128 characters or fewer.");
 
 export const tenantLoginSchema = z.object({
-  workspaceSlug: z
-    .string()
-    .trim()
-    .min(3, "Workspace must be at least 3 characters.")
-    .max(63, "Workspace must be 63 characters or fewer.")
-    .regex(
-      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-      "Use lowercase letters, numbers, and single hyphens only.",
-    ),
   email: emailSchema,
   password: passwordSchema,
-  rememberWorkspace: z.boolean(),
 });
 
 export const platformLoginSchema = z.object({

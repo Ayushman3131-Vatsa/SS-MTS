@@ -15,7 +15,7 @@ class UserAccount(Base):
 
     __tablename__ = "user_accounts"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "email", name="uq_tenant_user_email"),
+        UniqueConstraint("email", name="uq_user_accounts_email"),
         # Required so projects/tasks can FK (tenant_id, user_id) → user_accounts.
         UniqueConstraint("tenant_id", "id", name="uq_user_accounts_tenant_id"),
     )
@@ -29,7 +29,7 @@ class UserAccount(Base):
         nullable=False,
         index=True,
     )
-    email: Mapped[str] = mapped_column(CITEXT(), nullable=False, index=True)
+    email: Mapped[str] = mapped_column(CITEXT(), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
 
@@ -41,6 +41,7 @@ class UserAccount(Base):
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     force_pw_reset: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    credential_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

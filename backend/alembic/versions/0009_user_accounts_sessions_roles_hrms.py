@@ -24,6 +24,17 @@ SYSTEM_ROLES = (
 
 
 def upgrade() -> None:
+    # This revision identifier is longer than Alembic's default VARCHAR(32).
+    # Widen the version table before Alembic records this migration so clean
+    # installations can advance through the branch.
+    op.alter_column(
+        "alembic_version",
+        "version_num",
+        existing_type=sa.String(length=32),
+        type_=sa.String(length=64),
+        existing_nullable=False,
+    )
+
     # --- platform admin lockout fields (replaces auth_rate_limits for accounts) ---
     op.add_column(
         "platform_admins",
@@ -382,6 +393,10 @@ def upgrade() -> None:
         "tenant_subscriptions",
         "tenant_database_allocations",
         "tenant_offerings",
+        # Owned by the following 0010 migration. They are present in current
+        # ORM metadata but must not be created while replaying historical 0009.
+        "tenant_offering_entitlements",
+        "tenant_offering_events",
         "platform_activity_events",
     }
 

@@ -53,22 +53,26 @@ const tenant: TenantRecord = {
   tenant_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   org_name: "Example Tenant",
   tenant_code: "EXAMPLE",
-  workspace_slug: "example-tenant",
   legal_name: null,
   industry: null,
   company_size: null,
   website: null,
-  registration_number: null,
-  tax_identifier: null,
+  tax_registration_number: null,
+  pan_number: "ABCDE1234F",
   address_line_1: null,
   address_line_2: null,
   city: null,
   state_province: null,
   country: null,
   postal_code: null,
-  contact_name: null,
+  contact_name: "Avery Morgan",
+  contact_designation: "Operations Director",
   contact_email: null,
   contact_phone: null,
+  alternate_contact_name: "Jordan Lee",
+  alternate_contact_designation: "Finance Manager",
+  alternate_contact_email: "jordan@example.com",
+  alternate_contact_phone: "+91 88888 88888",
   subscription_plan: "Basic",
   subscription_plan_code: "BASIC",
   subscription_ends_at: null,
@@ -114,6 +118,13 @@ describe("TenantDetailPage entitlement management", () => {
     const historyPanel = within(screen.getByRole("tabpanel"));
     expect(historyPanel.getByText("Deactivated Offering")).toBeVisible();
     expect(historyPanel.getByText("Expired Offering")).toBeVisible();
+  });
+
+  it("displays the primary contact designation", async () => {
+    renderPage();
+
+    expect(await screen.findByText("Operations Director")).toBeVisible();
+    expect(screen.getByText("Finance Manager")).toBeVisible();
   });
 
   it("requires an expiry date when granting an offering", async () => {

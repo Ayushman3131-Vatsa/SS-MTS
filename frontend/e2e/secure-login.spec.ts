@@ -11,21 +11,12 @@ const PASSWORD = "ExistingAccountPassword!";
 
 const submitTenantLogin = async (
   page: Parameters<typeof installSessionApiMock>[0],
-  rememberWorkspace = false,
 ) => {
-  await page
-    .getByRole("textbox", { name: "Workspace", exact: true })
-    .fill("northstar-labs");
   await page
     .getByRole("textbox", { name: "Work email", exact: true })
     .fill("Member@Northstar.Example");
   await page.locator("#tenant-password").fill(PASSWORD);
-  if (rememberWorkspace) {
-    await page
-      .getByRole("checkbox", { name: "Remember workspace", exact: true })
-      .check();
-  }
-  await page.getByRole("button", { name: "Sign in to workspace" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
 };
 
 const submitPlatformLogin = async (
@@ -52,9 +43,7 @@ test.describe("secure multi-tenant login", () => {
     await expect(
       page.getByRole("heading", { name: "Welcome back" }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("textbox", { name: "Workspace", exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Work email", exact: true })).toBeVisible();
   });
 
   test("renders tenant-first login and switches to the restricted platform form", async ({
@@ -65,9 +54,7 @@ test.describe("secure multi-tenant login", () => {
     await page.goto("/");
 
     await expect(page).toHaveURL(/\/login$/);
-    await expect(
-      page.getByRole("textbox", { name: "Workspace", exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Work email", exact: true })).toBeVisible();
     await expect(
       page.getByRole("textbox", { name: "Work email", exact: true }),
     ).toBeVisible();
@@ -157,7 +144,6 @@ test.describe("secure multi-tenant login", () => {
           : {
               email: "member@northstar.example",
               password: PASSWORD,
-              workspace_slug: "northstar-labs",
             },
       );
       expect(loginCall?.payload).not.toHaveProperty("role");
@@ -197,7 +183,7 @@ test.describe("secure multi-tenant login", () => {
     const alert = page.getByRole("alert");
     await expect(alert).toContainText("Unable to sign in");
     await expect(alert).toContainText(
-      "The workspace or credentials are not recognized.",
+      "The email or password is not recognized.",
     );
     await expect
       .poll(() =>
@@ -271,7 +257,7 @@ test.describe("secure multi-tenant login", () => {
     );
   });
 
-  test("stores only an explicitly remembered workspace, never credentials or tokens", async ({
+  test("does not store tenant login identifiers, credentials, or tokens", async ({
     page,
   }) => {
     await installSessionApiMock(page, {
@@ -279,7 +265,7 @@ test.describe("secure multi-tenant login", () => {
     });
     await page.goto("/login");
 
-    await submitTenantLogin(page, true);
+    await submitTenantLogin(page);
     await expect(page).toHaveURL("/app/my-work");
 
     const storage = await page.evaluate(() => ({
@@ -298,7 +284,7 @@ test.describe("secure multi-tenant login", () => {
     }));
 
     expect(storage).toEqual({
-      local: { "workspace.remembered-slug": "northstar-labs" },
+      local: {},
       session: {},
     });
     expect(JSON.stringify(storage)).not.toContain(PASSWORD);
@@ -307,28 +293,45 @@ test.describe("secure multi-tenant login", () => {
     expect(JSON.stringify(storage).toLowerCase()).not.toContain("bearer");
   });
 
+  test("forces a bootstrapped admin to replace the temporary password", async ({
+    page,
+  }) => {
+    const pendingPrincipal = tenantPrincipal("Tenant Admin");
+    pendingPrincipal.password_change_required = true;
+    const api = await installSessionApiMock(page, {
+      loginPrincipal: pendingPrincipal,
+    });
+    await page.goto("/login");
+
+    await submitTenantLogin(page);
+    await expect(page).toHaveURL("/account/change-password");
+    await page.locator("#current-password").fill(PASSWORD);
+    await page.locator("#new-password").fill("Permanent!Password84");
+    await page.locator("#confirm-password").fill("Permanent!Password84");
+    await page.getByRole("button", { name: "Save password and continue" }).click();
+
+    await expect(page).toHaveURL("/app/overview");
+    const changeCall = api.calls.find(
+      (call) => call.path === "/api/auth/password/change",
+    );
+    expect(changeCall?.payload).toEqual({
+      current_password: PASSWORD,
+      new_password: "Permanent!Password84",
+    });
+  });
+
   test("exposes labeled controls, keyboard password visibility, and live validation", async ({
     page,
   }) => {
     const api = await installSessionApiMock(page);
     await page.goto("/login");
 
-    const workspace = page.getByRole("textbox", {
-      name: "Workspace",
-      exact: true,
-    });
     const email = page.getByRole("textbox", {
       name: "Work email",
       exact: true,
     });
     const password = page.locator("#tenant-password");
     await expect(page.getByRole("main")).toHaveCount(1);
-    await expect(workspace).toHaveAccessibleDescription(
-      "The unique name used by your organization.",
-    );
-
-    await workspace.focus();
-    await page.keyboard.type("invalid--workspace");
     await email.fill("not-an-email");
     await password.fill("visible-value");
     const visibility = page.getByRole("button", { name: "Show password" });
@@ -339,10 +342,7 @@ test.describe("secure multi-tenant login", () => {
       page.getByRole("button", { name: "Hide password" }),
     ).toHaveAttribute("aria-pressed", "true");
 
-    await page.getByRole("button", { name: "Sign in to workspace" }).click();
-    await expect(
-      page.getByText("Use lowercase letters, numbers, and single hyphens only."),
-    ).toBeVisible();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByText("Enter a valid email address.")).toBeVisible();
     expect(api.calls.filter((call) => call.method === "POST")).toHaveLength(0);
   });

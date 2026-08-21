@@ -11,7 +11,7 @@ export type SessionRole = PlatformRole | TenantRole;
 export interface SessionTenant {
   tenant_id: string;
   org_name: string;
-  workspace_slug: string;
+  tenant_code: string;
   status: "ACTIVE" | "SUSPENDED";
   offerings: SessionOffering[];
 }
@@ -33,6 +33,7 @@ export interface PlatformPrincipal {
   email: string;
   role: PlatformRole;
   tenant: null;
+  password_change_required: false;
 }
 
 export interface TenantPrincipal {
@@ -42,14 +43,19 @@ export interface TenantPrincipal {
   email: string;
   role: TenantRole;
   tenant: SessionTenant;
+  password_change_required: boolean;
 }
 
 export type SessionPrincipal = PlatformPrincipal | TenantPrincipal;
 
 export interface TenantLoginCredentials {
-  workspace_slug: string;
   email: string;
   password: string;
+}
+
+export interface PasswordChangeCredentials {
+  current_password: string;
+  new_password: string;
 }
 
 export interface PlatformLoginCredentials {

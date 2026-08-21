@@ -144,7 +144,7 @@ export const ProtectedHomePage = ({ variant }: ProtectedHomePageProps) => {
               <h2>{organization}</h2>
               <span>
                 {principal.principal_type === "tenant_user"
-                  ? principal.tenant.workspace_slug
+                  ? principal.tenant.tenant_code
                   : "Cross-tenant platform administration"}
               </span>
             </div>

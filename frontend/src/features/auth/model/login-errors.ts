@@ -37,7 +37,7 @@ export const getLoginErrorContent = (
       return {
         title: "Unable to sign in",
         message:
-          "The workspace or credentials are not recognized. Check your details and try again.",
+          "The email or password is not recognized. Check your details and try again.",
       };
     }
 

@@ -77,7 +77,8 @@ async def _seed_retired_entitlement(
     tenant = Tenant(
         org_name="Retention Test Tenant",
         tenant_code=f"RETENTION_{unique[:8].upper()}",
-        workspace_slug=f"retention-{unique[:12]}",
+        contact_name="Retention Contact",
+        contact_email=f"retention-contact-{unique}@example.test",
         subscription_plan="Free",
         status="ACTIVE",
         created_by_admin_id=admin_id,
@@ -203,7 +204,8 @@ async def test_effective_offering_uses_window_and_ignores_catalog_inactivity(
     tenant = Tenant(
         org_name="Entitlement Test Tenant",
         tenant_code="ENTITLEMENT_TEST",
-        workspace_slug="entitlement-test",
+        contact_name="Entitlement Contact",
+        contact_email="entitlement-contact@example.test",
         subscription_plan="Free",
         status="ACTIVE",
         created_by_admin_id=admin_id,

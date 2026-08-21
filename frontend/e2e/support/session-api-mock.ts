@@ -9,6 +9,7 @@ export interface PlatformPrincipal {
   email: string;
   role: "Platform Admin";
   tenant: null;
+  password_change_required: false;
 }
 
 export interface TenantPrincipal {
@@ -17,10 +18,11 @@ export interface TenantPrincipal {
   name: string;
   email: string;
   role: TenantRole;
+  password_change_required: boolean;
   tenant: {
     tenant_id: string;
     org_name: string;
-    workspace_slug: string;
+    tenant_code: string;
     status: "ACTIVE" | "SUSPENDED";
     offerings: Array<{
       offering_id: string;
@@ -107,6 +109,7 @@ export const platformPrincipal = (): PlatformPrincipal => ({
   email: "priya@platform.example",
   role: "Platform Admin",
   tenant: null,
+  password_change_required: false,
 });
 
 export const tenantPrincipal = (role: TenantRole): TenantPrincipal => ({
@@ -125,10 +128,11 @@ export const tenantPrincipal = (role: TenantRole): TenantPrincipal => ({
         : "Emery Employee",
   email: `${role.toLowerCase().replace(" ", ".")}@northstar.example`,
   role,
+  password_change_required: false,
   tenant: {
     tenant_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     org_name: "Northstar Labs",
-    workspace_slug: "northstar-labs",
+    tenant_code: "NORTHSTAR",
     status: "ACTIVE",
     offerings: [],
   },
@@ -313,6 +317,42 @@ export const installSessionApiMock = async (
       status: 404,
       headers: JSON_HEADERS,
       json: { detail: "Unhandled E2E API route" },
+    });
+  });
+
+  await page.route(/\/api\/auth\/password\/change$/, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const postData = request.postData();
+    const payload = postData ? request.postDataJSON() : null;
+    calls.push({
+      headers: request.headers(),
+      method: request.method(),
+      path: url.pathname,
+      payload,
+    });
+
+    if (request.method() !== "POST" || currentPrincipal?.principal_type !== "tenant_user") {
+      await route.fulfill({
+        status: 401,
+        headers: JSON_HEADERS,
+        json: { detail: "Authentication required" },
+      });
+      return;
+    }
+
+    currentPrincipal = {
+      ...currentPrincipal,
+      password_change_required: false,
+    };
+    await route.fulfill({
+      status: 200,
+      headers: JSON_HEADERS,
+      json: {
+        principal: currentPrincipal,
+        replacement_access_token: null,
+        token_type: null,
+      },
     });
   });
 

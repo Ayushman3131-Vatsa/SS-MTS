@@ -1,4 +1,3 @@
-import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -19,7 +18,6 @@ _pwd_context = CryptContext(
 
 MIN_PASSWORD_LENGTH = 12
 MAX_PASSWORD_LENGTH = 128
-WORKSPACE_SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 
 # This intentionally remains small and auditable. The structural and
 # user-context checks below do the rest of the work; this list catches the
@@ -81,22 +79,6 @@ def normalize_email(value: str) -> str:
     return value.strip().lower()
 
 
-def normalize_workspace_slug(value: str) -> str:
-    """Create a stable, URL-safe tenant slug from an organization label."""
-
-    slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
-    if not slug:
-        slug = "tenant"
-    elif len(slug) < 3:
-        slug = f"{slug}-org"
-    return slug[:63].rstrip("-")
-
-
-# ``slugify_workspace`` reads naturally at tenant-creation call sites while
-# ``normalize_workspace_slug`` is the canonical public helper name.
-slugify_workspace = normalize_workspace_slug
-
-
 def _is_comparison_character(character: str) -> bool:
     return character.isalnum() or unicodedata.category(character).startswith("M")
 
@@ -128,7 +110,6 @@ def validate_password(
     email: str | None = None,
     name: str | None = None,
     org_name: str | None = None,
-    workspace_slug: str | None = None,
 ) -> None:
     """Validate passwords at account creation/change boundaries.
 
@@ -171,7 +152,7 @@ def validate_password(
         if _is_comparison_character(character)
     )
     context_tokens: set[str] = set()
-    for value in (name, org_name, workspace_slug):
+    for value in (name, org_name):
         context_tokens.update(_context_tokens(value))
     if email:
         local_part, _, _ = normalize_email(email).partition("@")
@@ -184,7 +165,7 @@ def validate_password(
         if len(compact_email) >= 3:
             context_tokens.add(compact_email)
     if any(token in compact_password for token in context_tokens):
-        errors.append("not contain your name, email, organization, or workspace slug")
+        errors.append("not contain your name, email, or organization")
 
     if errors:
         raise ValueError("Password must " + ", ".join(errors) + ".")

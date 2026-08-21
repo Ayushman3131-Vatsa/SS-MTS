@@ -62,13 +62,12 @@ export interface TenantRecord {
   tenant_id: string;
   org_name: string;
   tenant_code: string;
-  workspace_slug: string;
   legal_name: string | null;
   industry: string | null;
   company_size: string | null;
   website: string | null;
-  registration_number: string | null;
-  tax_identifier: string | null;
+  tax_registration_number: string | null;
+  pan_number: string | null;
   address_line_1: string | null;
   address_line_2: string | null;
   city: string | null;
@@ -76,9 +75,11 @@ export interface TenantRecord {
   country: string | null;
   postal_code: string | null;
   contact_name: string | null;
+  contact_designation: string | null;
   contact_email: string | null;
   contact_phone: string | null;
   alternate_contact_name?: string | null;
+  alternate_contact_designation?: string | null;
   alternate_contact_email?: string | null;
   alternate_contact_phone?: string | null;
   subscription_plan: string;
@@ -105,7 +106,6 @@ export interface TenantListResponse {
 export interface TenantRegistrationPayload {
   org_name: string;
   tenant_code: string;
-  workspace_slug: string;
   subscription_plan_code: string;
   subscription_ends_at: string | null;
   status: string;
@@ -114,8 +114,8 @@ export interface TenantRegistrationPayload {
   industry: string;
   company_size: string;
   website: string | null;
-  registration_number: string | null;
-  tax_identifier: string | null;
+  tax_registration_number: string | null;
+  pan_number: string;
   address_line_1: string;
   address_line_2: string | null;
   city: string;
@@ -123,9 +123,11 @@ export interface TenantRegistrationPayload {
   country: string;
   postal_code: string;
   contact_name: string;
+  contact_designation: string;
   contact_email: string;
   contact_phone: string;
   alternate_contact_name: string | null;
+  alternate_contact_designation: string | null;
   alternate_contact_email: string | null;
   alternate_contact_phone: string | null;
   offering_ids?: string[];
@@ -136,9 +138,6 @@ export interface TenantRegistrationPayload {
     expected_tenant_version?: number;
     reason?: string | null;
   }>;
-  tenant_admin_name: string;
-  tenant_admin_email: string;
-  tenant_admin_password: string;
 }
 
 export interface TenantOfferingActionPayload {

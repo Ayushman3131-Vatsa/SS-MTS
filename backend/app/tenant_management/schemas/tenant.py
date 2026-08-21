@@ -5,12 +5,7 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
-from app.common.security import (
-    WORKSPACE_SLUG_PATTERN,
-    normalize_email,
-    normalize_workspace_slug,
-    validate_password,
-)
+from app.common.security import normalize_email
 from app.tenant_management.models.enums import (
     DatabaseIsolationMode,
     DatabaseProvisioningState,
@@ -52,17 +47,10 @@ class TenantOfferingGrantRequest(StrictRequestModel):
 
 class TenantCreateRequest(StrictRequestModel):
     org_name: str = Field(min_length=1, max_length=255)
-    tenant_code: str | None = Field(
-        default=None,
+    tenant_code: str = Field(
         min_length=2,
         max_length=30,
         pattern=r"^[A-Z0-9][A-Z0-9_-]*$",
-    )
-    workspace_slug: str | None = Field(
-        default=None,
-        min_length=3,
-        max_length=63,
-        pattern=WORKSPACE_SLUG_PATTERN,
     )
     subscription_plan_code: SubscriptionPlanCode | None = Field(default=None)
     subscription_ends_at: datetime | None = Field(default=None)
@@ -85,16 +73,21 @@ class TenantCreateRequest(StrictRequestModel):
         max_length=500,
         pattern=r"^https?://",
     )
-    registration_number: str | None = Field(default=None, max_length=100)
-    tax_identifier: str | None = Field(default=None, max_length=100)
+    tax_registration_number: str | None = Field(default=None, max_length=100)
+    pan_number: str = Field(
+        min_length=10,
+        max_length=10,
+        pattern=r"^[A-Z]{5}[0-9]{4}[A-Z]$",
+    )
     address_line_1: str | None = Field(default=None, min_length=1, max_length=255)
     address_line_2: str | None = Field(default=None, max_length=255)
     city: str | None = Field(default=None, min_length=1, max_length=100)
     state_province: str | None = Field(default=None, min_length=1, max_length=100)
     country: str | None = Field(default=None, min_length=1, max_length=100)
     postal_code: str | None = Field(default=None, min_length=1, max_length=30)
-    contact_name: str | None = Field(default=None, min_length=1, max_length=255)
-    contact_email: EmailStr | None = Field(default=None, max_length=254)
+    contact_name: str = Field(min_length=1, max_length=255)
+    contact_designation: str = Field(min_length=1, max_length=100)
+    contact_email: EmailStr = Field(max_length=254)
     contact_phone: str | None = Field(
         default=None,
         min_length=5,
@@ -102,6 +95,7 @@ class TenantCreateRequest(StrictRequestModel):
         pattern=r"^[0-9+().\-\s]+$",
     )
     alternate_contact_name: str | None = Field(default=None, min_length=1, max_length=255)
+    alternate_contact_designation: str | None = Field(default=None, min_length=1, max_length=100)
     alternate_contact_email: EmailStr | None = Field(default=None, max_length=254)
     alternate_contact_phone: str | None = Field(
         default=None,
@@ -111,13 +105,10 @@ class TenantCreateRequest(StrictRequestModel):
     )
     offering_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
     offering_grants: list[TenantOfferingGrantRequest] = Field(default_factory=list, max_length=50)
-    tenant_admin_name: str = Field(min_length=1, max_length=255)
-    tenant_admin_email: EmailStr = Field(max_length=254)
-    tenant_admin_password: str = Field(min_length=12, max_length=128)
-
     @field_validator(
         "org_name",
-        "tenant_admin_name",
+        "contact_name",
+        "contact_designation",
     )
     @classmethod
     def normalize_text(cls, value: str) -> str:
@@ -128,8 +119,7 @@ class TenantCreateRequest(StrictRequestModel):
 
     @field_validator(
         "website",
-        "registration_number",
-        "tax_identifier",
+        "tax_registration_number",
         "address_line_2",
     )
     @classmethod
@@ -138,6 +128,11 @@ class TenantCreateRequest(StrictRequestModel):
             return None
         normalized = value.strip()
         return normalized or None
+
+    @field_validator("pan_number", mode="before")
+    @classmethod
+    def normalize_pan_number(cls, value: object) -> object:
+        return value.strip().upper() if isinstance(value, str) else value
 
     @field_validator(
         "legal_name",
@@ -148,9 +143,9 @@ class TenantCreateRequest(StrictRequestModel):
         "state_province",
         "country",
         "postal_code",
-        "contact_name",
         "contact_phone",
         "alternate_contact_name",
+        "alternate_contact_designation",
         "alternate_contact_phone",
     )
     @classmethod
@@ -177,21 +172,13 @@ class TenantCreateRequest(StrictRequestModel):
             raise ValueError("must not be blank")
         return normalized
 
-    @field_validator("workspace_slug", mode="before")
-    @classmethod
-    def normalize_explicit_slug(cls, value: object) -> object:
-        if not isinstance(value, str):
-            return value
-        return value.strip().lower()
-
     @field_validator(
-        "tenant_admin_email",
         "contact_email",
         "alternate_contact_email",
         mode="before",
     )
     @classmethod
-    def normalize_admin_email(cls, value: object) -> object:
+    def normalize_contact_email(cls, value: object) -> object:
         return normalize_email(value) if isinstance(value, str) else value
 
     @model_validator(mode="after")
@@ -205,6 +192,7 @@ class TenantCreateRequest(StrictRequestModel):
             raise ValueError("Use offering_grants instead of offering_ids")
         alternate_contact_values = (
             self.alternate_contact_name,
+            self.alternate_contact_designation,
             self.alternate_contact_email,
             self.alternate_contact_phone,
         )
@@ -212,7 +200,7 @@ class TenantCreateRequest(StrictRequestModel):
             value is not None for value in alternate_contact_values
         ):
             raise ValueError(
-                "alternate contact name, email, and phone must be provided together"
+                "alternate contact name, designation, email, and phone must be provided together"
             )
         plan_code = self.resolved_subscription_plan_code
         if self.subscription_ends_at is not None:
@@ -234,13 +222,6 @@ class TenantCreateRequest(StrictRequestModel):
         ):
             raise ValueError("Free subscriptions must not specify subscription_ends_at")
 
-        validate_password(
-            self.tenant_admin_password,
-            email=str(self.tenant_admin_email),
-            name=self.tenant_admin_name,
-            org_name=self.org_name,
-            workspace_slug=self.workspace_slug or normalize_workspace_slug(self.org_name),
-        )
         return self
 
     @property
@@ -376,23 +357,24 @@ class TenantResponse(BaseModel):
     tenant_id: uuid.UUID
     org_name: str
     tenant_code: str
-    workspace_slug: str
     legal_name: str | None
     industry: str | None
     company_size: str | None
     website: str | None
-    registration_number: str | None
-    tax_identifier: str | None
+    tax_registration_number: str | None
+    pan_number: str | None
     address_line_1: str | None
     address_line_2: str | None
     city: str | None
     state_province: str | None
     country: str | None
     postal_code: str | None
-    contact_name: str | None
-    contact_email: str | None
+    contact_name: str
+    contact_designation: str | None
+    contact_email: str
     contact_phone: str | None
     alternate_contact_name: str | None
+    alternate_contact_designation: str | None
     alternate_contact_email: str | None
     alternate_contact_phone: str | None
     subscription_plan: str

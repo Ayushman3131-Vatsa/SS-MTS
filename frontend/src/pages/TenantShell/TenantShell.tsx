@@ -143,7 +143,7 @@ export const TenantShell = () => {
           <span><Users size={17} /></span>
           <div>
             <strong>{principal.tenant.org_name}</strong>
-            <small>{principal.tenant.workspace_slug}</small>
+            <small>{principal.tenant.tenant_code}</small>
           </div>
           <button type="button" aria-label="Close navigation" onClick={() => setDrawerOpen(false)}>
             <X size={19} />

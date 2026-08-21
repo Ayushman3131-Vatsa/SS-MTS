@@ -24,6 +24,7 @@ interface ProtectedRouteProps {
   area?: "platform" | "tenant";
   roles?: TenantRole[];
   allowSuspendedTenant?: boolean;
+  allowPasswordChangeRequired?: boolean;
 }
 
 interface OfferingRouteProps {
@@ -44,6 +45,7 @@ export const OfferingRoute = ({ code }: OfferingRouteProps) => {
 export const ProtectedRoute = ({
   area,
   allowSuspendedTenant = false,
+  allowPasswordChangeRequired = false,
   roles,
 }: ProtectedRouteProps) => {
   const { principal, status } = useSession();
@@ -62,6 +64,15 @@ export const ProtectedRoute = ({
 
   if (area === "tenant" && principal.principal_type !== "tenant_user") {
     return <Navigate to="/forbidden" replace />;
+  }
+
+  if (
+    area === "tenant" &&
+    principal.principal_type === "tenant_user" &&
+    principal.password_change_required &&
+    !allowPasswordChangeRequired
+  ) {
+    return <Navigate to="/account/change-password" replace />;
   }
 
   if (

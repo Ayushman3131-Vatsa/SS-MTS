@@ -12,10 +12,11 @@ const tenantPrincipal = (
   name: "Avery Morgan",
   email: "avery@example.com",
   role,
+  password_change_required: false,
   tenant: {
     tenant_id: "63e6c159-3c6c-43bb-856a-8ed53e21dabe",
     org_name: "Northstar Labs",
-    workspace_slug: "northstar-labs",
+    tenant_code: "NORTHSTAR",
     status,
     offerings: [],
   },
@@ -48,6 +49,7 @@ describe("getPrincipalHome", () => {
         email: "operator@example.com",
         role: "Platform Admin",
         tenant: null,
+        password_change_required: false,
       }),
     ).toBe("/platform");
   });

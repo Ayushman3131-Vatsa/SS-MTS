@@ -132,7 +132,7 @@ export const apiRequest = async <T>(
     }
 
     const apiError = await extractError(response);
-    if (["TENANT_SUSPENDED", "OFFERING_NOT_EFFECTIVE", "OFFERING_NOT_ENTITLED", "OFFERING_NOT_STARTED", "OFFERING_DEACTIVATED", "OFFERING_EXPIRED", "OFFERING_SUSPENDED"].includes(apiError.code)) {
+    if (["TENANT_SUSPENDED", "PASSWORD_CHANGE_REQUIRED", "OFFERING_NOT_EFFECTIVE", "OFFERING_NOT_ENTITLED", "OFFERING_NOT_STARTED", "OFFERING_DEACTIVATED", "OFFERING_EXPIRED", "OFFERING_SUSPENDED"].includes(apiError.code)) {
       announceTenantAccessChanged(apiError.code);
     }
     throw new ApiError(apiError.message, response.status, parseRetryAfter(response), apiError.code);
@@ -183,7 +183,7 @@ export const apiDownload = async (
   if (!response.ok) {
     if (response.status === 401) announceSessionExpiry();
     const apiError = await extractError(response);
-    if (["TENANT_SUSPENDED", "OFFERING_NOT_EFFECTIVE", "OFFERING_NOT_ENTITLED", "OFFERING_NOT_STARTED", "OFFERING_DEACTIVATED", "OFFERING_EXPIRED", "OFFERING_SUSPENDED"].includes(apiError.code)) {
+    if (["TENANT_SUSPENDED", "PASSWORD_CHANGE_REQUIRED", "OFFERING_NOT_EFFECTIVE", "OFFERING_NOT_ENTITLED", "OFFERING_NOT_STARTED", "OFFERING_DEACTIVATED", "OFFERING_EXPIRED", "OFFERING_SUSPENDED"].includes(apiError.code)) {
       announceTenantAccessChanged(apiError.code);
     }
     throw new ApiError(apiError.message, response.status, parseRetryAfter(response), apiError.code);

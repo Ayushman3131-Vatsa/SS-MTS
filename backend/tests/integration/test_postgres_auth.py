@@ -55,6 +55,7 @@ LEGACY_PASSWORD = "Legacy!Harbor72"
 THROTTLE_EMAIL = "throttle@example.com"
 THROTTLE_PASSWORD = "Throttle!Safe42"
 SHARED_MEMBER_EMAIL = "member@example.com"
+SECOND_MEMBER_EMAIL = "second-member@example.com"
 SHARED_MEMBER_PASSWORD = "Orbit!Sparrow42"
 
 _argon2_context = CryptContext(
@@ -170,6 +171,8 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
         cls._run_async(cls._seed_legacy_revision())
         cls._run_alembic("0002")
         cls._run_async(cls._seed_revision_0002_edge_cases())
+        cls._run_alembic("0018")
+        cls._run_async(cls._seed_revision_0018_contacts())
         alembic_config = Config(str(REPOSITORY_ROOT / "alembic.ini"))
         cls.head_revision = ScriptDirectory.from_config(
             alembic_config
@@ -261,8 +264,21 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
 
     @classmethod
     def _run_alembic(cls, target: str) -> None:
-        completed = subprocess.run(
-            [sys.executable, "-m", "alembic", "upgrade", target],
+        completed = cls._invoke_alembic("upgrade", target)
+        if completed.returncode != 0:
+            raise RuntimeError(
+                f"Alembic upgrade {target!r} failed in the disposable "
+                f"database:\n{completed.stdout}"
+            )
+
+    @classmethod
+    def _invoke_alembic(
+        cls,
+        command: str,
+        target: str,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "alembic", command, target],
             cwd=REPOSITORY_ROOT,
             env=cls._test_environment(),
             stdout=subprocess.PIPE,
@@ -271,9 +287,13 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             timeout=60,
             check=False,
         )
+
+    @classmethod
+    def _run_alembic_downgrade(cls, target: str) -> None:
+        completed = cls._invoke_alembic("downgrade", target)
         if completed.returncode != 0:
             raise RuntimeError(
-                f"Alembic upgrade {target!r} failed in the disposable "
+                f"Alembic downgrade {target!r} failed in the disposable "
                 f"database:\n{completed.stdout}"
             )
 
@@ -352,7 +372,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                              ' Member@Example.COM ', :member_hash,
                              'Tenant Admin', 'Active'),
                             (:tenant_two, :user_two, 'Shared Member',
-                             :member_email, :member_hash,
+                             :second_member_email, :member_hash,
                              'Employee', 'Active')
                         """
                     ),
@@ -361,7 +381,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                         "user_one": TENANT_ONE_USER_ID,
                         "tenant_two": TENANT_TWO_ID,
                         "user_two": TENANT_TWO_USER_ID,
-                        "member_email": SHARED_MEMBER_EMAIL,
+                        "second_member_email": SECOND_MEMBER_EMAIL,
                         "member_hash": member_hash,
                     },
                 )
@@ -384,6 +404,39 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                         """
                     ),
                     {"tenant_id": SHORT_ORG_TENANT_ID},
+                )
+        finally:
+            await engine.dispose()
+
+    @classmethod
+    async def _seed_revision_0018_contacts(cls) -> None:
+        """Prepare legacy tenants for the 0019 primary-contact preflight."""
+
+        engine = create_async_engine(cls.database_url, poolclass=NullPool)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        """
+                        UPDATE tenants
+                        SET contact_name = CASE tenant_id
+                                WHEN :tenant_one THEN 'Shared Member'
+                                WHEN :tenant_two THEN 'Second Member'
+                                ELSE 'Short Organization Contact'
+                            END,
+                            contact_email = CASE tenant_id
+                                WHEN :tenant_one THEN :member_email
+                                WHEN :tenant_two THEN :second_member_email
+                                ELSE 'short-contact@example.com'
+                            END
+                        """
+                    ),
+                    {
+                        "tenant_one": TENANT_ONE_ID,
+                        "tenant_two": TENANT_TWO_ID,
+                        "member_email": SHARED_MEMBER_EMAIL,
+                        "second_member_email": SECOND_MEMBER_EMAIL,
+                    },
                 )
         finally:
             await engine.dispose()
@@ -564,26 +617,27 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
 
         cls._run_async(execute())
 
-    def test_10_migration_backfills_normalized_unique_slugs(self) -> None:
+    def test_10_migration_preserves_accounts_and_removes_workspace_slug(self) -> None:
         self.assertEqual(
             self._db_scalar("SELECT version_num FROM alembic_version"),
             self.head_revision,
         )
-        rows = self._db_rows(
-            """
-            SELECT tenant_id::text AS tenant_id, workspace_slug
-            FROM tenants
-            ORDER BY tenant_id
-            """
-        )
-        by_id = {row["tenant_id"]: row["workspace_slug"] for row in rows}
-        self.assertEqual(by_id[str(TENANT_ONE_ID)], "acme-labs")
         self.assertEqual(
-            by_id[str(TENANT_TWO_ID)],
-            "acme-labs-22222222",
+            self._db_scalar(
+                """
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE table_name = 'tenants' AND column_name = 'workspace_slug'
+                """
+            ),
+            0,
         )
-        self.assertEqual(by_id[str(SHORT_ORG_TENANT_ID)], "x-org")
-        self.assertEqual(len(set(by_id.values())), 3)
+        self.assertEqual(
+            self._db_scalar(
+                "SELECT count(*) FROM tenants WHERE contact_name IS NULL OR contact_email IS NULL"
+            ),
+            0,
+        )
         self.assertEqual(
             self._db_scalar(
                 "SELECT email::text FROM platform_admins WHERE admin_id = :id",
@@ -595,8 +649,8 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             self._db_scalar(
                 """
                 SELECT email::text
-                FROM users
-                WHERE tenant_id = :tenant_id AND user_id = :user_id
+                FROM user_accounts
+                WHERE tenant_id = :tenant_id AND id = :user_id
                 """,
                 {
                     "tenant_id": TENANT_ONE_ID,
@@ -604,6 +658,13 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 },
             ),
             SHARED_MEMBER_EMAIL,
+        )
+        self.assertEqual(
+            self._db_scalar(
+                "SELECT credential_version FROM user_accounts WHERE id = :user_id",
+                {"user_id": TENANT_ONE_USER_ID},
+            ),
+            1,
         )
         self.assertEqual(
             [
@@ -669,6 +730,75 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             3,
         )
 
+    def test_12_migration_preflights_and_downgrade_are_deterministic(self) -> None:
+        self._run_alembic_downgrade("0018")
+        try:
+            first_slug = self._db_scalar(
+                "SELECT workspace_slug FROM tenants WHERE tenant_id = :tenant_id",
+                {"tenant_id": TENANT_ONE_ID},
+            )
+            self.assertEqual(first_slug, "tenant-11111111-11111111")
+
+            cases = (
+                (
+                    "UPDATE user_accounts SET email = :value WHERE id = :id",
+                    {"value": SHARED_MEMBER_EMAIL, "id": TENANT_TWO_USER_ID},
+                    "Duplicate emails",
+                    "UPDATE user_accounts SET email = :value WHERE id = :id",
+                    {"value": SECOND_MEMBER_EMAIL, "id": TENANT_TWO_USER_ID},
+                ),
+                (
+                    "UPDATE tenants SET contact_name = NULL WHERE tenant_id = :id",
+                    {"id": SHORT_ORG_TENANT_ID},
+                    "Fix tenants",
+                    "UPDATE tenants SET contact_name = 'Short Organization Contact' WHERE tenant_id = :id",
+                    {"id": SHORT_ORG_TENANT_ID},
+                ),
+                (
+                    "UPDATE tenants SET contact_email = :value WHERE tenant_id = :id",
+                    {"value": SHARED_MEMBER_EMAIL, "id": TENANT_TWO_ID},
+                    "Duplicate emails",
+                    "UPDATE tenants SET contact_email = :value WHERE tenant_id = :id",
+                    {"value": SECOND_MEMBER_EMAIL, "id": TENANT_TWO_ID},
+                ),
+                (
+                    "UPDATE tenants SET contact_email = :value WHERE tenant_id = :id",
+                    {"value": SHARED_MEMBER_EMAIL, "id": SHORT_ORG_TENANT_ID},
+                    "belongs to another tenant account",
+                    "UPDATE tenants SET contact_email = 'short-contact@example.com' WHERE tenant_id = :id",
+                    {"id": SHORT_ORG_TENANT_ID},
+                ),
+            )
+            for setup_sql, setup_params, diagnostic, restore_sql, restore_params in cases:
+                with self.subTest(diagnostic=diagnostic):
+                    self._db_execute(setup_sql, setup_params)
+                    completed = self._invoke_alembic("upgrade", "0019")
+                    self.assertNotEqual(completed.returncode, 0, completed.stdout)
+                    self.assertIn(diagnostic, completed.stdout)
+                    self._db_execute(restore_sql, restore_params)
+        finally:
+            self._db_execute(
+                "UPDATE user_accounts SET email = :second_email WHERE id = :second_id",
+                {
+                    "second_email": SECOND_MEMBER_EMAIL,
+                    "second_id": TENANT_TWO_USER_ID,
+                },
+            )
+            self._db_execute(
+                """
+                UPDATE tenants SET
+                    contact_name = 'Short Organization Contact',
+                    contact_email = 'short-contact@example.com'
+                WHERE tenant_id = :short_id
+                """,
+                {"short_id": SHORT_ORG_TENANT_ID},
+            )
+            self._db_execute(
+                "UPDATE tenants SET contact_email = :second_email WHERE tenant_id = :tenant_two",
+                {"second_email": SECOND_MEMBER_EMAIL, "tenant_two": TENANT_TWO_ID},
+            )
+            self._run_alembic("head")
+
     def test_15_only_one_current_subscription_is_allowed_per_tenant(self) -> None:
         with self.assertRaises(IntegrityError):
             self._db_execute(
@@ -697,14 +827,16 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
         self._db_execute(
             """
             INSERT INTO tenants
-                (tenant_id, org_name, workspace_slug, created_by_admin_id)
+                (tenant_id, org_name, tenant_code, contact_name, contact_email,
+                 created_by_admin_id)
             VALUES
-                (:tenant_id, 'Allocation Invariant',
-                 :workspace_slug, :admin_id)
+                (:tenant_id, 'Allocation Invariant', :tenant_code,
+                 'Allocation Contact', :contact_email, :admin_id)
             """,
             {
                 "tenant_id": tenant_id,
-                "workspace_slug": f"allocation-{tenant_id.hex[:12]}",
+                "tenant_code": f"ALLOC_{tenant_id.hex[:12].upper()}",
+                "contact_email": f"allocation-{tenant_id.hex}@example.com",
                 "admin_id": PLATFORM_ADMIN_ID,
             },
         )
@@ -723,7 +855,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 {"tenant_id": tenant_id},
             )
 
-    def test_20_citext_uniqueness_is_global_and_tenant_scoped(self) -> None:
+    def test_20_citext_uniqueness_is_global_for_tenant_users(self) -> None:
         with self.assertRaises(IntegrityError):
             self._db_execute(
                 """
@@ -737,11 +869,11 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
         with self.assertRaises(IntegrityError):
             self._db_execute(
                 """
-                INSERT INTO users
-                    (tenant_id, user_id, name, email, password_hash, role, status)
+                INSERT INTO user_accounts
+                    (tenant_id, id, display_name, email, password_hash, is_active)
                 VALUES
                     (:tenant_id, :user_id, 'Duplicate',
-                     'MEMBER@EXAMPLE.COM', 'not-used', 'Employee', 'Active')
+                     'MEMBER@EXAMPLE.COM', 'not-used', true)
                 """,
                 {
                     "tenant_id": TENANT_ONE_ID,
@@ -749,13 +881,14 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 },
             )
 
-        self.assertEqual(
-            self._db_scalar(
-                "SELECT count(*) FROM users WHERE email = 'MEMBER@EXAMPLE.COM'"
-            ),
-            2,
-            "the same case-insensitive email must remain valid in two tenants",
-        )
+        with self.assertRaises(IntegrityError):
+            self._db_execute(
+                """
+                UPDATE tenants SET contact_email = :email
+                WHERE tenant_id = :tenant_id
+                """,
+                {"email": SHARED_MEMBER_EMAIL, "tenant_id": TENANT_TWO_ID},
+            )
 
     def test_30_successful_login_persists_argon2id_rehash(self) -> None:
         before = self._db_scalar(
@@ -816,7 +949,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
         session_row = self._db_rows(
             """
             SELECT token_hash, csrf_token_hash, revoked_at
-            FROM browser_sessions
+            FROM user_sessions
             WHERE principal_id = :principal_id
             ORDER BY created_at DESC
             LIMIT 1
@@ -871,7 +1004,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             self._db_scalar(
                 """
                 SELECT revoked_at
-                FROM browser_sessions
+                FROM user_sessions
                 WHERE token_hash = :token_hash
                 """,
                 {
@@ -889,7 +1022,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(after_logout.status, 401)
 
-    def test_45_expired_session_and_stale_auth_state_are_cleaned(self) -> None:
+    def test_45_expired_session_is_cleaned(self) -> None:
         login = self._request(
             "POST",
             "/auth/session/platform",
@@ -903,7 +1036,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
 
         self._db_execute(
             """
-            UPDATE browser_sessions
+            UPDATE user_sessions
             SET expires_at = CURRENT_TIMESTAMP - INTERVAL '1 minute'
             WHERE token_hash = :token_hash
             """,
@@ -918,17 +1051,6 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             )
         )
 
-        stale_key = hashlib.sha256(b"integration:stale").hexdigest()
-        self._db_execute(
-            """
-            INSERT INTO auth_rate_limits
-                (throttle_key, failures, window_started_at, updated_at)
-            VALUES
-                (:key, 1, CURRENT_TIMESTAMP - INTERVAL '1 hour',
-                 CURRENT_TIMESTAMP - INTERVAL '1 hour')
-            """,
-            {"key": stale_key},
-        )
         completed = subprocess.run(
             [sys.executable, "-m", "scripts.cleanup_auth_state"],
             cwd=REPOSITORY_ROOT,
@@ -942,62 +1064,41 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout)
         self.assertEqual(
             self._db_scalar(
-                "SELECT count(*) FROM browser_sessions "
+                "SELECT count(*) FROM user_sessions "
                 "WHERE token_hash = :token_hash",
                 {"token_hash": token_hash},
             ),
             0,
         )
-        self.assertEqual(
-            self._db_scalar(
-                "SELECT count(*) FROM auth_rate_limits "
-                "WHERE throttle_key = :key",
-                {"key": stale_key},
-            ),
-            0,
-        )
-
-    def test_50_same_email_authenticates_in_two_workspaces(self) -> None:
+    def test_50_email_only_login_resolves_the_account_tenant(self) -> None:
         expected = (
-            ("acme-labs", TENANT_ONE_ID, "Tenant Admin"),
-            ("acme-labs-22222222", TENANT_TWO_ID, "Employee"),
+            (SHARED_MEMBER_EMAIL, TENANT_ONE_USER_ID, TENANT_ONE_ID, "TENANT_11111111", "Tenant Admin"),
+            (SECOND_MEMBER_EMAIL, TENANT_TWO_USER_ID, TENANT_TWO_ID, "TENANT_22222222", "Employee"),
         )
-        for slug, tenant_id, role in expected:
-            with self.subTest(workspace_slug=slug):
+        for email, user_id, tenant_id, tenant_code, role in expected:
+            with self.subTest(email=email):
                 response = self._request(
                     "POST",
                     "/auth/session/tenant",
                     payload={
-                        "workspace_slug": slug,
-                        "email": f" {SHARED_MEMBER_EMAIL.upper()} ",
+                        "email": f" {email.upper()} ",
                         "password": SHARED_MEMBER_PASSWORD,
                     },
                 )
                 self.assertEqual(response.status, 200, response.body)
                 principal = response.json()
-                self.assertEqual(principal["principal_id"], (
-                    str(TENANT_ONE_USER_ID)
-                    if tenant_id == TENANT_ONE_ID
-                    else str(TENANT_TWO_USER_ID)
-                ))
+                self.assertEqual(principal["principal_id"], str(user_id))
                 self.assertEqual(principal["tenant"]["tenant_id"], str(tenant_id))
-                self.assertEqual(principal["tenant"]["workspace_slug"], slug)
+                self.assertEqual(principal["tenant"]["tenant_code"], tenant_code)
                 self.assertEqual(principal["role"], role)
 
     def test_55_authentication_failures_are_generic(self) -> None:
         cases = (
             {
-                "workspace_slug": "missing-workspace",
-                "email": SHARED_MEMBER_EMAIL,
-                "password": SHARED_MEMBER_PASSWORD,
-            },
-            {
-                "workspace_slug": "acme-labs",
                 "email": "missing-member@example.com",
                 "password": SHARED_MEMBER_PASSWORD,
             },
             {
-                "workspace_slug": "acme-labs",
                 "email": SHARED_MEMBER_EMAIL,
                 "password": "wrong-password",
             },
@@ -1012,13 +1113,13 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 self.assertEqual(response.status, 401, response.body)
                 self.assertEqual(
                     response.json(),
-                    {"detail": "Invalid credentials"},
+                    {"code": "APP_ERROR", "detail": "Invalid credentials"},
                 )
 
         self._db_execute(
             """
-            UPDATE users SET status = 'Inactive'
-            WHERE tenant_id = :tenant_id AND user_id = :user_id
+            UPDATE user_accounts SET is_active = false
+            WHERE tenant_id = :tenant_id AND id = :user_id
             """,
             {
                 "tenant_id": TENANT_ONE_ID,
@@ -1030,7 +1131,6 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 "POST",
                 "/auth/session/tenant",
                 payload={
-                    "workspace_slug": "acme-labs",
                     "email": SHARED_MEMBER_EMAIL,
                     "password": SHARED_MEMBER_PASSWORD,
                 },
@@ -1038,13 +1138,13 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             self.assertEqual(inactive.status, 401, inactive.body)
             self.assertEqual(
                 inactive.json(),
-                {"detail": "Invalid credentials"},
+                {"code": "APP_ERROR", "detail": "Invalid credentials"},
             )
         finally:
             self._db_execute(
                 """
-                UPDATE users SET status = 'Active'
-                WHERE tenant_id = :tenant_id AND user_id = :user_id
+                UPDATE user_accounts SET is_active = true
+                WHERE tenant_id = :tenant_id AND id = :user_id
                 """,
                 {
                     "tenant_id": TENANT_ONE_ID,
@@ -1062,7 +1162,6 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 "POST",
                 "/auth/session/tenant",
                 payload={
-                    "workspace_slug": "acme-labs",
                     "email": SHARED_MEMBER_EMAIL,
                     "password": SHARED_MEMBER_PASSWORD,
                 },
@@ -1120,13 +1219,12 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         self.assertEqual(tenants.status, 200, tenants.body)
-        self.assertEqual(len(tenants.json()), 3)
+        self.assertEqual(len(tenants.json()["items"]), 3)
 
         tenant_login = self._request(
             "POST",
             "/auth/login",
             payload={
-                "tenant_id": str(TENANT_ONE_ID),
                 "email": SHARED_MEMBER_EMAIL,
                 "password": SHARED_MEMBER_PASSWORD,
             },
@@ -1156,9 +1254,11 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             headers={"Authorization": f"Bearer {token}"},
             payload={
                 "org_name": "Northstar Labs",
-                "workspace_slug": "northstar-labs",
-                "tenant_admin_name": "Admin User",
-                "tenant_admin_email": "admin@northstar.example",
+                "tenant_code": "NORTHSTAR",
+                "pan_number": "ABCDE1234F",
+                "contact_name": "Admin User",
+                "contact_designation": "Director",
+                "contact_email": "admin@northstar.example",
                 "tenant_admin_password": plaintext_password,
             },
         )
@@ -1166,6 +1266,35 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
         response_text = response.body.decode("utf-8")
         self.assertNotIn(plaintext_password, response_text)
         self.assertNotIn('"input"', response_text)
+
+    def test_66_registration_rejects_an_existing_tenant_user_email(self) -> None:
+        admin_login = self._request(
+            "POST",
+            "/auth/admin/login",
+            payload={"email": PLATFORM_EMAIL, "password": PLATFORM_PASSWORD},
+        )
+        token = admin_login.json()["access_token"]
+        response = self._request(
+            "POST",
+            "/tenants",
+            headers={"Authorization": f"Bearer {token}"},
+            payload={
+                "org_name": "Conflicting Contact",
+                "tenant_code": "CONFLICTING_CONTACT",
+                "pan_number": "ABCDE1234F",
+                "contact_name": "Existing Member",
+                "contact_designation": "Director",
+                "contact_email": SHARED_MEMBER_EMAIL,
+            },
+        )
+        self.assertEqual(response.status, 409, response.body)
+        self.assertEqual(
+            response.json(),
+            {
+                "code": "APP_ERROR",
+                "detail": "This primary contact email is already used by a tenant account",
+            },
+        )
 
     def test_70_tenant_creation_persists_complete_free_tenant_graph(self) -> None:
         admin_login = self._request(
@@ -1182,10 +1311,11 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             headers={"Authorization": f"Bearer {token}"},
             payload={
                 "org_name": "Orchid Systems",
-                "workspace_slug": "orchid-systems",
-                "tenant_admin_name": "Morgan Lee",
-                "tenant_admin_email": "owner@orchid.example",
-                "tenant_admin_password": "Cobalt!River84",
+                "tenant_code": "ORCHID_SYSTEMS",
+                "pan_number": "ABCDE1234F",
+                "contact_name": "Morgan Lee",
+                "contact_designation": "Director",
+                "contact_email": "owner@orchid.example",
             },
         )
         self.assertEqual(created.status, 201, created.body)
@@ -1209,7 +1339,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 allocation.ready_at,
                 activity.event_type,
                 activity.actor_id,
-                activity.metadata->>'workspace_slug' AS event_slug
+                activity.metadata->>'tenant_code' AS event_tenant_code
             FROM tenants AS tenant
             JOIN tenant_subscriptions AS subscription
               ON subscription.tenant_id = tenant.tenant_id
@@ -1235,7 +1365,192 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
         self.assertIsNotNone(row["ready_at"])
         self.assertEqual(row["event_type"], "TENANT_CREATED")
         self.assertEqual(row["actor_id"], PLATFORM_ADMIN_ID)
-        self.assertEqual(row["event_slug"], "orchid-systems")
+        self.assertEqual(row["event_tenant_code"], "ORCHID_SYSTEMS")
+        self.assertEqual(
+            self._db_scalar(
+                "SELECT count(*) FROM user_accounts WHERE tenant_id = :tenant_id",
+                {"tenant_id": tenant_id},
+            ),
+            0,
+        )
+        self.assertEqual(
+            self._db_scalar(
+                "SELECT count(*) FROM roles WHERE tenant_id = :tenant_id",
+                {"tenant_id": tenant_id},
+            ),
+            0,
+        )
+
+    def test_71_bootstrap_forces_password_change_and_rotates_credentials(self) -> None:
+        tenant_id = self._db_scalar(
+            "SELECT tenant_id FROM tenants WHERE tenant_code = 'ORCHID_SYSTEMS'"
+        )
+        self.assertIsNotNone(tenant_id)
+        self._db_execute(
+            """
+            INSERT INTO roles
+                (id, tenant_id, role_code, role_name, description, is_system, is_active)
+            VALUES
+                (:role_id, :tenant_id, 'TENANT_ADMIN', 'Tenant Admin',
+                 'Provisioned by UAM integration fixture', true, true)
+            """,
+            {"role_id": uuid.uuid4(), "tenant_id": tenant_id},
+        )
+
+        def run_bootstrap(*extra: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "scripts.bootstrap_tenant_admin",
+                    "--tenant-code",
+                    "ORCHID_SYSTEMS",
+                    *extra,
+                ],
+                cwd=REPOSITORY_ROOT,
+                env=self._test_environment(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+        created = run_bootstrap()
+        self.assertEqual(created.returncode, 0, created.stdout)
+        first_password = re.search(r"Temporary password: (\S+)", created.stdout)
+        self.assertIsNotNone(first_password, created.stdout)
+
+        duplicate = run_bootstrap()
+        self.assertNotEqual(duplicate.returncode, 0)
+        self.assertIn("A Tenant Admin already exists", duplicate.stdout)
+        self.assertNotIn("Temporary password:", duplicate.stdout)
+
+        rotated = run_bootstrap("--rotate-pending")
+        self.assertEqual(rotated.returncode, 0, rotated.stdout)
+        rotated_match = re.search(r"Temporary password: (\S+)", rotated.stdout)
+        self.assertIsNotNone(rotated_match, rotated.stdout)
+        temporary_password = rotated_match.group(1)
+        self.assertNotEqual(temporary_password, first_password.group(1))
+
+        browser_login = self._request(
+            "POST",
+            "/auth/session/tenant",
+            payload={
+                "email": "OWNER@ORCHID.EXAMPLE",
+                "password": temporary_password,
+            },
+        )
+        self.assertEqual(browser_login.status, 200, browser_login.body)
+        self.assertTrue(browser_login.json()["password_change_required"])
+        old_cookies = self._cookies_from(browser_login)
+        blocked = self._request("GET", "/users", cookies=old_cookies)
+        self.assertEqual(blocked.status, 403, blocked.body)
+        self.assertEqual(blocked.json()["code"], "PASSWORD_CHANGE_REQUIRED")
+
+        bearer_login = self._request(
+            "POST",
+            "/auth/login",
+            payload={
+                "email": "owner@orchid.example",
+                "password": temporary_password,
+            },
+        )
+        self.assertEqual(bearer_login.status, 200, bearer_login.body)
+        old_bearer = bearer_login.json()["access_token"]
+
+        changed = self._request(
+            "POST",
+            "/auth/password/change",
+            payload={
+                "current_password": temporary_password,
+                "new_password": "Permanent!Harbor96",
+            },
+            cookies=old_cookies,
+            headers={"X-CSRF-Token": old_cookies["mt_csrf"]},
+        )
+        self.assertEqual(changed.status, 200, changed.body)
+        self.assertFalse(changed.json()["principal"]["password_change_required"])
+        self.assertIsNone(changed.json()["replacement_access_token"])
+        new_cookies = self._cookies_from(changed)
+        self.assertNotEqual(new_cookies["mt_session"], old_cookies["mt_session"])
+        self.assertEqual(
+            self._request("GET", "/auth/session", cookies=old_cookies).status,
+            401,
+        )
+        self.assertEqual(
+            self._request("GET", "/auth/session", cookies=new_cookies).status,
+            200,
+        )
+        self.assertEqual(
+            self._request(
+                "GET",
+                "/users",
+                headers={"Authorization": f"Bearer {old_bearer}"},
+            ).status,
+            401,
+        )
+
+        bearer_after_setup = self._request(
+            "POST",
+            "/auth/login",
+            payload={
+                "email": "owner@orchid.example",
+                "password": "Permanent!Harbor96",
+            },
+        ).json()["access_token"]
+        bearer_change = self._request(
+            "POST",
+            "/auth/password/change",
+            payload={
+                "current_password": "Permanent!Harbor96",
+                "new_password": "Permanent!Summit97",
+            },
+            headers={"Authorization": f"Bearer {bearer_after_setup}"},
+        )
+        self.assertEqual(bearer_change.status, 200, bearer_change.body)
+        replacement_bearer = bearer_change.json()["replacement_access_token"]
+        self.assertIsNotNone(replacement_bearer)
+        self.assertEqual(bearer_change.json()["token_type"], "bearer")
+        self.assertEqual(
+            self._request(
+                "GET",
+                "/users",
+                headers={"Authorization": f"Bearer {bearer_after_setup}"},
+            ).status,
+            401,
+        )
+        self.assertEqual(
+            self._request(
+                "GET",
+                "/users",
+                headers={"Authorization": f"Bearer {replacement_bearer}"},
+            ).status,
+            200,
+        )
+
+        established_rotation = run_bootstrap("--rotate-pending")
+        self.assertNotEqual(established_rotation.returncode, 0)
+        self.assertIn("completed password setup", established_rotation.stdout)
+        self.assertNotIn("Temporary password:", established_rotation.stdout)
+
+        audit_values = self._db_rows(
+            """
+            SELECT action, coalesce(new_value::text, '') AS value
+            FROM audit_logs
+            WHERE tenant_id = :tenant_id
+              AND action IN ('BOOTSTRAP_TENANT_ADMIN', 'ROTATE_BOOTSTRAP_PASSWORD')
+            ORDER BY changed_at
+            """,
+            {"tenant_id": tenant_id},
+        )
+        self.assertEqual(
+            [row["action"] for row in audit_values],
+            ["BOOTSTRAP_TENANT_ADMIN", "ROTATE_BOOTSTRAP_PASSWORD"],
+        )
+        self.assertTrue(
+            all(temporary_password not in row["value"] for row in audit_values)
+        )
 
     def test_70_platform_dashboard_uses_real_aggregates_and_role_guard(self) -> None:
         admin_login = self._request(
@@ -1258,6 +1573,12 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             ),
             headers=admin_headers,
         )
+        if response.status == 500:
+            self.server_log.flush()
+            self.server_log.seek(0)
+            server_output = self.server_log.read().decode("utf-8", errors="replace")
+            self.server_log.seek(0, os.SEEK_END)
+            self.fail(f"Dashboard returned 500:\n{server_output}")
         self.assertEqual(response.status, 200, response.body)
         self.assertEqual(response.header("Cache-Control"), "private, no-store")
         dashboard = response.json()
@@ -1410,7 +1731,6 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             "POST",
             "/auth/login",
             payload={
-                "tenant_id": str(TENANT_ONE_ID),
                 "email": SHARED_MEMBER_EMAIL,
                 "password": SHARED_MEMBER_PASSWORD,
             },
@@ -1428,7 +1748,10 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
         self.assertEqual(forbidden.status, 403, forbidden.body)
         self.assertEqual(
             forbidden.json(),
-            {"detail": "Platform administrator access required"},
+            {
+                "code": "APP_ERROR",
+                "detail": "Platform administrator access required",
+            },
         )
 
     def test_72_deleted_tenant_activity_retains_snapshot_and_idempotency(self) -> None:
@@ -1436,7 +1759,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             """
             SELECT tenant_id
             FROM tenants
-            WHERE workspace_slug = 'orchid-systems'
+            WHERE tenant_code = 'ORCHID_SYSTEMS'
             """
         )
         self.assertIsNotNone(
@@ -1474,7 +1797,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             SELECT
                 tenant_id,
                 tenant_name_snapshot,
-                metadata->>'workspace_slug' AS workspace_slug,
+                metadata->>'tenant_code' AS tenant_code,
                 idempotency_key
             FROM platform_activity_events
             WHERE idempotency_key = :idempotency_key
@@ -1487,7 +1810,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 {
                     "tenant_id": None,
                     "tenant_name_snapshot": "Orchid Systems",
-                    "workspace_slug": "orchid-systems",
+                    "tenant_code": "ORCHID_SYSTEMS",
                     "idempotency_key": idempotency_key,
                 }
             ],
@@ -1603,7 +1926,10 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             )
             if attempt < 5:
                 self.assertEqual(response.status, 401, response.body)
-                self.assertEqual(response.json(), {"detail": "Invalid credentials"})
+                self.assertEqual(
+                    response.json(),
+                    {"code": "APP_ERROR", "detail": "Invalid credentials"},
+                )
             else:
                 self.assertEqual(response.status, 429, response.body)
                 self.assertEqual(
@@ -1625,51 +1951,6 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             correct_password_is_still_generic.json(),
             {"detail": "Unable to sign in. Please try again later."},
         )
-
-    def test_90_ip_throttling_is_shared_across_account_keys(self) -> None:
-        ip_key = hashlib.sha256(b"ip:127.0.0.1").hexdigest()
-        existing_failures = self._db_scalar(
-            """
-            SELECT failures
-            FROM auth_rate_limits
-            WHERE throttle_key = :throttle_key
-            """,
-            {"throttle_key": ip_key},
-        )
-        existing_failures = int(existing_failures or 0)
-        self.assertLess(existing_failures, 20)
-
-        remaining = 20 - existing_failures
-        for index in range(remaining):
-            response = self._request(
-                "POST",
-                "/auth/session/platform",
-                payload={
-                    "email": f"missing-{index}@example.com",
-                    "password": "wrong-password",
-                },
-            )
-            if index < remaining - 1:
-                self.assertEqual(response.status, 401, response.body)
-            else:
-                self.assertEqual(response.status, 429, response.body)
-                self.assertEqual(
-                    response.json(),
-                    {"detail": "Unable to sign in. Please try again later."},
-                )
-                self.assertGreater(int(response.header("Retry-After") or "0"), 0)
-
-        known_valid_account_is_also_ip_limited = self._request(
-            "POST",
-            "/auth/session/platform",
-            payload={"email": PLATFORM_EMAIL, "password": PLATFORM_PASSWORD},
-        )
-        self.assertEqual(known_valid_account_is_also_ip_limited.status, 429)
-        self.assertEqual(
-            known_valid_account_is_also_ip_limited.json(),
-            {"detail": "Unable to sign in. Please try again later."},
-        )
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,10 +13,11 @@ const principal: SessionPrincipal = {
   name: "Avery Morgan",
   email: "avery@example.com",
   role: "Tenant Admin",
+  password_change_required: false,
   tenant: {
     tenant_id: "63e6c159-3c6c-43bb-856a-8ed53e21dabe",
     org_name: "Northstar Labs",
-    workspace_slug: "northstar-labs",
+    tenant_code: "NORTHSTAR",
     status: "SUSPENDED",
     offerings: [],
   },
@@ -32,6 +33,7 @@ describe("SuspendedTenantPage", () => {
       clearNotice: vi.fn(),
       loginTenant: vi.fn(),
       loginPlatform: vi.fn(),
+      changePassword: vi.fn(),
       logout,
       retryBootstrap: vi.fn(),
     };
@@ -46,7 +48,7 @@ describe("SuspendedTenantPage", () => {
 
     expect(screen.getByRole("heading", { name: /temporarily suspended/i })).toBeVisible();
     expect(screen.getByText(/signed in successfully/i)).toBeVisible();
-    expect(screen.getByText("northstar-labs")).toBeVisible();
+    expect(screen.getByText("NORTHSTAR")).toBeVisible();
     expect(screen.getAllByRole("button")).toHaveLength(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));

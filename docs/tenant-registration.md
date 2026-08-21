@@ -7,17 +7,24 @@ one database transaction.
 
 `POST /tenants` creates:
 
-1. the tenant identity, company profile, address, and business contact;
+1. the tenant identity, company profile, address, and required primary contact;
 2. the current subscription;
 3. the database allocation;
 4. the selected tenant-offering grants, including their UTC validity windows;
-5. the first user with the `Tenant Admin` role;
-6. platform activity and tenant audit records.
+5. platform activity and tenant audit records.
 
-If any step fails, no partial workspace is committed. Workspace slugs and tenant
-codes are serialized with PostgreSQL advisory locks before their unique
-constraints are reached, which makes concurrent registrations deterministic.
-Passwords are validated and stored only as Argon2id hashes.
+If any step fails, no partial tenant is committed. Tenant codes and normalized
+primary-contact emails are serialized with PostgreSQL advisory locks before
+their unique constraints are reached, which makes concurrent registrations
+deterministic. A primary-contact email is rejected when another tenant has
+reserved it or any tenant user already owns it.
+
+Registration does not seed roles or create the first user. Once UAM has created
+an active tenant-scoped `TENANT_ADMIN` role, run
+`python -m scripts.bootstrap_tenant_admin --tenant-code <CODE>`. The command
+copies the primary contact name/email into a new account, assigns that existing
+role atomically, and prints a generated temporary password after commit. Future
+contact edits do not rename the account.
 
 ## Catalogs and entitlements
 

@@ -14,6 +14,7 @@ const principal: PlatformPrincipal = {
   email: "priya@platform.example",
   role: "Platform Admin",
   tenant: null,
+  password_change_required: false,
 };
 
 const renderShell = () => {
@@ -24,6 +25,7 @@ const renderShell = () => {
     clearNotice: vi.fn(),
     loginTenant: vi.fn(),
     loginPlatform: vi.fn(),
+    changePassword: vi.fn(),
     logout: vi.fn(),
     retryBootstrap: vi.fn(),
   };

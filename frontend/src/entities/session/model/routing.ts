@@ -5,6 +5,10 @@ export const getPrincipalHome = (principal: SessionPrincipal): string => {
     return "/platform";
   }
 
+  if (principal.password_change_required) {
+    return "/account/change-password";
+  }
+
   if (principal.tenant.status === "SUSPENDED") {
     return "/app/suspended";
   }

@@ -22,6 +22,7 @@ class Principal:
     tenant_id: uuid.UUID | None = None
     role: str | None = None  # 'Tenant Admin' | 'Project Manager' | 'Employee'; None for platform admins
     tenant_status: str | None = None
+    password_change_required: bool = False
 
 
 async def get_current_principal(request: Request, db: AsyncSession = Depends(get_db)) -> Principal:
@@ -59,9 +60,24 @@ async def get_current_principal(request: Request, db: AsyncSession = Depends(get
             or tenant is None
         ):
             raise UnauthorizedError("Authentication required")
+        if getattr(request.state, "auth_method", None) == "bearer":
+            try:
+                credential_version = int(claims.get("credential_version", 1))
+            except (TypeError, ValueError):
+                raise UnauthorizedError("Authentication required") from None
+            if credential_version != user.credential_version:
+                raise UnauthorizedError("Authentication required")
         role_name = await get_active_role_name(db, user.id)
         if role_name is None:
             raise UnauthorizedError("Authentication required")
+        if user.force_pw_reset and request.url.path not in {
+            "/auth/session",
+            "/auth/password/change",
+        }:
+            raise ForbiddenError(
+                "Password change required",
+                code="PASSWORD_CHANGE_REQUIRED",
+            )
         return Principal(
             type="user",
             id=user.id,
@@ -69,6 +85,7 @@ async def get_current_principal(request: Request, db: AsyncSession = Depends(get
             tenant_id=user.tenant_id,
             role=role_name,
             tenant_status=tenant.status,
+            password_change_required=user.force_pw_reset,
         )
 
     raise UnauthorizedError("Authentication required")
@@ -83,6 +100,11 @@ async def require_platform_admin(principal: Principal = Depends(get_current_prin
 async def require_tenant_user(principal: Principal = Depends(get_current_principal)) -> Principal:
     if principal.type != "user":
         raise ForbiddenError("Tenant user access required")
+    if principal.password_change_required:
+        raise ForbiddenError(
+            "Password change required",
+            code="PASSWORD_CHANGE_REQUIRED",
+        )
     if principal.tenant_status != "ACTIVE":
         raise ForbiddenError("Tenant access is suspended", code="TENANT_SUSPENDED")
     return principal

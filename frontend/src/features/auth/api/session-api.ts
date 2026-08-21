@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type {
+  PasswordChangeCredentials,
   PlatformLoginCredentials,
   SessionPrincipal,
   TenantLoginCredentials,
@@ -15,6 +16,7 @@ const platformPrincipalSchema = z.object({
   email: z.string().email(),
   role: z.literal("Platform Admin"),
   tenant: z.null(),
+  password_change_required: z.literal(false),
 });
 
 const tenantPrincipalSchema = z.object({
@@ -23,10 +25,11 @@ const tenantPrincipalSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
   role: z.enum(["Tenant Admin", "Project Manager", "Employee"]),
+  password_change_required: z.boolean(),
   tenant: z.object({
     tenant_id: z.string().uuid(),
     org_name: z.string().min(1),
-    workspace_slug: z.string().min(3).max(63),
+    tenant_code: z.string().min(2).max(30),
     status: z.enum(["ACTIVE", "SUSPENDED"]),
     offerings: z.array(
       z.object({
@@ -85,6 +88,19 @@ export const sessionApi = {
         notifyOnUnauthorized: false,
       }),
     ),
+
+  changePassword: async (
+    credentials: PasswordChangeCredentials,
+  ): Promise<SessionPrincipal> => {
+    const value = await apiRequest<unknown>("/auth/password/change", {
+      method: "POST",
+      body: credentials,
+      notifyOnUnauthorized: false,
+    });
+    const result = z.object({ principal: sessionPrincipalSchema }).safeParse(value);
+    if (!result.success) throw new InvalidApiResponseError();
+    return result.data.principal;
+  },
 
   logout: async (): Promise<void> => {
     await apiRequest<void>("/auth/session", {

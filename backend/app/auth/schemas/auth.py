@@ -3,19 +3,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.common.security import WORKSPACE_SLUG_PATTERN, normalize_email
+from app.common.security import normalize_email
 from app.common.schemas.base import StrictRequestModel
 
 LoginPassword = Annotated[str, Field(min_length=1, max_length=128)]
-WorkspaceSlug = Annotated[
-    str,
-    Field(
-        min_length=3,
-        max_length=63,
-        pattern=WORKSPACE_SLUG_PATTERN,
-        examples=["northstar-labs"],
-    ),
-]
 
 
 class StrictAuthRequest(StrictRequestModel):
@@ -37,12 +28,6 @@ class AdminLoginRequest(StrictAuthRequest):
 
 
 class TenantLoginRequest(StrictAuthRequest):
-    """email is only unique within a tenant (UNIQUE(tenant_id, email)), so a
-    tenant user login must disambiguate which tenant they belong to. A real
-    deployment would resolve this from a subdomain/org-slug; this POC takes
-    it explicitly instead of guessing across tenants."""
-
-    tenant_id: uuid.UUID
     email: Annotated[EmailStr, Field(max_length=254)]
     password: LoginPassword
 
@@ -53,14 +38,13 @@ class PlatformSessionLoginRequest(StrictAuthRequest):
 
 
 class TenantSessionLoginRequest(StrictAuthRequest):
-    workspace_slug: WorkspaceSlug
     email: Annotated[EmailStr, Field(max_length=254)]
     password: LoginPassword
 
-    @field_validator("workspace_slug", mode="before")
-    @classmethod
-    def canonicalize_workspace_slug(cls, value: object) -> object:
-        return value.strip().lower() if isinstance(value, str) else value
+
+class PasswordChangeRequest(StrictAuthRequest):
+    current_password: LoginPassword
+    new_password: LoginPassword
 
 
 class TokenResponse(BaseModel):
@@ -85,7 +69,7 @@ class SessionOfferingResponse(BaseModel):
 class SessionTenantResponse(BaseModel):
     tenant_id: uuid.UUID
     org_name: str
-    workspace_slug: str
+    tenant_code: str
     status: Literal["ACTIVE", "SUSPENDED"]
     offerings: list[SessionOfferingResponse]
 
@@ -97,3 +81,10 @@ class SessionPrincipalResponse(BaseModel):
     email: str
     role: Literal["Platform Admin", "Tenant Admin", "Project Manager", "Employee"]
     tenant: SessionTenantResponse | None
+    password_change_required: bool = False
+
+
+class PasswordChangeResponse(BaseModel):
+    principal: SessionPrincipalResponse
+    replacement_access_token: str | None = None
+    token_type: Literal["bearer"] | None = None

@@ -23,10 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.deps import Principal
 from app.auth.roles import get_active_role_name
 from app.common.config import get_settings
-from app.common.exceptions import UnauthorizedError
+from app.common.audit import record_audit
+from app.common.exceptions import BusinessRuleError, ForbiddenError, UnauthorizedError
 from app.common.security import (
     create_access_token,
+    hash_password,
     normalize_email,
+    validate_password,
+    verify_password,
     verify_password_and_update,
     verify_password_or_dummy,
 )
@@ -37,6 +41,7 @@ from app.auth.models.user_session import UserSession
 from app.tenant_management.tenants import repository as tenant_repository
 from app.auth.schemas.auth import (
     AdminLoginRequest,
+    PasswordChangeRequest,
     PlatformSessionLoginRequest,
     SessionOfferingResponse,
     SessionPrincipalResponse,
@@ -68,8 +73,8 @@ def platform_account_throttle_key(email: str) -> str:
     return _throttle_key("account:platform", normalize_email(email))
 
 
-def tenant_account_throttle_key(tenant_reference: str, email: str) -> str:
-    return _throttle_key("account:tenant", f"{tenant_reference}:{normalize_email(email)}")
+def tenant_account_throttle_key(email: str) -> str:
+    return _throttle_key("account:tenant", normalize_email(email))
 
 
 @dataclass(frozen=True)
@@ -77,6 +82,14 @@ class BrowserAuthenticationResult:
     principal: SessionPrincipalResponse
     session_token: str
     csrf_token: str
+
+
+@dataclass(frozen=True)
+class PasswordChangeResult:
+    principal: SessionPrincipalResponse
+    session_token: str | None = None
+    csrf_token: str | None = None
+    replacement_access_token: str | None = None
 
 
 @dataclass(frozen=True)
@@ -166,35 +179,20 @@ async def _authenticate_platform_admin(
     return admin
 
 
-async def _tenant_for_slug(
-    db: AsyncSession,
-    workspace_slug: str,
-) -> Tenant | None:
-    result = await db.execute(
-        select(Tenant).where(Tenant.workspace_slug == workspace_slug).limit(1)
-    )
-    return result.scalar_one_or_none()
-
-
 async def _authenticate_tenant_user(
     db: AsyncSession,
     *,
-    tenant: Tenant | None,
-    tenant_reference: str,
     email: str,
     password: str,
     ip_address: str,
 ) -> UserAccount:
-    del tenant_reference, ip_address
+    del ip_address
     now = _utc_now()
     normalized_email = normalize_email(email)
 
-    # Always execute the same account lookup, even for an unknown workspace,
-    # so workspace existence does not create an obvious database fast path.
-    lookup_tenant_id = tenant.tenant_id if tenant is not None else uuid.UUID(int=0)
     result = await db.execute(
         select(UserAccount)
-        .where(UserAccount.tenant_id == lookup_tenant_id, UserAccount.email == normalized_email)
+        .where(UserAccount.email == normalized_email)
         .limit(1)
     )
     user: UserAccount | None = result.scalar_one_or_none()
@@ -209,7 +207,6 @@ async def _authenticate_tenant_user(
     if (
         not verified
         or not user.is_active
-        or tenant is None
     ):
         next_count, locked_until = await _register_account_failure(
             db, failed_login_count=user.failed_login_count, now=now
@@ -256,13 +253,14 @@ async def _tenant_principal(
         tenant=SessionTenantResponse(
             tenant_id=tenant.tenant_id,
             org_name=tenant.org_name,
-            workspace_slug=tenant.workspace_slug,
+            tenant_code=tenant.tenant_code,
             status=tenant.status,
             offerings=[
                 SessionOfferingResponse.model_validate(offering)
                 for offering in offerings
             ],
         ),
+        password_change_required=user.force_pw_reset,
     )
 
 
@@ -321,11 +319,8 @@ async def login_tenant_user(
     *,
     ip_address: str = "unknown",
 ) -> TokenResponse:
-    tenant = await db.get(Tenant, payload.tenant_id)
     user = await _authenticate_tenant_user(
         db,
-        tenant=tenant,
-        tenant_reference=str(payload.tenant_id),
         email=str(payload.email),
         password=payload.password,
         ip_address=ip_address,
@@ -340,6 +335,7 @@ async def login_tenant_user(
             "type": "user",
             "tenant_id": str(user.tenant_id),
             "role": role_name,
+            "credential_version": user.credential_version,
         }
     )
     return TokenResponse(access_token=token, role=role_name, tenant_id=user.tenant_id)
@@ -366,22 +362,116 @@ async def login_tenant_browser(
     *,
     ip_address: str,
 ) -> BrowserAuthenticationResult:
-    tenant = await _tenant_for_slug(db, payload.workspace_slug)
-    tenant_reference = str(tenant.tenant_id) if tenant is not None else f"slug:{payload.workspace_slug}"
     user = await _authenticate_tenant_user(
         db,
-        tenant=tenant,
-        tenant_reference=tenant_reference,
         email=str(payload.email),
         password=payload.password,
         ip_address=ip_address,
     )
-    if tenant is None:  # pragma: no cover - unreachable after authentication
+    tenant = await db.get(Tenant, user.tenant_id)
+    if tenant is None:  # pragma: no cover - protected by the foreign key
         raise UnauthorizedError(GENERIC_CREDENTIALS_MESSAGE)
     role_name = await get_active_role_name(db, user.id)
     if role_name is None:
         raise UnauthorizedError(GENERIC_CREDENTIALS_MESSAGE)
     return await _create_browser_session(db, await _tenant_principal(db, user, tenant, role_name))
+
+
+async def change_tenant_password(
+    db: AsyncSession,
+    principal: Principal,
+    payload: PasswordChangeRequest,
+    *,
+    auth_method: str,
+) -> PasswordChangeResult:
+    if principal.type != "user" or principal.tenant_id is None:
+        raise ForbiddenError("Tenant user access required")
+
+    user = await db.get(UserAccount, principal.id)
+    tenant = await db.get(Tenant, principal.tenant_id)
+    if user is None or tenant is None or user.tenant_id != tenant.tenant_id or not user.is_active:
+        raise UnauthorizedError("Authentication required")
+    if not verify_password(payload.current_password, user.password_hash):
+        raise UnauthorizedError("Current password is incorrect")
+    if verify_password(payload.new_password, user.password_hash):
+        raise BusinessRuleError("New password must be different from the current password")
+    try:
+        validate_password(
+            payload.new_password,
+            email=str(user.email),
+            name=user.display_name,
+            org_name=tenant.org_name,
+        )
+    except ValueError as exc:
+        raise BusinessRuleError(str(exc)) from exc
+
+    role_name = await get_active_role_name(db, user.id)
+    if role_name is None:
+        raise UnauthorizedError("Authentication required")
+
+    now = _utc_now()
+    user.password_hash = hash_password(payload.new_password)
+    user.force_pw_reset = False
+    user.credential_version += 1
+    user.failed_login_count = 0
+    user.locked_until = None
+    await db.execute(
+        update(UserSession)
+        .where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
+        .values(revoked_at=now, revoked_by="password_change")
+    )
+    await record_audit(
+        db,
+        tenant_id=tenant.tenant_id,
+        entity_type="user",
+        entity_id=user.id,
+        action="PASSWORD_CHANGE",
+        changed_by_user_id=user.id,
+        new_value={"credential_version": user.credential_version},
+    )
+    await db.flush()
+    response_principal = await _tenant_principal(db, user, tenant, role_name)
+
+    session_token: str | None = None
+    csrf_token: str | None = None
+    replacement_access_token: str | None = None
+    if auth_method == "browser_session":
+        settings = get_settings()
+        session_token = secrets.token_urlsafe(32)
+        csrf_token = secrets.token_urlsafe(32)
+        db.add(
+            UserSession(
+                token_hash=digest_secret(session_token),
+                csrf_token_hash=digest_secret(csrf_token),
+                principal_type="tenant_user",
+                principal_id=user.id,
+                tenant_id=tenant.tenant_id,
+                user_id=user.id,
+                created_at=now,
+                expires_at=now + timedelta(minutes=settings.browser_session_expire_minutes),
+                last_seen_at=now,
+            )
+        )
+    elif auth_method == "bearer":
+        replacement_access_token = create_access_token(
+            {
+                "sub": str(user.id),
+                "type": "user",
+                "tenant_id": str(user.tenant_id),
+                "role": role_name,
+                "credential_version": user.credential_version,
+            }
+        )
+    else:  # pragma: no cover - middleware owns this invariant
+        raise UnauthorizedError("Authentication required")
+
+    await db.commit()
+    return PasswordChangeResult(
+        principal=response_principal,
+        session_token=session_token,
+        csrf_token=csrf_token,
+        replacement_access_token=replacement_access_token,
+    )
 
 
 async def get_active_browser_session(

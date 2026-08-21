@@ -81,8 +81,8 @@ export const SuspendedTenantPage = () => {
 
           <dl className={styles.workspaceDetails}>
             <div>
-              <dt>Workspace</dt>
-              <dd>{principal.tenant.workspace_slug}</dd>
+              <dt>Tenant code</dt>
+              <dd>{principal.tenant.tenant_code}</dd>
             </div>
             <div>
               <dt>Status</dt>

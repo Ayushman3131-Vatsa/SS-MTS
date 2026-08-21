@@ -41,7 +41,7 @@ npm.cmd run preview
 src/
   app/                 application composition, providers, router and guards
   pages/               route-level login and protected screens
-  features/auth/       authentication API, forms, schemas and workspace memory
+  features/auth/       authentication API, forms and schemas
   features/platform-dashboard/ typed dashboard API, polling state and UI
   entities/session/    principal contracts, context and role routing
   shared/api/          credentialed HTTP client, CSRF and typed failures
@@ -56,7 +56,7 @@ pages or features.
 ## Authentication flow
 
 1. At startup, `AuthProvider` requests `GET /api/auth/session`.
-2. Organization members submit workspace slug, email, and password to
+2. Organization members submit email and password to
    `POST /api/auth/session/tenant`.
 3. Platform Admins use `POST /api/auth/session/platform`.
 4. The backend stores the opaque session in the HttpOnly `mt_session` cookie.
@@ -66,10 +66,12 @@ pages or features.
 6. `DELETE /api/auth/session` revokes the server session and signs out.
 7. A protected-request 401 clears local principal state and returns the user to
    sign-in.
+8. A bootstrap account is routed to `/account/change-password`; successful
+   change rotates the cookies and keeps the browser signed in.
 
 The API client always uses `credentials: "include"`. Credentials and session
-tokens are never written to localStorage or sessionStorage. The optional
-“Remember workspace” control stores only the non-sensitive workspace slug.
+tokens and login identifiers are never written to localStorage or
+sessionStorage.
 
 ## Role routing
 
@@ -99,8 +101,8 @@ Metric definitions and backend persistence are documented in
 
 ## Validation policy
 
-Login validates workspace-slug syntax, RFC-style email syntax and field
-lengths. It requires a password without reapplying password-creation strength
+Login validates RFC-style email syntax and field lengths. It requires a
+password without reapplying password-creation strength
 rules. This is intentional: existing valid passwords must remain usable.
 Strong-password enforcement belongs to backend account creation and password
 change operations.
