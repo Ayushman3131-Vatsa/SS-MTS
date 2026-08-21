@@ -17,10 +17,10 @@ const renderForm = (onSubmit = vi.fn().mockResolvedValue(undefined)) => {
 };
 
 describe("TenantLoginForm", () => {
-  it("renders tenant-first fields and no registration or role selector", () => {
+  it("renders email/password fields and no registration or role selector", () => {
     renderForm();
 
-    expect(screen.getByLabelText("Workspace")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Workspace")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Work email")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(screen.queryByText(/create account/i)).not.toBeInTheDocument();
@@ -33,10 +33,9 @@ describe("TenantLoginForm", () => {
     const onSubmit = renderForm();
 
     await user.click(
-      screen.getByRole("button", { name: "Sign in to workspace" }),
+      screen.getByRole("button", { name: "Sign in" }),
     );
 
-    expect(await screen.findByText(/workspace must be at least/i)).toBeVisible();
     expect(screen.getByText(/enter your work email/i)).toBeVisible();
     expect(screen.getByText(/enter your password/i)).toBeVisible();
     expect(onSubmit).not.toHaveBeenCalled();
@@ -55,23 +54,20 @@ describe("TenantLoginForm", () => {
     ).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("normalizes workspace and email but preserves the password", async () => {
+  it("normalizes email but preserves the password", async () => {
     const user = userEvent.setup();
     const onSubmit = renderForm();
 
-    await user.type(screen.getByLabelText("Workspace"), "Northstar-Labs");
     await user.type(screen.getByLabelText("Work email"), "Avery@Example.COM");
     await user.type(screen.getByLabelText("Password"), " keep spaces ");
     await user.click(
-      screen.getByRole("button", { name: "Sign in to workspace" }),
+      screen.getByRole("button", { name: "Sign in" }),
     );
 
     expect(onSubmit).toHaveBeenCalledWith(
       {
-        workspaceSlug: "northstar-labs",
         email: "Avery@Example.COM",
         password: " keep spaces ",
-        rememberWorkspace: false,
       },
       expect.anything(),
     );

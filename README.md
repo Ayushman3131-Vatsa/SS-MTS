@@ -155,22 +155,21 @@ authentication by database-backed dependencies and service rules.
 | Method | Path | Description |
 |---|---|---|
 | POST | `/auth/session/platform` | Platform Admin browser login using secure cookies |
-| POST | `/auth/session/tenant` | Tenant-user browser login by workspace slug |
+| POST | `/auth/session/tenant` | Tenant-user browser login using email and password |
+| POST | `/auth/password/change` | Replace a tenant user's temporary password and rotate credentials |
 | GET | `/auth/session` | Restore the current browser principal |
 | DELETE | `/auth/session` | Revoke the browser session and clear cookies |
 | POST | `/auth/admin/login` | Platform admin login → JWT |
-| POST | `/auth/login` | Tenant user login (requires `tenant_id` + `email` + `password` — see note below) |
+| POST | `/auth/login` | Tenant user login using email and password |
 
-> Tenant user emails are only unique **within** a tenant
-> (`UNIQUE(tenant_id, email)`), not globally. The compatibility bearer
-> endpoint uses `tenant_id`; the browser endpoint uses the tenant's friendly,
-> unique `workspace_slug`.
+> Tenant-user emails are globally case-insensitively unique. Both browser and
+> bearer login resolve the tenant from the matched account.
 
 ### Tenants (`/tenants`) — platform admin only
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/tenants` | Create a tenant + seed its first Tenant Admin, one transaction |
+| POST | `/tenants` | Create a tenant profile and commercial configuration; does not create users or roles |
 | GET | `/tenants` | Paginated tenant list with search and `status` filtering |
 | GET | `/tenants/{tenant_id}` | Get one tenant |
 | GET | `/tenants/offering-catalog` | List active and inactive offering catalog entries |

@@ -42,13 +42,12 @@ class TenantReadModel:
     tenant_id: uuid.UUID
     org_name: str
     tenant_code: str
-    workspace_slug: str
     legal_name: str | None
     industry: str | None
     company_size: str | None
     website: str | None
-    registration_number: str | None
-    tax_identifier: str | None
+    tax_registration_number: str | None
+    pan_number: str | None
     address_line_1: str | None
     address_line_2: str | None
     city: str | None
@@ -56,9 +55,11 @@ class TenantReadModel:
     country: str | None
     postal_code: str | None
     contact_name: str | None
+    contact_designation: str | None
     contact_email: str | None
     contact_phone: str | None
     alternate_contact_name: str | None
+    alternate_contact_designation: str | None
     alternate_contact_email: str | None
     alternate_contact_phone: str | None
     subscription_plan: str
@@ -95,13 +96,12 @@ def _tenant_details_statement():
             Tenant.tenant_id,
             Tenant.org_name,
             Tenant.tenant_code,
-            Tenant.workspace_slug,
             Tenant.legal_name,
             Tenant.industry,
             Tenant.company_size,
             Tenant.website,
-            Tenant.registration_number,
-            Tenant.tax_identifier,
+            Tenant.tax_registration_number,
+            Tenant.pan_number,
             Tenant.address_line_1,
             Tenant.address_line_2,
             Tenant.city,
@@ -109,9 +109,11 @@ def _tenant_details_statement():
             Tenant.country,
             Tenant.postal_code,
             Tenant.contact_name,
+            Tenant.contact_designation,
             Tenant.contact_email,
             Tenant.contact_phone,
             Tenant.alternate_contact_name,
+            Tenant.alternate_contact_designation,
             Tenant.alternate_contact_email,
             Tenant.alternate_contact_phone,
             Tenant.subscription_plan,
@@ -144,11 +146,6 @@ async def get_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant | None:
 
 async def get_tenant_for_update(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant | None:
     result = await db.execute(select(Tenant).where(Tenant.tenant_id == tenant_id).with_for_update())
-    return result.scalar_one_or_none()
-
-
-async def get_tenant_by_workspace_slug(db: AsyncSession, workspace_slug: str) -> Tenant | None:
-    result = await db.execute(select(Tenant).where(Tenant.workspace_slug == workspace_slug))
     return result.scalar_one_or_none()
 
 
@@ -434,9 +431,7 @@ async def list_tenants(
     filters = []
     if query:
         pattern = f"%{query.strip()}%"
-        filters.append(
-            or_(Tenant.org_name.ilike(pattern), Tenant.tenant_code.ilike(pattern), Tenant.workspace_slug.ilike(pattern))
-        )
+        filters.append(or_(Tenant.org_name.ilike(pattern), Tenant.tenant_code.ilike(pattern)))
     if status:
         filters.append(Tenant.status == status)
     count_result = await db.execute(select(func.count()).select_from(base.where(*filters).subquery()))

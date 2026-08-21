@@ -38,13 +38,11 @@ from app.auth.schemas.auth import (
 
 
 class AuthSchemaTests(unittest.TestCase):
-    def test_tenant_login_normalizes_only_workspace_and_email(self) -> None:
+    def test_tenant_login_normalizes_only_email(self) -> None:
         payload = TenantSessionLoginRequest(
-            workspace_slug=" Northstar-Labs ",
             email=" Person@Example.COM ",
             password="  exact password  ",
         )
-        self.assertEqual(payload.workspace_slug, "northstar-labs")
         self.assertEqual(str(payload.email), "person@example.com")
         self.assertEqual(payload.password, "  exact password  ")
 
@@ -65,20 +63,15 @@ class AuthSchemaTests(unittest.TestCase):
                 }
             )
 
-    def test_workspace_slug_rules_are_enforced(self) -> None:
-        for invalid_slug in (
-            "ab",
-            "-northstar",
-            "north_star",
-            "northstar-",
-            "north--star",
-        ):
-            with self.subTest(slug=invalid_slug), self.assertRaises(ValidationError):
-                TenantSessionLoginRequest(
-                    workspace_slug=invalid_slug,
-                    email="person@example.com",
-                    password="legacy",
-                )
+    def test_tenant_login_rejects_legacy_workspace_identifier(self) -> None:
+        with self.assertRaises(ValidationError):
+            TenantSessionLoginRequest.model_validate(
+                {
+                    "workspace_slug": "northstar-labs",
+                    "email": "person@example.com",
+                    "password": "legacy",
+                }
+            )
 
     def test_session_response_has_exact_public_shape(self) -> None:
         response = SessionPrincipalResponse(
@@ -98,6 +91,7 @@ class AuthSchemaTests(unittest.TestCase):
                 "email",
                 "role",
                 "tenant",
+                "password_change_required",
             },
         )
 
@@ -192,7 +186,6 @@ class SessionSecurityTests(unittest.TestCase):
 
 class SuspendedTenantAuthenticationTests(unittest.IsolatedAsyncioTestCase):
     async def test_valid_suspended_tenant_credentials_still_authenticate(self) -> None:
-        tenant = SimpleNamespace(tenant_id=uuid.uuid4(), status="SUSPENDED")
         user = SimpleNamespace(
             password_hash="password-hash",
             status="Active",
@@ -209,8 +202,6 @@ class SuspendedTenantAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         ):
             authenticated = await _authenticate_tenant_user(
                 db,
-                tenant=tenant,
-                tenant_reference=str(tenant.tenant_id),
                 email="member@example.com",
                 password="correct-password",
                 ip_address="127.0.0.1",

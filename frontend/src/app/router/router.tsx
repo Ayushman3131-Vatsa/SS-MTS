@@ -13,6 +13,7 @@ import { TenantModuleComingSoonPage } from "../../pages/TenantModuleComingSoonPa
 import { TenantRegistrationPage } from "../../pages/TenantRegistrationPage/TenantRegistrationPage";
 import { TenantShell } from "../../pages/TenantShell/TenantShell";
 import { SuspendedTenantPage } from "../../pages/SuspendedTenantPage/SuspendedTenantPage";
+import { ForcedPasswordChangePage } from "../../pages/ForcedPasswordChangePage/ForcedPasswordChangePage";
 import { RouteLoader } from "../../shared/ui/RouteLoader/RouteLoader";
 import { NotFoundRoute, RootRoute } from "./redirect-routes";
 import { OfferingRoute, ProtectedRoute, PublicOnlyRoute } from "./route-guards";
@@ -151,6 +152,21 @@ export const router = createBrowserRouter([
             element: <TenantDetailPage />,
           },
         ],
+      },
+    ],
+  },
+  {
+    element: (
+      <ProtectedRoute
+        area="tenant"
+        allowSuspendedTenant
+        allowPasswordChangeRequired
+      />
+    ),
+    children: [
+      {
+        path: "/account/change-password",
+        element: <ForcedPasswordChangePage />,
       },
     ],
   },

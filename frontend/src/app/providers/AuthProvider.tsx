@@ -8,6 +8,7 @@ import {
 
 import { SessionContext } from "../../entities/session/model/session-context";
 import type {
+  PasswordChangeCredentials,
   PlatformLoginCredentials,
   SessionPrincipal,
   SessionStatus,
@@ -25,6 +26,8 @@ const accessNotice = (code: string | undefined) => {
   switch (code) {
     case "TENANT_SUSPENDED":
       return "This workspace is suspended by the platform administrator. Contact support to restore access.";
+    case "PASSWORD_CHANGE_REQUIRED":
+      return "Create a permanent password before accessing tenant features.";
     case "OFFERING_EXPIRED":
       return "This module entitlement has expired. Contact your platform administrator for a re-grant.";
     case "OFFERING_SUSPENDED":
@@ -168,6 +171,17 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     [],
   );
 
+  const changePassword = useCallback(
+    async (credentials: PasswordChangeCredentials) => {
+      const updatedPrincipal = await sessionApi.changePassword(credentials);
+      setPrincipal(updatedPrincipal);
+      setStatus("authenticated");
+      setNotice(null);
+      return updatedPrincipal;
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
     await sessionApi.logout();
     setPrincipal(null);
@@ -186,6 +200,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       clearNotice,
       loginTenant,
       loginPlatform,
+      changePassword,
       logout,
       retryBootstrap,
     }),
@@ -196,6 +211,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       clearNotice,
       loginTenant,
       loginPlatform,
+      changePassword,
       logout,
       retryBootstrap,
     ],

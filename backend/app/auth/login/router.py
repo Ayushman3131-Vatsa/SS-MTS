@@ -10,6 +10,8 @@ from app.common.db.session import get_db
 from app.auth.login import service
 from app.auth.schemas.auth import (
     AdminLoginRequest,
+    PasswordChangeRequest,
+    PasswordChangeResponse,
     PlatformSessionLoginRequest,
     SessionPrincipalResponse,
     TenantLoginRequest,
@@ -45,8 +47,10 @@ def _mark_sensitive_response(response: Response) -> None:
 
 def _set_browser_session_cookies(
     response: Response,
-    result: service.BrowserAuthenticationResult,
+    result: service.BrowserAuthenticationResult | service.PasswordChangeResult,
 ) -> None:
+    if result.session_token is None or result.csrf_token is None:
+        raise RuntimeError("Browser authentication result is missing cookie secrets")
     settings = get_settings()
     max_age = settings.browser_session_expire_minutes * 60
     expires = datetime.now(timezone.utc) + timedelta(seconds=max_age)
@@ -169,6 +173,31 @@ async def tenant_session_login(
         _raise_rate_limit(exc)
     _set_browser_session_cookies(response, result)
     return result.principal
+
+
+@router.post("/password/change", response_model=PasswordChangeResponse)
+async def change_password(
+    payload: PasswordChangeRequest,
+    request: Request,
+    response: Response,
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+) -> PasswordChangeResponse:
+    result = await service.change_tenant_password(
+        db,
+        principal,
+        payload,
+        auth_method=getattr(request.state, "auth_method", ""),
+    )
+    if result.session_token is not None:
+        _set_browser_session_cookies(response, result)
+    else:
+        _mark_sensitive_response(response)
+    return PasswordChangeResponse(
+        principal=result.principal,
+        replacement_access_token=result.replacement_access_token,
+        token_type="bearer" if result.replacement_access_token is not None else None,
+    )
 
 
 @router.get("/session", response_model=SessionPrincipalResponse)

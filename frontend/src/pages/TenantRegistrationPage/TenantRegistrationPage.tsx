@@ -4,9 +4,6 @@ import {
   Building2,
   Clock3,
   Check,
-  Eye,
-  EyeOff,
-  KeyRound,
   MapPin,
   PackageCheck,
   Plus,
@@ -37,15 +34,6 @@ const optionalUrl = z
     "Enter a full URL beginning with http:// or https://",
   );
 
-const contextTokens = (value: string): string[] => {
-  const normalized = value.toLocaleLowerCase();
-  const parts = normalized.split(/[^\p{L}\p{N}\p{M}]+/u).filter(
-    (part) => part.length >= 3,
-  );
-  const compact = normalized.replace(/[^\p{L}\p{N}\p{M}]/gu, "");
-  return compact.length >= 3 ? [...parts, compact] : parts;
-};
-
 const registrationSchema = z.object({
   org_name: z.string().trim().min(1, "Tenant name is required").max(255),
   tenant_code: z
@@ -62,8 +50,15 @@ const registrationSchema = z.object({
   industry: z.string().trim().min(1, "Industry is required").max(100),
   company_size: z.string().trim().min(1, "Company size is required").max(50),
   website: optionalUrl,
-  registration_number: z.string().trim().max(100),
-  tax_identifier: z.string().trim().max(100),
+  tax_registration_number: z.string().trim().max(100),
+  pan_number: z
+    .string()
+    .trim()
+    .min(1, "PAN number is required")
+    .regex(
+      /^[A-Z]{5}[0-9]{4}[A-Z]$/i,
+      "Enter a valid PAN (five letters, four digits, and one letter)",
+    ),
   address_line_1: z.string().trim().min(1, "Address is required").max(255),
   address_line_2: z.string().trim().max(255),
   city: z.string().trim().min(1, "City is required").max(100),
@@ -71,6 +66,11 @@ const registrationSchema = z.object({
   country: z.string().trim().min(1, "Country is required").max(100),
   postal_code: z.string().trim().min(1, "Postal code is required").max(30),
   contact_name: z.string().trim().min(1, "Contact name is required").max(255),
+  contact_designation: z
+    .string()
+    .trim()
+    .min(1, "Designation is required")
+    .max(100),
   contact_email: z.string().trim().email("Enter a valid contact email"),
   contact_phone: z
     .string()
@@ -79,6 +79,7 @@ const registrationSchema = z.object({
     .max(40)
     .regex(/^[0-9+().\-\s]+$/, "Enter a valid phone number"),
   alternate_contact_name: z.string().trim().max(255),
+  alternate_contact_designation: z.string().trim().max(100),
   alternate_contact_email: z
     .string()
     .trim()
@@ -95,44 +96,6 @@ const registrationSchema = z.object({
       "Enter a valid alternate contact phone number",
     ),
   offering_ids: z.array(z.string().uuid()).min(1, "Select at least one offering"),
-  workspace_slug: z
-    .string()
-    .trim()
-    .min(3, "Workspace slug is required")
-    .max(63)
-    .regex(
-      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-      "Use lowercase letters, numbers, and single hyphens",
-    ),
-  tenant_admin_name: z.string().trim().min(1, "Admin name is required").max(255),
-  tenant_admin_email: z.string().trim().email("Enter a valid login email"),
-  tenant_admin_password: z
-    .string()
-    .min(12, "Use at least 12 characters")
-    .max(128)
-    .regex(/[a-z]/, "Include a lowercase letter")
-    .regex(/[A-Z]/, "Include an uppercase letter")
-    .regex(/[0-9]/, "Include a number")
-    .regex(/[^\p{L}\p{N}\s]/u, "Include a special character"),
-}).superRefine((values, context) => {
-  const compactPassword = values.tenant_admin_password
-    .toLocaleLowerCase()
-    .replace(/[^\p{L}\p{N}\p{M}]/gu, "");
-  const emailName = values.tenant_admin_email.split("@")[0] ?? "";
-  const tokens = [
-    values.org_name,
-    values.workspace_slug,
-    values.tenant_admin_name,
-    emailName,
-  ].flatMap(contextTokens);
-  if (tokens.some((token) => compactPassword.includes(token))) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["tenant_admin_password"],
-      message:
-        "Do not include the admin name, email, organization, or workspace",
-    });
-  }
 });
 
 type RegistrationFormValues = z.infer<typeof registrationSchema>;
@@ -149,8 +112,8 @@ const emptyDefaults: RegistrationFormValues = {
   industry: "",
   company_size: "",
   website: "",
-  registration_number: "",
-  tax_identifier: "",
+  tax_registration_number: "",
+  pan_number: "",
   address_line_1: "",
   address_line_2: "",
   city: "",
@@ -158,16 +121,14 @@ const emptyDefaults: RegistrationFormValues = {
   country: "",
   postal_code: "",
   contact_name: "",
+  contact_designation: "",
   contact_email: "",
   contact_phone: "",
   alternate_contact_name: "",
+  alternate_contact_designation: "",
   alternate_contact_email: "",
   alternate_contact_phone: "",
   offering_ids: [],
-  workspace_slug: "",
-  tenant_admin_name: "",
-  tenant_admin_email: "",
-  tenant_admin_password: "",
 };
 
 const textOrNull = (value: string): string | null => value.trim() || null;
@@ -207,7 +168,6 @@ export const TenantRegistrationPage = () => {
   const [options, setOptions] = useState<TenantRegistrationOptions | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
   const [showAlternateContact, setShowAlternateContact] = useState(false);
   const [offeringWindows, setOfferingWindows] = useState<Record<string, OfferingWindow>>({});
   const {
@@ -312,6 +272,7 @@ export const TenantRegistrationPage = () => {
     if (showAlternateContact) {
       const alternateContactFields = [
         ["alternate_contact_name", values.alternate_contact_name],
+        ["alternate_contact_designation", values.alternate_contact_designation],
         ["alternate_contact_email", values.alternate_contact_email],
         ["alternate_contact_phone", values.alternate_contact_phone],
       ] as const;
@@ -357,15 +318,15 @@ export const TenantRegistrationPage = () => {
       offering_ids: undefined,
       offering_grants: offeringGrants,
       tenant_code: values.tenant_code.toUpperCase(),
-      workspace_slug: values.workspace_slug.toLowerCase(),
       subscription_ends_at: values.subscription_end_date
         ? new Date(`${values.subscription_end_date}T23:59:59.000Z`).toISOString()
         : null,
       website: textOrNull(values.website),
-      registration_number: textOrNull(values.registration_number),
-      tax_identifier: textOrNull(values.tax_identifier),
+      tax_registration_number: textOrNull(values.tax_registration_number),
+      pan_number: values.pan_number.toUpperCase(),
       address_line_2: textOrNull(values.address_line_2),
       alternate_contact_name: textOrNull(values.alternate_contact_name),
+      alternate_contact_designation: textOrNull(values.alternate_contact_designation),
       alternate_contact_email: textOrNull(values.alternate_contact_email),
       alternate_contact_phone: textOrNull(values.alternate_contact_phone),
     };
@@ -408,7 +369,7 @@ export const TenantRegistrationPage = () => {
           <div>
             <p>Tenant onboarding</p>
             <h1>Register tenant</h1>
-            <span>Create the organization, workspace access, and licensed modules together.</span>
+            <span>Create the organization profile and licensed modules together.</span>
           </div>
         </header>
         <div className={styles.loadingCard}>Loading registration settings…</div>
@@ -429,7 +390,7 @@ export const TenantRegistrationPage = () => {
           </Link>
           <p>Tenant onboarding</p>
           <h1>Register tenant</h1>
-          <span>Create the organization, workspace access, and licensed modules together.</span>
+          <span>Create the organization profile and licensed modules together.</span>
         </div>
         <div className={styles.headerActions}>
           <Button
@@ -549,12 +510,18 @@ export const TenantRegistrationPage = () => {
               {fieldError("website") && <small>{fieldError("website")}</small>}
             </label>
             <label>
-              <span>Registration number</span>
-              <input {...register("registration_number")} />
+              <span>Tax Registration number</span>
+              <input {...register("tax_registration_number")} />
             </label>
             <label>
-              <span>Tax identifier</span>
-              <input {...register("tax_identifier")} />
+              <span>PAN number *</span>
+              <input
+                {...register("pan_number")}
+                required
+                maxLength={10}
+                autoCapitalize="characters"
+              />
+              {fieldError("pan_number") && <small>{fieldError("pan_number")}</small>}
             </label>
           </div>
         </section>
@@ -616,10 +583,12 @@ export const TenantRegistrationPage = () => {
               onClick={() => {
                 if (showAlternateContact) {
                   setValue("alternate_contact_name", "");
+                  setValue("alternate_contact_designation", "");
                   setValue("alternate_contact_email", "");
                   setValue("alternate_contact_phone", "");
                   clearErrors([
                     "alternate_contact_name",
+                    "alternate_contact_designation",
                     "alternate_contact_email",
                     "alternate_contact_phone",
                   ]);
@@ -637,11 +606,18 @@ export const TenantRegistrationPage = () => {
               <strong>Primary contact</strong>
               <span>Required</span>
             </div>
-            <div className={styles.fieldGridThree}>
+            <div className={styles.fieldGridFour}>
               <label>
                 <span>Contact person *</span>
                 <input {...register("contact_name")} />
                 {fieldError("contact_name") && <small>{fieldError("contact_name")}</small>}
+              </label>
+              <label>
+                <span>Designation *</span>
+                <input {...register("contact_designation")} required maxLength={100} />
+                {fieldError("contact_designation") && (
+                  <small>{fieldError("contact_designation")}</small>
+                )}
               </label>
               <label>
                 <span>Contact email *</span>
@@ -661,11 +637,22 @@ export const TenantRegistrationPage = () => {
                 <strong>Alternate contact</strong>
                 <span>All fields required</span>
               </div>
-              <div className={styles.fieldGridThree}>
+              <div className={styles.fieldGridFour}>
                 <label>
                   <span>Contact person *</span>
                   <input {...register("alternate_contact_name")} />
                   {fieldError("alternate_contact_name") && <small>{fieldError("alternate_contact_name")}</small>}
+                </label>
+                <label>
+                  <span>Designation *</span>
+                  <input
+                    {...register("alternate_contact_designation")}
+                    required
+                    maxLength={100}
+                  />
+                  {fieldError("alternate_contact_designation") && (
+                    <small>{fieldError("alternate_contact_designation")}</small>
+                  )}
                 </label>
                 <label>
                   <span>Contact email *</span>
@@ -804,55 +791,6 @@ export const TenantRegistrationPage = () => {
                 })}
               </div>
             )}
-          </div>
-        </section>
-
-        <section className={`${styles.section} ${styles.workspaceSection}`}>
-          <div className={styles.sectionHeading}>
-            <KeyRound size={19} aria-hidden="true" />
-            <div>
-              <h2>Workspace access</h2>
-              <p>Creates the first Tenant Admin account and login workspace.</p>
-            </div>
-          </div>
-          <div className={styles.fieldGrid}>
-            <label>
-              <span>Workspace slug *</span>
-              <input {...register("workspace_slug")} placeholder="acme-corporation" autoCapitalize="none" />
-              {fieldError("workspace_slug") && <small>{fieldError("workspace_slug")}</small>}
-            </label>
-            <label>
-              <span>Tenant Admin name *</span>
-              <input {...register("tenant_admin_name")} />
-              {fieldError("tenant_admin_name") && <small>{fieldError("tenant_admin_name")}</small>}
-            </label>
-            <label>
-              <span>Login email *</span>
-              <input type="email" {...register("tenant_admin_email")} autoComplete="off" />
-              {fieldError("tenant_admin_email") && <small>{fieldError("tenant_admin_email")}</small>}
-            </label>
-            <label>
-              <span>Temporary password *</span>
-              <span className={styles.passwordInput}>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  {...register("tenant_admin_password")}
-                  autoComplete="new-password"
-                />
-                <button
-                  type="button"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  onClick={() => setShowPassword((current) => !current)}
-                >
-                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
-              </span>
-              {fieldError("tenant_admin_password") ? (
-                <small>{fieldError("tenant_admin_password")}</small>
-              ) : (
-                <em>At least 12 characters with upper, lower, number, and symbol.</em>
-              )}
-            </label>
           </div>
         </section>
 

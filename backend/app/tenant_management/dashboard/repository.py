@@ -49,7 +49,7 @@ async def get_kpis(db: AsyncSession) -> dict[str, Any]:
                     WHERE mode = 'SHARED'
                       AND provisioning_state = 'READY'
                 ) AS shared_database_tenants,
-                (SELECT count(*) FROM users) AS total_users,
+                (SELECT count(*) FROM user_accounts) AS total_users,
                 (
                     SELECT count(*)
                     FROM tenants

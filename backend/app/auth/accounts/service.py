@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit import record_audit
 from app.auth.deps import Principal
+from app.auth.email_identity import reserve_new_user_email
 from app.auth.roles import assign_role, get_active_role_name, get_role_for_tenant_by_name
 from app.common.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.common.security import hash_password, normalize_email, validate_password
@@ -53,7 +54,11 @@ async def create_user(db: AsyncSession, principal: Principal, payload: UserCreat
     """Only a Tenant Admin may create Project Manager / Employee users."""
     _assert_tenant_admin(principal)
 
-    normalized_email = normalize_email(str(payload.email))
+    normalized_email = await reserve_new_user_email(
+        db,
+        str(payload.email),
+        tenant_id=principal.tenant_id,
+    )
     tenant = await db.get(Tenant, principal.tenant_id)
     if tenant is None:
         raise NotFoundError("Tenant not found")
@@ -62,12 +67,7 @@ async def create_user(db: AsyncSession, principal: Principal, payload: UserCreat
         email=normalized_email,
         name=payload.name,
         org_name=tenant.org_name,
-        workspace_slug=tenant.workspace_slug,
     )
-
-    existing = await repository.get_user_by_email(db, principal.tenant_id, normalized_email)
-    if existing is not None:
-        raise ConflictError("A user with this email already exists in this tenant")
 
     role = await get_role_for_tenant_by_name(db, principal.tenant_id, payload.role)
     if role is None:

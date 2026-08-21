@@ -76,8 +76,7 @@
   box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px rgb(15 23 42 / 0.025);
 }
 
-.offeringsSection,
-.workspaceSection {
+.offeringsSection {
   grid-column: 1 / -1;
 }
 
@@ -159,7 +158,8 @@
 }
 
 .fieldGrid,
-.fieldGridThree {
+.fieldGridThree,
+.fieldGridFour {
   display: grid;
   gap: 0.85rem;
 }
@@ -172,8 +172,13 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.fieldGridFour {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .fieldGrid label,
-.fieldGridThree label {
+.fieldGridThree label,
+.fieldGridFour label {
   min-width: 0;
   display: grid;
   align-content: start;
@@ -189,7 +194,8 @@
 
 .fieldGrid input,
 .fieldGrid select,
-.fieldGridThree input {
+.fieldGridThree input,
+.fieldGridFour input {
   width: 100%;
   min-height: 2.75rem;
   border: 1px solid var(--color-slate-300);
@@ -204,13 +210,15 @@
 
 .fieldGrid input:focus,
 .fieldGrid select:focus,
-.fieldGridThree input:focus {
+.fieldGridThree input:focus,
+.fieldGridFour input:focus {
   border-color: var(--color-blue-500);
   outline: 3px solid var(--color-focus);
 }
 
 .fieldGrid small,
 .fieldGridThree small,
+.fieldGridFour small,
 .sectionError {
   margin: 0;
   color: var(--color-danger-700);
@@ -557,28 +565,6 @@
   margin-top: 0.7rem;
 }
 
-.passwordInput {
-  position: relative;
-}
-
-.passwordInput input {
-  padding-right: 2.7rem;
-}
-
-.passwordInput button {
-  position: absolute;
-  top: 50%;
-  right: 0.4rem;
-  display: grid;
-  place-items: center;
-  border: 0;
-  padding: 0.35rem;
-  color: var(--color-slate-500);
-  background: transparent;
-  transform: translateY(-50%);
-  cursor: pointer;
-}
-
 .loadingCard {
   min-height: 24rem;
   display: grid;
@@ -599,8 +585,7 @@
     grid-template-columns: 1fr;
   }
 
-  .offeringsSection,
-  .workspaceSection {
+  .offeringsSection {
     grid-column: auto;
   }
 
@@ -653,6 +638,7 @@
 
   .fieldGrid,
   .fieldGridThree,
+  .fieldGridFour,
   .offeringCatalog {
     grid-template-columns: 1fr;
   }

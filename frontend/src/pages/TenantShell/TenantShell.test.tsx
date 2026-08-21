@@ -13,10 +13,11 @@ const principal = (enabled: boolean): TenantPrincipal => ({
   name: "Avery Morgan",
   email: "avery@example.com",
   role: "Tenant Admin",
+  password_change_required: false,
   tenant: {
     tenant_id: "22222222-2222-4222-8222-222222222222",
     org_name: "Northstar Labs",
-    workspace_slug: "northstar",
+    tenant_code: "NORTHSTAR",
     status: "ACTIVE",
     offerings: enabled ? [{
       offering_id: "33333333-3333-4333-8333-333333333333",
@@ -31,7 +32,7 @@ const principal = (enabled: boolean): TenantPrincipal => ({
 });
 
 const renderShell = (enabled: boolean, path = "/app/overview") => {
-  const context: SessionContextValue = { status: "authenticated", principal: principal(enabled), notice: null, clearNotice: vi.fn(), loginTenant: vi.fn(), loginPlatform: vi.fn(), logout: vi.fn(), retryBootstrap: vi.fn() };
+  const context: SessionContextValue = { status: "authenticated", principal: principal(enabled), notice: null, clearNotice: vi.fn(), loginTenant: vi.fn(), loginPlatform: vi.fn(), changePassword: vi.fn(), logout: vi.fn(), retryBootstrap: vi.fn() };
   render(<SessionContext.Provider value={context}><MemoryRouter initialEntries={[path]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}><Routes><Route path="/app" element={<TenantShell />}><Route path="overview" element={<div>Tenant home</div>} /><Route path="task-management/*" element={<div>Task workspace</div>} /></Route></Routes></MemoryRouter></SessionContext.Provider>);
 };
 

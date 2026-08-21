@@ -236,7 +236,6 @@ export const TenantDetailPage = () => {
         <div>
           <p>{tenant.tenant_code}</p>
           <h1>{tenant.org_name}</h1>
-          <span>{tenant.workspace_slug}</span>
         </div>
         <div className={styles.headerActions}>
           <span className={`${styles.status} ${tenant.status === "ACTIVE" ? styles.active : styles.suspended}`}>{tenant.status}</span>
@@ -261,10 +260,14 @@ export const TenantDetailPage = () => {
             <div><dt>Industry</dt><dd>{tenant.industry || "—"}</dd></div>
             <div><dt>Company size</dt><dd>{tenant.company_size || "—"}</dd></div>
             <div><dt>Contact</dt><dd>{tenant.contact_name || "—"}</dd></div>
+            <div><dt>Designation</dt><dd>{tenant.contact_designation || "—"}</dd></div>
             <div><dt>Email</dt><dd>{tenant.contact_email || "—"}</dd></div>
             <div><dt>Phone</dt><dd>{tenant.contact_phone || "—"}</dd></div>
             {tenant.alternate_contact_name && (
               <div><dt>Alternate contact</dt><dd>{tenant.alternate_contact_name}</dd></div>
+            )}
+            {tenant.alternate_contact_designation && (
+              <div><dt>Alternate designation</dt><dd>{tenant.alternate_contact_designation}</dd></div>
             )}
             {tenant.alternate_contact_email && (
               <div><dt>Alternate email</dt><dd>{tenant.alternate_contact_email}</dd></div>

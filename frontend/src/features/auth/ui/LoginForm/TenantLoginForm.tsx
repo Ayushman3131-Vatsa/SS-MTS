@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Building2, Eye, EyeOff, LockKeyhole, Mail, Shield } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole, Mail, Shield } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
@@ -14,14 +14,12 @@ import {
 import styles from "./LoginForm.module.css";
 
 interface TenantLoginFormProps {
-  initialWorkspace?: string;
   notice?: string | null;
   onSubmit: (values: TenantLoginValues) => Promise<void>;
   serverError?: { title: string; message: string } | null;
 }
 
 export const TenantLoginForm = ({
-  initialWorkspace = "",
   notice,
   onSubmit,
   serverError,
@@ -35,10 +33,8 @@ export const TenantLoginForm = ({
   } = useForm<TenantLoginValues>({
     resolver: zodResolver(tenantLoginSchema),
     defaultValues: {
-      workspaceSlug: initialWorkspace,
       email: "",
       password: "",
-      rememberWorkspace: Boolean(initialWorkspace),
     },
     mode: "onTouched",
   });
@@ -67,22 +63,6 @@ export const TenantLoginForm = ({
           </Alert>
         </div>
       )}
-
-      <InputField
-        id="workspace-slug"
-        label="Workspace"
-        placeholder="northstar-labs"
-        autoComplete="organization"
-        autoCapitalize="none"
-        spellCheck={false}
-        disabled={isSubmitting}
-        leadingIcon={<Building2 size={18} />}
-        error={errors.workspaceSlug?.message}
-        hint="The unique name used by your organization."
-        {...register("workspaceSlug", {
-          setValueAs: (value: string) => value.trim().toLowerCase(),
-        })}
-      />
 
       <InputField
         id="tenant-email"
@@ -125,24 +105,13 @@ export const TenantLoginForm = ({
         {...register("password")}
       />
 
-      <div className={styles.options}>
-        <label className={styles.checkbox}>
-          <input
-            type="checkbox"
-            disabled={isSubmitting}
-            {...register("rememberWorkspace")}
-          />
-          Remember workspace
-        </label>
-      </div>
-
       <Button
         type="submit"
         fullWidth
         loading={isSubmitting}
         loadingLabel="Signing in…"
       >
-        Sign in to workspace
+        Sign in
       </Button>
 
       <p className={styles.help}>

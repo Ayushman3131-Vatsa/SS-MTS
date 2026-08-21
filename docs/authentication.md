@@ -15,12 +15,12 @@ authorization.
 | Account | Creation path | Login path |
 |---|---|---|
 | Platform Admin | `scripts.seed_platform_admin` only | Platform session login |
-| Tenant Admin | Created atomically with a tenant | Organization-member login |
+| Tenant Admin | `scripts.bootstrap_tenant_admin`, after UAM creates its role | Organization-member login |
 | Project Manager | Created by a Tenant Admin | Organization-member login |
 | Employee | Created by a Tenant Admin | Organization-member login |
 
-Tenant users never select a role during sign-in. They provide a workspace slug,
-email, and password; the authenticated database record supplies the role.
+Tenant users never select a tenant or role during sign-in. They provide email
+and password; the globally unique account supplies the tenant and active role.
 
 ## Browser-session flow
 
@@ -31,7 +31,7 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     Browser->>API: POST /auth/session/tenant
-    API->>DB: Resolve workspace + account
+    API->>DB: Resolve globally unique account email
     API->>DB: Verify throttle + Argon2id/bcrypt password
     API->>DB: Store SHA-256(session token) + CSRF hash
     API-->>Browser: Principal JSON + mt_session + mt_csrf cookies
@@ -56,7 +56,8 @@ requests.
 | Method | Path | Body or result |
 |---|---|---|
 | `POST` | `/auth/session/platform` | `{email, password}` |
-| `POST` | `/auth/session/tenant` | `{workspace_slug, email, password}` |
+| `POST` | `/auth/session/tenant` | `{email, password}` |
+| `POST` | `/auth/password/change` | `{current_password, new_password}`; rotates the current credential |
 | `GET` | `/auth/session` | Current principal and tenant context |
 | `DELETE` | `/auth/session` | Revokes the session and clears cookies |
 
@@ -71,7 +72,7 @@ Creation and password-change boundaries enforce the strong password policy:
 - at least one uppercase letter, lowercase letter, number, and special
   character;
 - not a common password;
-- does not contain the account email, name, organization, or workspace slug.
+- does not contain the account email, name, or organization.
 
 Sign-in validates only that a password is present and no longer than 128
 characters. Reapplying creation-time strength rules during sign-in would lock
@@ -79,9 +80,28 @@ out valid legacy accounts. Passwords are never trimmed, normalized, echoed in
 validation responses, or logged.
 
 Emails are trimmed, lowercased, validated, and stored with PostgreSQL `CITEXT`
-semantics. A tenant's `workspace_slug` is unique, lowercase, 3–63 characters,
-contains only letters, digits, and single hyphen separators, and cannot start
-or end with a hyphen.
+semantics. Tenant-user emails are globally unique. Tenant sessions expose the
+organization name and stable `tenant_code`; no workspace identifier is needed
+for login.
+
+## First Tenant Admin and forced password change
+
+Tenant registration reserves the primary contact email but does not create a
+user or UAM role. After the UAM-owned, tenant-scoped `TENANT_ADMIN` role exists,
+bootstrap the first administrator from the tenant's primary contact:
+
+```powershell
+Set-Location backend
+python -m scripts.bootstrap_tenant_admin --tenant-code ACME
+```
+
+The command prints a generated temporary password once, after commit. The
+account may restore its session, sign out, and call the password-change endpoint
+but receives `403 PASSWORD_CHANGE_REQUIRED` from other tenant APIs. Successful
+change revokes other browser sessions, increments the credential version,
+rotates the current browser session/CSRF cookie, and invalidates older bearer
+tokens. `--rotate-pending` replaces a lost temporary password only before the
+administrator has completed password setup.
 
 ## Abuse and transport controls
 

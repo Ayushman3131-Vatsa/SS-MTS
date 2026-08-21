@@ -4,8 +4,9 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.audit import record_audit
 from app.auth.deps import Principal
+from app.auth.email_identity import reserve_new_tenant_contact
+from app.common.audit import record_audit
 from app.common.config import get_settings
 from app.common.exceptions import (
     BusinessRuleError,
@@ -13,12 +14,7 @@ from app.common.exceptions import (
     ForbiddenError,
     NotFoundError,
 )
-from app.common.security import (
-    hash_password,
-    normalize_email,
-    normalize_workspace_slug,
-    validate_password,
-)
+from app.common.security import normalize_email
 from app.tenant_management.models.enums import (
     DatabaseIsolationMode,
     DatabaseProvisioningState,
@@ -29,14 +25,12 @@ from app.tenant_management.models.enums import (
     TenantStatus,
     TenantSubscriptionStatus,
 )
-from app.auth.roles import assign_role, seed_tenant_system_roles
 from app.tenant_management.models.platform_activity_event import PlatformActivityEvent
 from app.tenant_management.models.tenant import Tenant
 from app.tenant_management.models.tenant_database_allocation import TenantDatabaseAllocation
 from app.tenant_management.models.offering import Offering
 from app.tenant_management.models.tenant_offering import TenantOffering, TenantOfferingEvent
 from app.tenant_management.models.tenant_subscription import TenantSubscription
-from app.auth.models.user_account import UserAccount
 from app.tenant_management.tenants import repository
 from app.tenant_management.schemas.tenant import (
     OfferingResponse,
@@ -51,58 +45,19 @@ from app.tenant_management.schemas.tenant import (
 )
 
 
-async def _resolve_workspace_slug(
-    db: AsyncSession,
-    *,
-    tenant_id: uuid.UUID,
-    org_name: str,
-    requested_slug: str | None,
-) -> str:
-    base_slug = normalize_workspace_slug(requested_slug or org_name)
-    # Serialize allocations for the same base slug so two onboarding requests
-    # cannot both observe it as available before the unique constraint runs.
-    await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:workspace_slug, 0))"),
-        {"workspace_slug": base_slug},
-    )
-    existing = await repository.get_tenant_by_workspace_slug(db, base_slug)
-    if existing is None:
-        return base_slug
-    if requested_slug is not None:
-        raise ConflictError("This workspace slug is already in use")
-
-    for suffix_length in range(8, 33, 4):
-        suffix = tenant_id.hex[:suffix_length]
-        candidate = f"{base_slug[: 62 - suffix_length]}-{suffix}"
-        if await repository.get_tenant_by_workspace_slug(db, candidate) is None:
-            return candidate
-    raise ConflictError("Unable to allocate a unique workspace slug")
-
-
 async def _resolve_tenant_code(
     db: AsyncSession,
     *,
-    tenant_id: uuid.UUID,
-    workspace_slug: str,
-    requested_code: str | None,
+    requested_code: str,
 ) -> str:
-    base_code = requested_code or workspace_slug.replace("-", "_").upper()
-    base_code = base_code[:30]
+    base_code = requested_code.strip().upper()
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:tenant_code, 1))"),
         {"tenant_code": base_code},
     )
     if await repository.get_tenant_by_code(db, base_code) is None:
         return base_code
-    if requested_code is not None:
-        raise ConflictError("This tenant code is already in use")
-
-    for suffix_length in range(6, 13, 2):
-        suffix = tenant_id.hex[:suffix_length].upper()
-        candidate = f"{base_code[: 29 - suffix_length]}_{suffix}"
-        if await repository.get_tenant_by_code(db, candidate) is None:
-            return candidate
-    raise ConflictError("Unable to allocate a unique tenant code")
+    raise ConflictError("This tenant code is already in use")
 
 
 async def create_tenant(
@@ -110,9 +65,11 @@ async def create_tenant(
     principal: Principal,
     payload: TenantCreateRequest,
 ) -> repository.TenantReadModel:
-    """Only a platform_admins row can insert into tenants. In the same
-    transaction, seeds the first users row with role='Tenant Admin' and
-    created_by_user_id=NULL, per the onboarding rule in the architecture doc."""
+    """Create a tenant profile and commercial configuration.
+
+    User/role provisioning is deliberately separate. The primary contact
+    email is reserved here for the later first-admin bootstrap command.
+    """
     if principal.type != "admin" or principal.tenant_id is not None:
         raise ForbiddenError("Only a Platform Admin can create a tenant")
 
@@ -130,44 +87,27 @@ async def create_tenant(
     ):
         raise BusinessRuleError("subscription_ends_at must be in the future")
 
-    tenant_id = uuid.uuid4()
-    workspace_slug = await _resolve_workspace_slug(
-        db,
-        tenant_id=tenant_id,
-        org_name=payload.org_name,
-        requested_slug=payload.workspace_slug,
-    )
     tenant_code = await _resolve_tenant_code(
         db,
-        tenant_id=tenant_id,
-        workspace_slug=workspace_slug,
         requested_code=payload.tenant_code,
     )
+    contact_email = await reserve_new_tenant_contact(db, str(payload.contact_email))
+    tenant_id = uuid.uuid4()
     grant_by_id = {grant.offering_id: grant for grant in payload.offering_grants}
     offering_ids = set(grant_by_id) or set(payload.offering_ids)
     offerings = await repository.get_active_offerings_by_ids(db, offering_ids)
     if len(offerings) != len(offering_ids):
         raise BusinessRuleError("One or more selected offerings are not available")
-    admin_email = normalize_email(str(payload.tenant_admin_email))
-    validate_password(
-        payload.tenant_admin_password,
-        email=admin_email,
-        name=payload.tenant_admin_name,
-        org_name=payload.org_name,
-        workspace_slug=workspace_slug,
-    )
-
     tenant = Tenant(
         tenant_id=tenant_id,
         org_name=payload.org_name,
         tenant_code=tenant_code,
-        workspace_slug=workspace_slug,
         legal_name=payload.legal_name,
         industry=payload.industry,
         company_size=payload.company_size,
         website=payload.website,
-        registration_number=payload.registration_number,
-        tax_identifier=payload.tax_identifier,
+        tax_registration_number=payload.tax_registration_number,
+        pan_number=payload.pan_number,
         address_line_1=payload.address_line_1,
         address_line_2=payload.address_line_2,
         city=payload.city,
@@ -175,13 +115,11 @@ async def create_tenant(
         country=payload.country,
         postal_code=payload.postal_code,
         contact_name=payload.contact_name,
-        contact_email=(
-            normalize_email(str(payload.contact_email))
-            if payload.contact_email is not None
-            else None
-        ),
+        contact_designation=payload.contact_designation,
+        contact_email=contact_email,
         contact_phone=payload.contact_phone,
         alternate_contact_name=payload.alternate_contact_name,
+        alternate_contact_designation=payload.alternate_contact_designation,
         alternate_contact_email=(
             normalize_email(str(payload.alternate_contact_email))
             if payload.alternate_contact_email is not None
@@ -241,21 +179,6 @@ async def create_tenant(
             )
         )
 
-    roles = await seed_tenant_system_roles(db, tenant.tenant_id)
-    tenant_admin_role = roles["TENANT_ADMIN"]
-
-    tenant_admin = UserAccount(
-        tenant_id=tenant.tenant_id,
-        display_name=payload.tenant_admin_name,
-        email=admin_email,
-        password_hash=hash_password(payload.tenant_admin_password),
-        created_by_user_id=None,
-        is_active=True,
-    )
-    db.add(tenant_admin)
-    await db.flush()
-    await assign_role(db, user_id=tenant_admin.id, role=tenant_admin_role, assigned_by=None)
-
     db.add(
         PlatformActivityEvent(
             event_type=PlatformActivityType.TENANT_CREATED.value,
@@ -265,7 +188,6 @@ async def create_tenant(
             actor_type=PlatformActorType.PLATFORM_ADMIN.value,
             occurred_at=database_now,
             event_metadata={
-                "workspace_slug": tenant.workspace_slug,
                 "tenant_code": tenant.tenant_code,
                 "subscription_plan_code": plan.code,
                 "offering_codes": sorted(offering.code for offering in offerings),
@@ -287,7 +209,6 @@ async def create_tenant(
         changed_by_admin_id=principal.id,
         new_value={
             "org_name": tenant.org_name,
-            "workspace_slug": tenant.workspace_slug,
             "tenant_code": tenant.tenant_code,
             "subscription_plan": tenant.subscription_plan,
             "subscription_plan_code": plan.code,
@@ -296,21 +217,6 @@ async def create_tenant(
             "offering_codes": sorted(offering.code for offering in offerings),
         },
     )
-    await record_audit(
-        db,
-        tenant_id=tenant.tenant_id,
-        entity_type="user",
-        entity_id=tenant_admin.id,
-        action="CREATE",
-        changed_by_user_id=None,
-        changed_by_admin_id=principal.id,
-        new_value={
-            "name": tenant_admin.display_name,
-            "email": tenant_admin.email,
-            "role": "Tenant Admin",
-        },
-    )
-
     await db.commit()
     created = await repository.get_tenant_details(db, tenant.tenant_id)
     if created is None:

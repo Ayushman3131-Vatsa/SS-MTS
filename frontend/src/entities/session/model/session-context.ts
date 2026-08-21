@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 
 import type {
+  PasswordChangeCredentials,
   PlatformLoginCredentials,
   SessionPrincipal,
   SessionStatus,
@@ -17,6 +18,9 @@ export interface SessionContextValue {
   ) => Promise<SessionPrincipal>;
   loginPlatform: (
     credentials: PlatformLoginCredentials,
+  ) => Promise<SessionPrincipal>;
+  changePassword: (
+    credentials: PasswordChangeCredentials,
   ) => Promise<SessionPrincipal>;
   logout: () => Promise<void>;
   retryBootstrap: () => Promise<void>;

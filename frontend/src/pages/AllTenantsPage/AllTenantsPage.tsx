@@ -146,7 +146,7 @@ export const AllTenantsPage = () => {
                   <tr key={tenant.tenant_id}>
                     <td>
                       <strong>{tenant.org_name}</strong>
-                      <span>{tenant.tenant_code} · {tenant.workspace_slug}</span>
+                      <span>{tenant.tenant_code}</span>
                     </td>
                     <td>
                       <span className={`${styles.badge} ${tenant.status === "ACTIVE" ? styles.active : styles.suspended}`}>

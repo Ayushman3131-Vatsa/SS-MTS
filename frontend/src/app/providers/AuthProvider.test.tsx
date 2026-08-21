@@ -16,10 +16,11 @@ const principal: SessionPrincipal = {
   name: "Avery Morgan",
   email: "avery@example.com",
   role: "Tenant Admin",
+  password_change_required: false,
   tenant: {
     tenant_id: "63e6c159-3c6c-43bb-856a-8ed53e21dabe",
     org_name: "Northstar Labs",
-    workspace_slug: "northstar-labs",
+    tenant_code: "NORTHSTAR",
     status: "ACTIVE",
     offerings: [],
   },
