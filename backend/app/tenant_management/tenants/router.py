@@ -4,6 +4,10 @@ from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import Principal, require_platform_admin
+from app.auth.tenant_admin_onboarding import (
+    enable_initial_tenant_admin,
+    regenerate_initial_tenant_admin_password,
+)
 from app.common.db.session import get_db
 from app.tenant_management.models.enums import TenantStatus
 from app.tenant_management.tenants import service
@@ -16,6 +20,8 @@ from app.tenant_management.schemas.tenant import (
     TenantOfferingResponse,
     TenantOfferingEventResponse,
     TenantStatusActionRequest,
+    TenantAdminProvisioningRequest,
+    InitialTenantAdminCredentialsResponse,
     TenantRegistrationOptionsResponse,
     TenantResponse,
     OfferingCatalogResponse,
@@ -81,6 +87,63 @@ async def get_tenant(
 ) -> TenantResponse:
     tenant = await service.get_tenant_or_404(db, tenant_id)
     return TenantResponse.model_validate(tenant)
+
+
+@router.post(
+    "/{tenant_id}/enable",
+    response_model=InitialTenantAdminCredentialsResponse,
+)
+async def enable_tenant(
+    tenant_id: uuid.UUID,
+    payload: TenantAdminProvisioningRequest,
+    response: Response,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=255),
+    principal: Principal = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_db),
+) -> InitialTenantAdminCredentialsResponse:
+    credentials = await enable_initial_tenant_admin(
+        db,
+        tenant_id=tenant_id,
+        platform_admin_id=principal.id,
+        expected_version=payload.expected_version,
+        idempotency_key=idempotency_key or f"tenant-enable:{tenant_id}:{payload.expected_version}",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return InitialTenantAdminCredentialsResponse(
+        email=credentials.email,
+        temporary_password=credentials.temporary_password,
+    )
+
+
+@router.post(
+    "/{tenant_id}/regenerate-initial-password",
+    response_model=InitialTenantAdminCredentialsResponse,
+)
+async def regenerate_initial_password(
+    tenant_id: uuid.UUID,
+    payload: TenantAdminProvisioningRequest,
+    response: Response,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=255),
+    principal: Principal = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_db),
+) -> InitialTenantAdminCredentialsResponse:
+    credentials = await regenerate_initial_tenant_admin_password(
+        db,
+        tenant_id=tenant_id,
+        platform_admin_id=principal.id,
+        expected_version=payload.expected_version,
+        idempotency_key=(
+            idempotency_key
+            or f"tenant-regenerate-initial-password:{tenant_id}:{payload.expected_version}"
+        ),
+    )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return InitialTenantAdminCredentialsResponse(
+        email=credentials.email,
+        temporary_password=credentials.temporary_password,
+    )
 
 
 @router.post("/{tenant_id}/suspend", response_model=TenantResponse)

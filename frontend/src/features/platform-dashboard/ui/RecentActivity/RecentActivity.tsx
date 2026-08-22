@@ -3,6 +3,7 @@ import {
   Building2,
   CircleCheck,
   CircleX,
+  KeyRound,
   RefreshCcw,
   RotateCcw,
 } from "lucide-react";
@@ -104,6 +105,20 @@ const getActivityCopy = (event: PlatformActivity): ActivityCopy => {
         icon: RotateCcw,
         title: `${tenantName} reactivated`,
         tone: "green",
+      };
+    case "TENANT_ADMIN_ENABLED":
+      return {
+        detail: "The first Tenant Admin account was created.",
+        icon: KeyRound,
+        title: `${tenantName} enabled`,
+        tone: "green",
+      };
+    case "TENANT_ADMIN_PASSWORD_REGENERATED":
+      return {
+        detail: "A pending Tenant Admin password was regenerated.",
+        icon: KeyRound,
+        title: `${tenantName} credentials regenerated`,
+        tone: "orange",
       };
     case "DATABASE_ALLOCATION_READY":
       return {

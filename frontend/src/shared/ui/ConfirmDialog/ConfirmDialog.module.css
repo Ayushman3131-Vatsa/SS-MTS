@@ -9,7 +9,7 @@
 }
 
 .dialog {
-  width: min(100%, 30rem);
+  width: min(100%, 34rem);
   border: 1px solid var(--color-slate-200);
   border-radius: 1rem;
   padding: 1.25rem;

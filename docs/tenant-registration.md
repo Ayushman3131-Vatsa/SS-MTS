@@ -19,12 +19,14 @@ their unique constraints are reached, which makes concurrent registrations
 deterministic. A primary-contact email is rejected when another tenant has
 reserved it or any tenant user already owns it.
 
-Registration does not seed roles or create the first user. Once UAM has created
-an active tenant-scoped `TENANT_ADMIN` role, run
-`python -m scripts.bootstrap_tenant_admin --tenant-code <CODE>`. The command
-copies the primary contact name/email into a new account, assigns that existing
-role atomically, and prints a generated temporary password after commit. Future
-contact edits do not rename the account.
+Registration does not create the first user. The Platform Admin **Enable
+Tenant** action creates or reuses the canonical tenant roles, copies the primary
+contact name/email into the first Tenant Admin account, and returns a generated
+temporary password once after commit. A pending password can be regenerated
+only before the administrator completes password setup. The same workflow is
+available operationally through
+`python -m scripts.bootstrap_tenant_admin --tenant-code <CODE>`. Future contact
+edits do not rename the account.
 
 ## Catalogs and entitlements
 
@@ -43,6 +45,8 @@ Platform admins manage entitlements with:
 
 - `GET /tenants?page=1&page_size=25&query=...&status=ACTIVE`;
 - `POST /tenants/{tenant_id}/suspend` and `/activate`;
+- `POST /tenants/{tenant_id}/enable` and `/regenerate-initial-password` for the
+  first Tenant Admin;
 - `GET /tenants/offering-catalog`;
 - `GET /tenants/{tenant_id}/offering-entitlements`;
 - `GET /tenants/{tenant_id}/offering-entitlements/history` for immutable transition events;

@@ -15,7 +15,7 @@ authorization.
 | Account | Creation path | Login path |
 |---|---|---|
 | Platform Admin | `scripts.seed_platform_admin` only | Platform session login |
-| Tenant Admin | `scripts.bootstrap_tenant_admin`, after UAM creates its role | Organization-member login |
+| Tenant Admin | Platform Admin **Enable Tenant** action or `scripts.bootstrap_tenant_admin` | Organization-member login |
 | Project Manager | Created by a Tenant Admin | Organization-member login |
 | Employee | Created by a Tenant Admin | Organization-member login |
 
@@ -87,21 +87,25 @@ for login.
 ## First Tenant Admin and forced password change
 
 Tenant registration reserves the primary contact email but does not create a
-user or UAM role. After the UAM-owned, tenant-scoped `TENANT_ADMIN` role exists,
-bootstrap the first administrator from the tenant's primary contact:
+user. Platform Admins enable the tenant from its detail page; the action creates
+or reuses canonical tenant roles, creates the primary-contact administrator,
+and returns the generated credentials once after commit. The raw password is
+not persisted or returned by tenant reads. The CLI remains available for
+operational use:
 
 ```powershell
 Set-Location backend
 python -m scripts.bootstrap_tenant_admin --tenant-code ACME
 ```
 
-The command prints a generated temporary password once, after commit. The
-account may restore its session, sign out, and call the password-change endpoint
+The command and the platform action print or return a generated temporary
+password once, after commit. If it is lost before first sign-in, a Platform
+Admin can regenerate it only while password setup remains pending. The account
+may restore its session, sign out, and call the password-change endpoint
 but receives `403 PASSWORD_CHANGE_REQUIRED` from other tenant APIs. Successful
 change revokes other browser sessions, increments the credential version,
 rotates the current browser session/CSRF cookie, and invalidates older bearer
-tokens. `--rotate-pending` replaces a lost temporary password only before the
-administrator has completed password setup.
+tokens. `--rotate-pending` provides the same recovery from the CLI.
 
 ## Abuse and transport controls
 

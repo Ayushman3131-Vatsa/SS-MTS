@@ -14,6 +14,8 @@ import type {
   OfferingCatalogEntry,
   TenantRegistrationOptions,
   TenantRegistrationPayload,
+  InitialTenantAdminCredentials,
+  TenantAdminProvisioningPayload,
 } from "../model/tenants";
 
 const offeringSchema = z.object({
@@ -89,6 +91,11 @@ const tenantSchema = z.object({
   database_mode: z.string().min(1),
   database_provisioning_state: z.string().min(1),
   user_count: z.number().int().nonnegative(),
+  tenant_admin_provisioning_status: z.enum([
+    "NOT_ENABLED",
+    "PENDING_PASSWORD_CHANGE",
+    "ENABLED",
+  ]),
   offerings: z.array(entitlementSchema),
   created_by_admin_id: z.string().uuid(),
   created_at: z.string(),
@@ -101,6 +108,11 @@ const tenantListSchema = z.object({
   page: z.number().int().positive(),
   page_size: z.number().int().positive(),
   total: z.number().int().nonnegative(),
+});
+
+const initialTenantAdminCredentialsSchema = z.object({
+  email: z.string().email(),
+  temporary_password: z.string().min(1),
 });
 
 const optionsSchema = z.object({
@@ -237,6 +249,32 @@ export const tenantsApi = {
     parse(
       tenantSchema,
       await apiRequest<unknown>(`/tenants/${tenantId}/${action}`, {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey() },
+        body: payload,
+      }),
+    ),
+
+  enable: async (
+    tenantId: string,
+    payload: TenantAdminProvisioningPayload,
+  ): Promise<InitialTenantAdminCredentials> =>
+    parse(
+      initialTenantAdminCredentialsSchema,
+      await apiRequest<unknown>(`/tenants/${tenantId}/enable`, {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey() },
+        body: payload,
+      }),
+    ),
+
+  regenerateInitialPassword: async (
+    tenantId: string,
+    payload: TenantAdminProvisioningPayload,
+  ): Promise<InitialTenantAdminCredentials> =>
+    parse(
+      initialTenantAdminCredentialsSchema,
+      await apiRequest<unknown>(`/tenants/${tenantId}/regenerate-initial-password`, {
         method: "POST",
         headers: { "Idempotency-Key": idempotencyKey() },
         body: payload,

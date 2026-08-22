@@ -1,9 +1,9 @@
-import { ArrowLeft, Building2, Database, MapPin, PackageCheck, Pause, Play, Plus, ShieldOff, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Building2, Check, Copy, Database, KeyRound, MapPin, PackageCheck, Pause, Play, Plus, RefreshCw, ShieldOff, Trash2, Users, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { tenantsApi } from "../../features/tenant-management/api/tenants-api";
-import type { OfferingCatalogEntry, TenantOfferingEntitlement, TenantRecord } from "../../features/tenant-management/model/tenants";
+import type { InitialTenantAdminCredentials, OfferingCatalogEntry, TenantOfferingEntitlement, TenantRecord } from "../../features/tenant-management/model/tenants";
 import { ApiError } from "../../shared/api/errors";
 import { Alert } from "../../shared/ui/Alert/Alert";
 import { Button } from "../../shared/ui/Button/Button";
@@ -35,6 +35,7 @@ const remainingTime = (endsAt: string | null) => {
 
 type PendingAction =
   | { type: "tenant"; action: "suspend" | "activate"; tenantName: string; version: number }
+  | { type: "tenant-admin"; action: "enable" | "regenerate"; tenantName: string; email: string; version: number }
   | { type: "grant"; offeringId: string; offeringName: string; startsAt: string; endsAt: string; tenantVersion: number }
   | { type: "offering"; action: "suspend" | "resume" | "deactivate" | "remove"; entitlementId: string; offeringName: string; version: number };
 
@@ -65,6 +66,8 @@ export const TenantDetailPage = () => {
   const [dialogReason, setDialogReason] = useState("");
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [entitlementTab, setEntitlementTab] = useState<EntitlementTab>("active");
+  const [credentials, setCredentials] = useState<InitialTenantAdminCredentials | null>(null);
+  const [copiedCredential, setCopiedCredential] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!tenantId) {
@@ -129,6 +132,17 @@ export const TenantDetailPage = () => {
     setPendingAction({ type: "tenant", action, tenantName: tenant.org_name, version: tenant.version });
   };
 
+  const handleTenantAdminAction = (action: "enable" | "regenerate") => {
+    if (!tenant) return;
+    setPendingAction({
+      type: "tenant-admin",
+      action,
+      tenantName: tenant.org_name,
+      email: tenant.contact_email ?? "the primary contact email",
+      version: tenant.version,
+    });
+  };
+
   const handleGrant = () => {
     if (!tenantId || !selectedOffering) {
       setError("Select an offering before granting access.");
@@ -179,11 +193,22 @@ export const TenantDetailPage = () => {
   const executePendingAction = async () => {
     if (!pendingAction || !tenantId) return;
     let succeeded = false;
+    let issuedCredentials: InitialTenantAdminCredentials | null = null;
     if (pendingAction.type === "tenant") {
       succeeded = await reloadAfter(`tenant-${pendingAction.action}`, () => tenantsApi.tenantAction(tenantId, pendingAction.action, {
         expected_version: pendingAction.version,
         reason: dialogReason || null,
       }));
+    } else if (pendingAction.type === "tenant-admin") {
+      succeeded = await reloadAfter(`tenant-admin-${pendingAction.action}`, async () => {
+        issuedCredentials = pendingAction.action === "enable"
+          ? await tenantsApi.enable(tenantId, { expected_version: pendingAction.version })
+          : await tenantsApi.regenerateInitialPassword(tenantId, { expected_version: pendingAction.version });
+      });
+      if (issuedCredentials) {
+        setCredentials(issuedCredentials);
+        setCopiedCredential(null);
+      }
     } else if (pendingAction.type === "grant") {
       succeeded = await reloadAfter("grant-offering", () => tenantsApi.grant(tenantId, {
         offering_id: pendingAction.offeringId,
@@ -207,6 +232,11 @@ export const TenantDetailPage = () => {
         { expected_version: pendingAction.version, reason: dialogReason || null },
       ));
     }
+    if (pendingAction.type === "tenant-admin" && issuedCredentials) {
+      setPendingAction(null);
+      setDialogReason("");
+      return;
+    }
     if (succeeded) {
       if (pendingAction.type === "grant" || (pendingAction.type === "offering" && pendingAction.action === "resume")) {
         setEntitlementTab("active");
@@ -217,6 +247,27 @@ export const TenantDetailPage = () => {
       }
       setPendingAction(null);
       setDialogReason("");
+    }
+  };
+
+  const copyCredential = async (label: string, value: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const temporaryField = document.createElement("textarea");
+        temporaryField.value = value;
+        temporaryField.style.position = "fixed";
+        temporaryField.style.opacity = "0";
+        document.body.append(temporaryField);
+        temporaryField.select();
+        const copied = document.execCommand("copy");
+        temporaryField.remove();
+        if (!copied) throw new Error("Copy command was rejected");
+      }
+      setCopiedCredential(label);
+    } catch {
+      setError("Credentials could not be copied. Select and copy the value manually.");
     }
   };
 
@@ -239,6 +290,16 @@ export const TenantDetailPage = () => {
         </div>
         <div className={styles.headerActions}>
           <span className={`${styles.status} ${tenant.status === "ACTIVE" ? styles.active : styles.suspended}`}>{tenant.status}</span>
+          {tenant.tenant_admin_provisioning_status === "NOT_ENABLED" && (
+            <Button variant="secondary" disabled={Boolean(busy)} onClick={() => handleTenantAdminAction("enable")}>
+              <KeyRound size={15} /> Enable Tenant
+            </Button>
+          )}
+          {tenant.tenant_admin_provisioning_status === "PENDING_PASSWORD_CHANGE" && (
+            <Button variant="secondary" disabled={Boolean(busy)} onClick={() => handleTenantAdminAction("regenerate")}>
+              <RefreshCw size={15} /> Regenerate temporary password
+            </Button>
+          )}
           <Button variant="secondary" disabled={Boolean(busy)} onClick={() => handleTenantAction(tenant.status === "ACTIVE" ? "suspend" : "activate")}>
             {tenant.status === "ACTIVE" ? <Pause size={15} /> : <Play size={15} />}
             {tenant.status === "ACTIVE" ? "Suspend tenant" : "Activate tenant"}
@@ -401,16 +462,24 @@ export const TenantDetailPage = () => {
           ? `Grant ${pendingAction.offeringName}?`
           : pendingAction?.type === "tenant"
             ? `${pendingAction.action === "suspend" ? "Suspend" : "Activate"} tenant?`
+            : pendingAction?.type === "tenant-admin"
+              ? pendingAction.action === "enable" ? "Enable tenant?" : "Regenerate temporary password?"
             : `${pendingAction?.action === "remove" ? "Remove" : pendingAction?.action === "deactivate" ? "Deactivate" : pendingAction?.action === "resume" ? "Resume" : "Suspend"} offering?`}
         description={pendingAction?.type === "grant"
           ? `${pendingAction.offeringName} will be available from ${formatDate(pendingAction.startsAt)} until ${formatDate(pendingAction.endsAt)}.`
           : pendingAction?.type === "tenant"
             ? `You are about to ${pendingAction.action} ${pendingAction.tenantName}. This changes access for the tenant.`
+            : pendingAction?.type === "tenant-admin"
+              ? pendingAction.action === "enable"
+                ? <>This creates the first Tenant Admin for {pendingAction.tenantName} using&nbsp;<strong className={styles.primaryContactEmail}>{pendingAction.email}</strong>. The generated password will be shown only once.</>
+                : `This replaces the temporary password for ${pendingAction.email}. Any prior temporary password will stop working.`
             : pendingAction?.action === "remove"
               ? `${pendingAction.offeringName} and its entitlement history will be permanently deleted. This cannot be undone.`
               : `You are about to ${pendingAction?.action} ${pendingAction?.offeringName}. Entitlement dates will not be extended.`}
         confirmLabel={pendingAction?.type === "tenant"
           ? pendingAction.action === "suspend" ? "Suspend tenant" : "Activate tenant"
+          : pendingAction?.type === "tenant-admin"
+            ? pendingAction.action === "enable" ? "Enable tenant" : "Regenerate password"
           : pendingAction?.type === "grant" ? "Grant offering"
           : pendingAction?.action === "remove" ? "Remove permanently"
           : pendingAction?.action === "deactivate" ? "Deactivate offering" : `${pendingAction?.action === "resume" ? "Resume" : "Suspend"} offering`}
@@ -419,10 +488,30 @@ export const TenantDetailPage = () => {
         reasonLabel={pendingAction?.type === "offering" && pendingAction.action === "remove" ? "Reason for permanent removal" : pendingAction?.type === "offering" && pendingAction.action === "deactivate" ? "Reason for deactivation" : "Reason (optional)"}
         reasonRequired={pendingAction?.type === "offering" && ["deactivate", "remove"].includes(pendingAction.action)}
         busy={Boolean(busy)}
-        onReasonChange={setDialogReason}
+        onReasonChange={pendingAction?.type === "tenant-admin" ? undefined : setDialogReason}
         onCancel={() => { if (!busy) { setPendingAction(null); setDialogReason(""); } }}
         onConfirm={() => void executePendingAction()}
       />
+      {credentials && (
+        <div className={styles.credentialsBackdrop} role="presentation">
+          <section className={styles.credentialsDialog} role="dialog" aria-modal="true" aria-labelledby="tenant-credentials-title" aria-describedby="tenant-credentials-description">
+            <div className={styles.credentialsHeader}>
+              <span className={styles.credentialsIcon} aria-hidden="true"><KeyRound size={19} /></span>
+              <button className={styles.closeCredentials} type="button" onClick={() => setCredentials(null)} aria-label="Close credentials dialog"><X size={18} /></button>
+            </div>
+            <h2 id="tenant-credentials-title">Tenant login credentials</h2>
+            <p id="tenant-credentials-description">Copy these credentials now. The password is shown only once and the tenant will be required to change it at first sign-in.</p>
+            <div className={styles.credentialFields}>
+              <label><span>Email</span><div><output>{credentials.email}</output><Button type="button" variant="secondary" onClick={() => void copyCredential("email", credentials.email)}>{copiedCredential === "email" ? <Check size={15} /> : <Copy size={15} />}{copiedCredential === "email" ? "Copied" : "Copy"}</Button></div></label>
+              <label><span>Temporary password</span><div><output>{credentials.temporary_password}</output><Button type="button" variant="secondary" onClick={() => void copyCredential("password", credentials.temporary_password)}>{copiedCredential === "password" ? <Check size={15} /> : <Copy size={15} />}{copiedCredential === "password" ? "Copied" : "Copy"}</Button></div></label>
+            </div>
+            <div className={styles.credentialActions}>
+              <Button type="button" variant="secondary" onClick={() => void copyCredential("credentials", `Email: ${credentials.email}\nTemporary password: ${credentials.temporary_password}`)}>{copiedCredential === "credentials" ? <Check size={15} /> : <Copy size={15} />}{copiedCredential === "credentials" ? "Credentials copied" : "Copy credentials"}</Button>
+              <Button type="button" onClick={() => setCredentials(null)}>I have copied them</Button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 };
