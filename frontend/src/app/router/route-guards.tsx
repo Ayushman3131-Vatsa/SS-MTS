@@ -2,8 +2,9 @@ import type { PropsWithChildren } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 
 import { getPrincipalHome } from "../../entities/session/model/routing";
+import { canAccessPage } from "../../entities/session/model/page-access";
 import { useSession } from "../../entities/session/model/session-context";
-import type { TenantRole } from "../../entities/session/model/session";
+import type { AccessLevel, TenantRole } from "../../entities/session/model/session";
 import { FullPageLoader } from "../../shared/ui/FullPageLoader/FullPageLoader";
 
 export const PublicOnlyRoute = () => {
@@ -30,6 +31,23 @@ interface ProtectedRouteProps {
 interface OfferingRouteProps {
   code: string;
 }
+
+interface PageAccessRouteProps {
+  route: string;
+  minimum?: AccessLevel;
+}
+
+export const PageAccessRoute = ({ route, minimum = "view" }: PageAccessRouteProps) => {
+  const { principal, status } = useSession();
+
+  if (status === "bootstrapping") return <FullPageLoader />;
+  if (!principal) return <Navigate to="/login" replace />;
+  if (!canAccessPage(principal, route, minimum)) {
+    return <Navigate to={getPrincipalHome(principal)} replace />;
+  }
+
+  return <Outlet />;
+};
 
 export const OfferingRoute = ({ code }: OfferingRouteProps) => {
   const { principal, status } = useSession();
@@ -58,21 +76,16 @@ export const ProtectedRoute = ({
     return <Navigate to="/login" replace />;
   }
 
+  if (principal.password_change_required && !allowPasswordChangeRequired) {
+    return <Navigate to="/account/change-password" replace />;
+  }
+
   if (area === "platform" && principal.principal_type !== "platform_admin") {
     return <Navigate to="/forbidden" replace />;
   }
 
   if (area === "tenant" && principal.principal_type !== "tenant_user") {
     return <Navigate to="/forbidden" replace />;
-  }
-
-  if (
-    area === "tenant" &&
-    principal.principal_type === "tenant_user" &&
-    principal.password_change_required &&
-    !allowPasswordChangeRequired
-  ) {
-    return <Navigate to="/account/change-password" replace />;
   }
 
   if (

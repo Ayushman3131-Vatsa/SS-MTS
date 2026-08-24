@@ -16,6 +16,7 @@ class UserAccount(Base):
     __tablename__ = "user_accounts"
     __table_args__ = (
         UniqueConstraint("email", name="uq_user_accounts_email"),
+        UniqueConstraint("username", name="uq_user_accounts_username"),
         # Required so projects/tasks can FK (tenant_id, user_id) → user_accounts.
         UniqueConstraint("tenant_id", "id", name="uq_user_accounts_tenant_id"),
     )
@@ -30,8 +31,10 @@ class UserAccount(Base):
         index=True,
     )
     email: Mapped[str] = mapped_column(CITEXT(), nullable=False)
+    username: Mapped[str] = mapped_column(CITEXT(), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    employee_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),

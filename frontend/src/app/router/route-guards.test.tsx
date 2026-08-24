@@ -71,6 +71,7 @@ const renderProtectedRoute = (
           <Route path="/forbidden" element={<div>Forbidden screen</div>} />
           <Route path="/app/suspended" element={<div>Suspended screen</div>} />
           <Route path="/app/my-work" element={<div>Tenant home</div>} />
+          <Route path="/account/change-password" element={<div>Change password</div>} />
         </Routes>
       </MemoryRouter>
     </SessionContext.Provider>,

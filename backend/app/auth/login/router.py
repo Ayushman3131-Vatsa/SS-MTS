@@ -183,7 +183,7 @@ async def change_password(
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ) -> PasswordChangeResponse:
-    result = await service.change_tenant_password(
+    result = await service.change_password(
         db,
         principal,
         payload,

@@ -15,6 +15,14 @@ describe("tenantLoginSchema", () => {
     }
   });
 
+  it("accepts a username in place of email", () => {
+    const result = tenantLoginSchema.safeParse({
+      email: "jane.doe",
+      password: "existing-password",
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects passwords over the API maximum without requiring strength", () => {
     const result = tenantLoginSchema.safeParse({
       email: "employee@example.com",
@@ -26,10 +34,16 @@ describe("tenantLoginSchema", () => {
 });
 
 describe("platformLoginSchema", () => {
-  it("requires a valid email", () => {
+  it("accepts a username or an email", () => {
     expect(
       platformLoginSchema.safeParse({
-        email: "not-an-email",
+        email: "platform.admin",
+        password: "some-password",
+      }).success,
+    ).toBe(true);
+    expect(
+      platformLoginSchema.safeParse({
+        email: "ab",
         password: "some-password",
       }).success,
     ).toBe(false);

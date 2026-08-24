@@ -9,7 +9,7 @@ import { ConfirmDialog } from "../../../../shared/ui/ConfirmDialog/ConfirmDialog
 import { taskManagementApi } from "../../api/task-management-api";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENT_BYTES, TASK_TRANSITIONS, TERMINAL_STATUSES } from "../../model/constants";
 import { activityLabel, formatBytes, formatDate, formatHours } from "../../model/format";
-import { canCollaborate, canExecuteTask, canManageProject } from "../../model/permissions";
+import { buildTaskManagementAccess, canCollaborate, canExecuteTask, canManageProject } from "../../model/permissions";
 import { taskManagementKeys } from "../../model/query-keys";
 import { LINK_TYPES, PRIORITIES, type Project, type Task, type TaskComment, type TimeEntry, type UserSummary } from "../../model/types";
 import { useMembers, useTask, useTaskMutation, useTaskTenantId, useTasks } from "../../model/use-task-management";
@@ -82,7 +82,13 @@ export const TaskDrawer = ({ taskId, projects, users, onClose }: { taskId?: stri
   const [transitionError, setTransitionError] = useState<string | null>(null);
   const tenantPrincipal = principal?.principal_type === "tenant_user" ? principal : null;
   const member = membersQuery.data?.items.find((item) => item.user_id === tenantPrincipal?.principal_id);
-  const access = { tenantRole: tenantPrincipal?.role ?? "Employee", memberRole: member?.role, principalId: tenantPrincipal?.principal_id ?? "" };
+  const access = tenantPrincipal ? buildTaskManagementAccess(tenantPrincipal, member?.role) : {
+    tenantRole: "User",
+    memberRole: member?.role,
+    principalId: "",
+    hasTenantTaskView: false,
+    hasTenantTaskModify: false,
+  };
   const mayManage = canManageProject(access);
   const mayExecute = task ? canExecuteTask(access, task) : false;
   const mayCollaborate = canCollaborate(access);

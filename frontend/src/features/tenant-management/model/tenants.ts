@@ -94,6 +94,15 @@ export interface TenantRecord {
   created_at: string;
   updated_at: string;
   version: number;
+  first_access?: TenantFirstAccess | null;
+}
+
+export interface TenantFirstAccess {
+  email: string;
+  username?: string | null;
+  temporary_password: string;
+  login_path: string;
+  password_change_required: boolean;
 }
 
 export interface TenantListResponse {

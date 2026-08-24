@@ -6,6 +6,7 @@ from sqlalchemy import func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.access_control.shared.checks import tenant_has_task_management_modify
 from app.common.audit import record_audit
 from app.common.deps import Principal
 from app.core.exceptions import BusinessRuleError, ConflictError, ForbiddenError, NotFoundError
@@ -14,6 +15,7 @@ from app.modules.task_management.access import (
     assert_can_view_project,
     get_project_or_404,
     require_tenant_principal,
+    tenant_wide_task_visibility,
 )
 from app.modules.task_management.domain import errors
 from app.modules.task_management.domain.enums import ProjectMemberRole, ProjectStatus
@@ -57,11 +59,17 @@ async def create_project(
     db: AsyncSession, principal: Principal, payload: ProjectCreateRequest
 ) -> Project:
     tenant_id, actor_id, tenant_role = require_tenant_principal(principal)
-    if tenant_role not in {"Tenant Admin", "Project Manager"}:
-        raise ForbiddenError("Only a Tenant Admin or Project Manager can create projects")
+    has_task_modify = await tenant_has_task_management_modify(
+        db, tenant_id=tenant_id, user_id=actor_id
+    )
+    if tenant_role != "Tenant Admin" and not has_task_modify:
+        raise ForbiddenError(
+            "You need modify access on Task Management to create projects"
+        )
 
+    acts_as_project_manager = tenant_role != "Tenant Admin" and has_task_modify
     pm_id = payload.pm_id
-    if tenant_role == "Project Manager" and pm_id is None:
+    if acts_as_project_manager and pm_id is None:
         pm_id = actor_id
     manager_ids = {value for value in (pm_id, payload.dm_id) if value is not None}
     await _validate_manager_ids(db, tenant_id, manager_ids)
@@ -86,7 +94,7 @@ async def create_project(
             "Project key is already in use", code=errors.PROJECT_KEY_CONFLICT
         ) from exc
 
-    if tenant_role == "Project Manager":
+    if acts_as_project_manager:
         manager_ids.add(actor_id)
     for manager_id in manager_ids:
         await ensure_member(
@@ -129,11 +137,12 @@ async def list_projects(
     sort: str = "-updated_at",
 ) -> PageResponse[ProjectResponse]:
     tenant_id, actor_id, tenant_role = require_tenant_principal(principal)
+    tenant_wide_access = await tenant_wide_task_visibility(db, principal)
     projects, total = await repository.list_projects(
         db,
         tenant_id=tenant_id,
         user_id=actor_id,
-        tenant_role=tenant_role,
+        tenant_wide_access=tenant_wide_access,
         page=page,
         page_size=page_size,
         query=query,
@@ -151,12 +160,13 @@ async def list_projects(
 
 
 async def list_projects_legacy(db: AsyncSession, principal: Principal) -> list[Project]:
-    tenant_id, actor_id, tenant_role = require_tenant_principal(principal)
+    tenant_id, actor_id, _ = require_tenant_principal(principal)
+    tenant_wide_access = await tenant_wide_task_visibility(db, principal)
     projects, _ = await repository.list_projects(
         db,
         tenant_id=tenant_id,
         user_id=actor_id,
-        tenant_role=tenant_role,
+        tenant_wide_access=tenant_wide_access,
         page=1,
         page_size=1_000_000,
         include_archived=False,

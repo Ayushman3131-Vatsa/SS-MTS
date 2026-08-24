@@ -30,7 +30,7 @@ export const TaskManagementOverviewPage = () => {
   const selectedTaskId = params.get("task") ?? undefined;
   const closeTask = () => { const next = new URLSearchParams(params); next.delete("task"); setParams(next, { replace: true }); };
   return <div className={styles.content}>
-    <PageHeading eyebrow="Task Management" title="Work overview" description="A compact view of delivery health across projects you can access." actions={<><Button type="button" variant="secondary" className={styles.compactButton} onClick={() => navigate("/app/task-management/tasks")}>View all work <ArrowRight size={14} /></Button>{canCreateProject(principal.role) && <Button type="button" className={styles.compactButton} onClick={() => setCreatingProject(true)}><Plus size={14} /> New project</Button>}</>} />
+    <PageHeading eyebrow="Task Management" title="Work overview" description="A compact view of delivery health across projects you can access." actions={<><Button type="button" variant="secondary" className={styles.compactButton} onClick={() => navigate("/app/task-management/tasks")}>View all work <ArrowRight size={14} /></Button>{canCreateProject(principal) && <Button type="button" className={styles.compactButton} onClick={() => setCreatingProject(true)}><Plus size={14} /> New project</Button>}</>} />
     <section className={styles.kpiGrid} aria-label="Task management summary">
       <article><span className={styles.kpiIcon}><BriefcaseBusiness size={17} /></span><div><small>Accessible projects</small><strong>{projectQuery.data?.total ?? "—"}</strong></div></article>
       <article><span className={styles.kpiIcon}><UserRoundCheck size={17} /></span><div><small>Assigned to me</small><strong>{myQuery.data?.total ?? "—"}</strong></div></article>

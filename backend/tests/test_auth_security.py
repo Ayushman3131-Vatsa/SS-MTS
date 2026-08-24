@@ -90,6 +90,8 @@ class AuthSchemaTests(unittest.TestCase):
                 "name",
                 "email",
                 "role",
+                "roles",
+                "page_access",
                 "tenant",
                 "password_change_required",
             },

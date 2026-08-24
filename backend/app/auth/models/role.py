@@ -11,6 +11,7 @@ class Role(Base):
     __tablename__ = "roles"
     __table_args__ = (
         UniqueConstraint("tenant_id", "role_code", name="uq_tenant_role_code"),
+        UniqueConstraint("tenant_id", "id", name="uq_roles_tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -24,6 +25,7 @@ class Role(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    module_scope: Mapped[str | None] = mapped_column(String(100), nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

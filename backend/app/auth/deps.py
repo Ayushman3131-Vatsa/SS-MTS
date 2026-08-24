@@ -5,9 +5,10 @@ from typing import Literal
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.access_control.platform.users.service import platform_roles_for_admin
 from app.auth.models.platform_admin import PlatformAdmin
 from app.auth.models.user_account import UserAccount
-from app.auth.roles import get_active_role_name
+from app.auth.roles import get_active_role_names
 from app.common.db.session import get_db
 from app.common.exceptions import ForbiddenError, UnauthorizedError
 from app.tenant_management.models.tenant import Tenant
@@ -20,7 +21,8 @@ class Principal:
     id: uuid.UUID
     email: str
     tenant_id: uuid.UUID | None = None
-    role: str | None = None  # 'Tenant Admin' | 'Project Manager' | 'Employee'; None for platform admins
+    role: str | None = None  # primary display role; None for platform admins
+    roles: tuple[str, ...] = ()
     tenant_status: str | None = None
     password_change_required: bool = False
 
@@ -41,9 +43,19 @@ async def get_current_principal(request: Request, db: AsyncSession = Depends(get
         except (KeyError, TypeError, ValueError):
             raise UnauthorizedError("Authentication required") from None
         admin = await db.get(PlatformAdmin, admin_id)
-        if admin is None:
+        if admin is None or not admin.is_active:
             raise UnauthorizedError("Authentication required")
-        return Principal(type="admin", id=admin.admin_id, email=admin.email)
+        assigned = await platform_roles_for_admin(db, admin.admin_id)
+        if not assigned:
+            raise UnauthorizedError("Authentication required")
+        return Principal(
+            type="admin",
+            id=admin.admin_id,
+            email=admin.email,
+            role=assigned[0].role_name,
+            roles=tuple(role.role_name for role in assigned),
+            password_change_required=admin.force_pw_reset,
+        )
 
     if principal_type == "user":
         try:
@@ -67,23 +79,17 @@ async def get_current_principal(request: Request, db: AsyncSession = Depends(get
                 raise UnauthorizedError("Authentication required") from None
             if credential_version != user.credential_version:
                 raise UnauthorizedError("Authentication required")
-        role_name = await get_active_role_name(db, user.id)
-        if role_name is None:
+        role_names = await get_active_role_names(db, user.id)
+        if not role_names:
             raise UnauthorizedError("Authentication required")
-        if user.force_pw_reset and request.url.path not in {
-            "/auth/session",
-            "/auth/password/change",
-        }:
-            raise ForbiddenError(
-                "Password change required",
-                code="PASSWORD_CHANGE_REQUIRED",
-            )
+        role_name = "Tenant Admin" if "Tenant Admin" in role_names else role_names[0]
         return Principal(
             type="user",
             id=user.id,
             email=user.email,
             tenant_id=user.tenant_id,
             role=role_name,
+            roles=tuple(role_names),
             tenant_status=tenant.status,
             password_change_required=user.force_pw_reset,
         )
@@ -94,6 +100,13 @@ async def get_current_principal(request: Request, db: AsyncSession = Depends(get
 async def require_platform_admin(principal: Principal = Depends(get_current_principal)) -> Principal:
     if principal.type != "admin":
         raise ForbiddenError("Platform administrator access required")
+    if principal.password_change_required:
+        raise ForbiddenError(
+            "Password change required",
+            code="PASSWORD_CHANGE_REQUIRED",
+        )
+    if not principal.roles:
+        raise ForbiddenError("An assigned role is required")
     return principal
 
 
@@ -112,7 +125,8 @@ async def require_tenant_user(principal: Principal = Depends(get_current_princip
 
 def require_roles(*roles: str):
     async def _dependency(principal: Principal = Depends(require_tenant_user)) -> Principal:
-        if principal.role not in roles:
+        assigned = principal.roles or ((principal.role,) if principal.role else ())
+        if not any(role in roles for role in assigned):
             raise ForbiddenError(f"Requires one of roles: {', '.join(roles)}")
         return principal
 

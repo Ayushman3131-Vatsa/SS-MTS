@@ -125,8 +125,7 @@ Copy-Item .env.example .env   # then set DATABASE_URL and a strong JWT_SECRET_KE
 python -m alembic upgrade head
 
 python -m scripts.seed_platform_admin `
-  --name "Platform Admin" `
-  --email admin@platform.io
+
 # Enter and confirm the password at the hidden prompt.
 
 python -m uvicorn app.main:app --reload     # API: http://127.0.0.1:8000/docs
@@ -290,6 +289,9 @@ strength rules, so valid legacy passwords remain usable.
 
 See [docs/authentication.md](docs/authentication.md) for browser sessions,
 CSRF, validation, throttling, and frontend module boundaries.
+See [docs/user-access-management.md](docs/user-access-management.md) for the
+platform RBAC, tenant RBAC, page/action permission, and HRMS resource-policy
+design.
 
 ## 6. Verification
 

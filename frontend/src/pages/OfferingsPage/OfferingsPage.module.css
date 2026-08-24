@@ -3,8 +3,10 @@
 .pageHeader, .sectionHeading, .toolbar, .toolbar > div, .actions, .editorActions { display: flex; align-items: center; }
 .pageHeader, .sectionHeading, .toolbar { justify-content: space-between; gap: 1rem; }
 .pageHeader { align-items: flex-end; }
-.pageHeader p, .pageHeader h1, .pageHeader span, .sectionHeading h2, .sectionHeading span { margin: 0; }
-.pageHeader p { color: var(--color-blue-600); font-size: .68rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.pageHeader p,
+.pageHeader h1,
+.pageHeader span, .sectionHeading h2, .sectionHeading span { margin: 0; }
+.pageHeader p { display: block; margin-top: .45rem; color: var(--color-slate-600); font-size: .92rem; }
 .pageHeader h1 { margin-top: .2rem; color: var(--color-slate-950); font-size: clamp(1.75rem, 3vw, 2.4rem); letter-spacing: -.045em; line-height: 1.1; }
 .pageHeader span, .sectionHeading span { display: block; margin-top: .45rem; color: var(--color-slate-500); font-size: .8rem; }
 .pageHeader button, .sectionHeading button { min-height: 2.55rem; font-size: .72rem; }

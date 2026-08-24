@@ -7,15 +7,19 @@ import {
   Package,
   PlusCircle,
   ShieldCheck,
+  UsersRound,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useSession } from "../../entities/session/model/session-context";
+import { canAccessPage } from "../../entities/session/model/page-access";
 import { getLoginErrorContent } from "../../features/auth/model/login-errors";
 import { BrandMark } from "../../shared/ui/BrandMark/BrandMark";
 import { Button } from "../../shared/ui/Button/Button";
+import { UserAvatar } from "../../shared/ui/UserAvatar/UserAvatar";
+import { formatRoleLabel } from "../../shared/utils/user-display";
 import styles from "./PlatformShell.module.css";
 
 const navigation = [
@@ -36,6 +40,18 @@ const navigation = [
     icon: PlusCircle,
     label: "Register Tenant",
     to: "/platform/tenants/register",
+  },
+  {
+    end: true,
+    icon: UsersRound,
+    label: "Users",
+    to: "/platform/users",
+  },
+  {
+    end: true,
+    icon: ShieldCheck,
+    label: "Roles & Permissions",
+    to: "/platform/roles",
   },
   {
     end: true,
@@ -165,14 +181,15 @@ export const PlatformShell = () => {
         </div>
 
         <div className={styles.identity}>
-          <div className={styles.identityText}>
-            <strong>Platform operations</strong>
-            <span>{principal.role}</span>
+          <div className={styles.userCard}>
+            <UserAvatar name={principal.name} size="md" />
+            <div className={styles.identityText}>
+              <strong>{principal.name}</strong>
+              <span className={styles.roleLine}>{formatRoleLabel(principal.role)}</span>
+            </div>
           </div>
-          <span className={styles.avatar} aria-hidden="true">
-            {principal.name.slice(0, 1).toUpperCase()}
-          </span>
           <Button
+            className={styles.signOutButton}
             variant="ghost"
             onClick={handleLogout}
             loading={isLoggingOut}
@@ -180,7 +197,7 @@ export const PlatformShell = () => {
             aria-label="Sign out"
           >
             {!isLoggingOut && <LogOut size={17} aria-hidden="true" />}
-            {!isLoggingOut && "Sign out"}
+            {!isLoggingOut && <span className={styles.signOutLabel}>Sign out</span>}
           </Button>
         </div>
       </header>
@@ -226,7 +243,9 @@ export const PlatformShell = () => {
 
         <nav aria-label="Platform navigation">
           <span className={styles.navLabel}>Workspace</span>
-          {navigation.map(({ end, icon: Icon, label, to }) => (
+          {navigation
+            .filter((item) => canAccessPage(principal, item.to))
+            .map(({ end, icon: Icon, label, to }) => (
             <NavLink
               className={({ isActive }) =>
                 `${styles.navItem} ${isActive ? styles.active : ""}`
@@ -246,7 +265,7 @@ export const PlatformShell = () => {
           <ShieldCheck size={16} aria-hidden="true" />
           <div>
             <strong>Secure console</strong>
-            <span>Platform Admin access</span>
+            <span>{formatRoleLabel(principal.role)} · Platform access</span>
           </div>
         </div>
       </aside>

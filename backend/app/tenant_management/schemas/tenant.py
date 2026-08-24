@@ -105,6 +105,7 @@ class TenantCreateRequest(StrictRequestModel):
     )
     offering_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
     offering_grants: list[TenantOfferingGrantRequest] = Field(default_factory=list, max_length=50)
+
     @field_validator(
         "org_name",
         "contact_name",
@@ -189,7 +190,9 @@ class TenantCreateRequest(StrictRequestModel):
         if len(set(grant_ids)) != len(grant_ids):
             raise ValueError("offering_grants must not contain duplicates")
         if self.offering_ids and self.offering_grants:
-            raise ValueError("Use offering_grants instead of offering_ids")
+            if set(self.offering_ids) != set(grant_ids):
+                raise ValueError("offering_ids must match offering_grants")
+            object.__setattr__(self, "offering_ids", [])
         alternate_contact_values = (
             self.alternate_contact_name,
             self.alternate_contact_designation,
@@ -351,6 +354,14 @@ class TenantRegistrationOptionsResponse(BaseModel):
     defaults: RegistrationDefaultsResponse
 
 
+class TenantFirstAccessResponse(BaseModel):
+    email: str
+    username: str | None = None
+    temporary_password: str
+    login_path: str = "/login"
+    password_change_required: bool = True
+
+
 class TenantResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -389,6 +400,7 @@ class TenantResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     version: int
+    first_access: TenantFirstAccessResponse | None = None
 
 
 class TenantListResponse(BaseModel):

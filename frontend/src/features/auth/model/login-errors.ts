@@ -33,6 +33,13 @@ export const getLoginErrorContent = (
   }
 
   if (error instanceof ApiError) {
+    if (error.code === "ROLE_REQUIRED") {
+      return {
+        title: "Unable to sign in",
+        message: "This account has no assigned role. Contact an administrator.",
+      };
+    }
+
     if (error.status === 401) {
       return {
         title: "Unable to sign in",

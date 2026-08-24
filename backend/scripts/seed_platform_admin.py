@@ -22,6 +22,7 @@ from sqlalchemy import select
 from app.common.security import hash_password, normalize_email, validate_password
 from app.common.db.session import db_manager
 from app.auth.models.platform_admin import PlatformAdmin
+from app.auth.username_identity import username_base_from_email
 
 _EMAIL_ADAPTER = TypeAdapter(Annotated[EmailStr, Field(max_length=254)])
 
@@ -54,6 +55,7 @@ async def _seed(name: str, email: str, password: str) -> None:
         admin = PlatformAdmin(
             name=normalized_name,
             email=normalized_email,
+            username=username_base_from_email(normalized_email),
             password_hash=hash_password(password),
         )
         session.add(admin)

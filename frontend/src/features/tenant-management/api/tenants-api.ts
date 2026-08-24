@@ -5,6 +5,7 @@ import { InvalidApiResponseError } from "../../../shared/api/errors";
 import type {
   TenantRecord,
   TenantListResponse,
+  TenantFirstAccess,
   TenantOfferingActionPayload,
   TenantOfferingGrantPayload,
   TenantOfferingRemovalPayload,
@@ -58,6 +59,14 @@ const decimalSchema = z
   .union([z.number().finite(), z.string().regex(/^-?\d+(?:\.\d+)?$/)])
   .nullable();
 
+const firstAccessSchema = z.object({
+  email: z.string().email(),
+  username: z.string().min(1).nullable().optional(),
+  temporary_password: z.string().min(1),
+  login_path: z.string().min(1).optional().default("/login"),
+  password_change_required: z.boolean().optional().default(true),
+});
+
 const tenantSchema = z.object({
   tenant_id: z.string().uuid(),
   org_name: z.string().min(1),
@@ -94,6 +103,7 @@ const tenantSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   version: z.number().int().positive(),
+  first_access: firstAccessSchema.nullable().optional(),
 });
 
 const tenantListSchema = z.object({
@@ -179,6 +189,14 @@ export const tenantsApi = {
     parse(
       tenantSchema,
       await apiRequest<unknown>(`/tenants/${tenantId}`, { signal }),
+    ),
+
+  rotateFirstAccess: async (tenantId: string): Promise<TenantFirstAccess> =>
+    parse(
+      firstAccessSchema,
+      await apiRequest<unknown>(`/tenants/${tenantId}/first-access/rotate`, {
+        method: "POST",
+      }),
     ),
 
   create: async (

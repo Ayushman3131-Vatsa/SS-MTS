@@ -13,7 +13,7 @@ const submitTenantLogin = async (
   page: Parameters<typeof installSessionApiMock>[0],
 ) => {
   await page
-    .getByRole("textbox", { name: "Work email", exact: true })
+    .getByRole("textbox", { name: "Work email or username", exact: true })
     .fill("Member@Northstar.Example");
   await page.locator("#tenant-password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -23,7 +23,7 @@ const submitPlatformLogin = async (
   page: Parameters<typeof installSessionApiMock>[0],
 ) => {
   await page
-    .getByRole("textbox", { name: "Administrator email", exact: true })
+    .getByRole("textbox", { name: "Administrator email or username", exact: true })
     .fill("Operator@Platform.Example");
   await page.locator("#platform-password").fill(PASSWORD);
   await page
@@ -43,7 +43,7 @@ test.describe("secure multi-tenant login", () => {
     await expect(
       page.getByRole("heading", { name: "Welcome back" }),
     ).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "Work email", exact: true })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Work email or username", exact: true })).toBeVisible();
   });
 
   test("renders tenant-first login and switches to the restricted platform form", async ({
@@ -54,9 +54,9 @@ test.describe("secure multi-tenant login", () => {
     await page.goto("/");
 
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByRole("textbox", { name: "Work email", exact: true })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Work email or username", exact: true })).toBeVisible();
     await expect(
-      page.getByRole("textbox", { name: "Work email", exact: true }),
+      page.getByRole("textbox", { name: "Work email or username", exact: true }),
     ).toBeVisible();
     await expect(page.locator("#tenant-password")).toHaveAttribute(
       "autocomplete",
@@ -327,7 +327,7 @@ test.describe("secure multi-tenant login", () => {
     await page.goto("/login");
 
     const email = page.getByRole("textbox", {
-      name: "Work email",
+      name: "Work email or username",
       exact: true,
     });
     const password = page.locator("#tenant-password");

@@ -66,9 +66,9 @@ export const TenantLoginForm = ({
 
       <InputField
         id="tenant-email"
-        type="email"
-        label="Work email"
-        placeholder="you@company.com"
+        type="text"
+        label="Work email or username"
+        placeholder="you@company.com or jane.doe"
         autoComplete="username"
         autoCapitalize="none"
         spellCheck={false}

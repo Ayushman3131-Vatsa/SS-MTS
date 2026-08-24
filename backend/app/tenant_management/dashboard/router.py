@@ -20,9 +20,8 @@ router = APIRouter(tags=["platform"])
 async def get_dashboard_db() -> AsyncGenerator[AsyncSession, None]:
     """Provide a session that is independent from the auth dependency.
 
-    The authorization dependency reloads the Platform Admin from PostgreSQL.
-    A separate session lets the dashboard service start its own read-only,
-    repeatable-read transaction before issuing any reporting queries.
+    Reporting tables are not FORCE RLS. This session must not run SET LOCAL
+    GUC statements before SET TRANSACTION ISOLATION LEVEL.
     """
 
     async with db_manager.session_for() as db:

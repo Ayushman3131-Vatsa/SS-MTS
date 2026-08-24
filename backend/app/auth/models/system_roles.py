@@ -5,8 +5,6 @@ from __future__ import annotations
 # role_code → role_name (role_name is what Principal.role / authz expect)
 SYSTEM_ROLES: tuple[tuple[str, str], ...] = (
     ("TENANT_ADMIN", "Tenant Admin"),
-    ("PROJECT_MANAGER", "Project Manager"),
-    ("EMPLOYEE", "Employee"),
 )
 
 ROLE_CODE_BY_NAME: dict[str, str] = {name: code for code, name in SYSTEM_ROLES}

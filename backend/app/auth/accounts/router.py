@@ -17,7 +17,8 @@ async def create_user(
     principal: Principal = Depends(require_roles("Tenant Admin")),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
-    return service.to_user_response(await service.create_user(db, principal, payload))
+    created = await service.create_user(db, principal, payload)
+    return service.to_user_response(created.view, temporary_password=created.temporary_password)
 
 
 @router.get("", response_model=list[UserResponse])

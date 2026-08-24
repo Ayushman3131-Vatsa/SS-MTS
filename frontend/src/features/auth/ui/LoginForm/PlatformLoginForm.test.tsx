@@ -15,7 +15,7 @@ describe("PlatformLoginForm", () => {
     );
 
     expect(screen.getByText(/authorized operators only/i)).toBeVisible();
-    expect(screen.getByLabelText("Administrator email")).toBeVisible();
+    expect(screen.getByLabelText("Administrator email or username")).toBeVisible();
     expect(screen.queryByText(/create account/i)).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /back to organization sign in/i }),

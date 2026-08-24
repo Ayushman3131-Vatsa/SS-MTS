@@ -4,7 +4,7 @@ import { getPrincipalHome } from "./routing";
 import type { SessionPrincipal } from "./session";
 
 const tenantPrincipal = (
-  role: "Tenant Admin" | "Project Manager" | "Employee",
+  role: string,
   status: "ACTIVE" | "SUSPENDED" = "ACTIVE",
 ): SessionPrincipal => ({
   principal_type: "tenant_user",
@@ -23,16 +23,12 @@ const tenantPrincipal = (
 });
 
 describe("getPrincipalHome", () => {
-  it.each(["Tenant Admin", "Project Manager"] as const)(
+  it.each(["Tenant Admin", "Task Manager"] as const)(
     "routes %s to the tenant overview",
     (role) => {
       expect(getPrincipalHome(tenantPrincipal(role))).toBe("/app/overview");
     },
   );
-
-  it("routes employees to My Work", () => {
-    expect(getPrincipalHome(tenantPrincipal("Employee"))).toBe("/app/my-work");
-  });
 
   it("routes every suspended tenant user to the restricted status page", () => {
     expect(getPrincipalHome(tenantPrincipal("Tenant Admin", "SUSPENDED"))).toBe(
@@ -52,5 +48,19 @@ describe("getPrincipalHome", () => {
         password_change_required: false,
       }),
     ).toBe("/platform");
+  });
+
+  it("routes a first-login platform administrator to change password", () => {
+    expect(
+      getPrincipalHome({
+        principal_type: "platform_admin",
+        principal_id: "d94f8e58-05d0-4df1-868b-69a843c5d3a7",
+        name: "Platform Operator",
+        email: "operator@example.com",
+        role: "Platform Admin",
+        tenant: null,
+        password_change_required: true,
+      }),
+    ).toBe("/account/change-password");
   });
 });

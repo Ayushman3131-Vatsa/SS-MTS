@@ -8,14 +8,24 @@ class ProjectAccess:
     tenant_role: str
     member_role: str | None
     is_assignee: bool = False
+    has_tenant_task_view: bool = False
+    has_tenant_task_modify: bool = False
 
 
 def can_view_project(access: ProjectAccess) -> bool:
-    return access.tenant_role == "Tenant Admin" or access.member_role is not None
+    return (
+        access.tenant_role == "Tenant Admin"
+        or access.has_tenant_task_view
+        or access.member_role is not None
+    )
 
 
 def can_manage_project(access: ProjectAccess) -> bool:
-    return access.tenant_role == "Tenant Admin" or access.member_role == ProjectMemberRole.MANAGER
+    return (
+        access.tenant_role == "Tenant Admin"
+        or access.has_tenant_task_modify
+        or access.member_role == ProjectMemberRole.MANAGER
+    )
 
 
 def can_create_task(access: ProjectAccess) -> bool:

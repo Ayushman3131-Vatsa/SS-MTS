@@ -1,0 +1,1 @@
+"""Tenant user role assignment."""

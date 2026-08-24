@@ -27,7 +27,8 @@ PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
 
 def _require_tenant_admin(principal: Principal) -> None:
     """Guard that only Tenant Admin can access configuration endpoints."""
-    if principal.type != "user" or principal.role != "Tenant Admin":
+    assigned = principal.roles or ((principal.role,) if principal.role else ())
+    if principal.type != "user" or "Tenant Admin" not in assigned:
         raise ForbiddenError("Only a Tenant Admin can manage configurations")
 
 

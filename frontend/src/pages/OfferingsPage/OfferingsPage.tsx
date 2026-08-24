@@ -212,9 +212,8 @@ export const OfferingsPage = () => {
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
-          <p>Product catalog</p>
           <h1>Offerings</h1>
-          <span>Control which products Platform Admins can license to new tenants.</span>
+          <p>Products that can be licensed to tenants.</p>
         </div>
         <Button type="button" onClick={resetEditor} variant="secondary"><Plus size={16} aria-hidden="true" /> New offering</Button>
       </header>

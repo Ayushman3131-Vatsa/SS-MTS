@@ -3,6 +3,8 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 
 import { ForbiddenPage } from "../../pages/ForbiddenPage/ForbiddenPage";
 import { AllTenantsPage } from "../../pages/AllTenantsPage/AllTenantsPage";
+import { RolesPermissionsPage } from "../../pages/AccessManagementPage/RolesPermissionsPage";
+import { UsersManagementPage } from "../../pages/AccessManagementPage/UsersManagementPage";
 import { LoginPage } from "../../pages/LoginPage/LoginPage";
 import { OfferingsPage } from "../../pages/OfferingsPage/OfferingsPage";
 import { PlatformLoginPage } from "../../pages/PlatformLoginPage/PlatformLoginPage";
@@ -16,7 +18,7 @@ import { SuspendedTenantPage } from "../../pages/SuspendedTenantPage/SuspendedTe
 import { ForcedPasswordChangePage } from "../../pages/ForcedPasswordChangePage/ForcedPasswordChangePage";
 import { RouteLoader } from "../../shared/ui/RouteLoader/RouteLoader";
 import { NotFoundRoute, RootRoute } from "./redirect-routes";
-import { OfferingRoute, ProtectedRoute, PublicOnlyRoute } from "./route-guards";
+import { OfferingRoute, PageAccessRoute, ProtectedRoute, PublicOnlyRoute } from "./route-guards";
 
 const PlatformDashboardPage = lazy(async () => {
   const page = await import(
@@ -92,6 +94,7 @@ export const router = createBrowserRouter([
     children: [
       { path: "/login", element: <LoginPage /> },
       { path: "/login/platform", element: <PlatformLoginPage /> },
+      { path: "/platform/login", element: <PlatformLoginPage /> },
     ],
   },
   {
@@ -122,6 +125,18 @@ export const router = createBrowserRouter([
           {
             path: "offerings",
             element: <OfferingsPage />,
+          },
+          {
+            path: "access",
+            element: <Navigate to="/platform/users" replace />,
+          },
+          {
+            path: "users",
+            element: <UsersManagementPage realm="platform" />,
+          },
+          {
+            path: "roles",
+            element: <RolesPermissionsPage realm="platform" />,
           },
           {
             path: "default-templates",
@@ -156,13 +171,7 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    element: (
-      <ProtectedRoute
-        area="tenant"
-        allowSuspendedTenant
-        allowPasswordChangeRequired
-      />
-    ),
+    element: <ProtectedRoute allowPasswordChangeRequired />,
     children: [
       {
         path: "/account/change-password",
@@ -187,9 +196,7 @@ export const router = createBrowserRouter([
         element: <TenantShell />,
         children: [
           {
-            element: (
-              <ProtectedRoute roles={["Tenant Admin", "Project Manager"]} />
-            ),
+            element: <PageAccessRoute route="/app/overview" />,
             children: [
               {
                 path: "overview",
@@ -198,7 +205,29 @@ export const router = createBrowserRouter([
             ],
           },
           {
-            element: <ProtectedRoute roles={["Tenant Admin"]} />,
+            element: <PageAccessRoute route="/app/users" />,
+            children: [
+              {
+                path: "access",
+                element: <Navigate to="/app/users" replace />,
+              },
+              {
+                path: "users",
+                element: <UsersManagementPage realm="tenant" />,
+              },
+            ],
+          },
+          {
+            element: <PageAccessRoute route="/app/roles" />,
+            children: [
+              {
+                path: "roles",
+                element: <RolesPermissionsPage realm="tenant" />,
+              },
+            ],
+          },
+          {
+            element: <PageAccessRoute route="/app/configurations" />,
             children: [
               {
                 path: "configurations",
@@ -219,7 +248,7 @@ export const router = createBrowserRouter([
             ],
           },
           {
-            element: <ProtectedRoute roles={["Employee"]} />,
+            element: <PageAccessRoute route="/app/my-work" />,
             children: [
               {
                 path: "my-work",
@@ -232,17 +261,22 @@ export const router = createBrowserRouter([
             children: [
               { path: "modules/task-management", element: <Navigate to="/app/task-management" replace /> },
               {
-                path: "task-management",
-                element: taskRoute(<TaskManagementLayout />),
+                element: <PageAccessRoute route="/app/task-management" />,
                 children: [
-                  { index: true, element: taskRoute(<TaskManagementOverviewPage />) },
-                  { path: "projects", element: taskRoute(<TaskProjectsPage />) },
-                  { path: "projects/:projectId/board", element: taskRoute(<TaskProjectPage view="board" />) },
-                  { path: "projects/:projectId/list", element: taskRoute(<TaskProjectPage view="list" />) },
-                  { path: "projects/:projectId/members", element: taskRoute(<TaskProjectPage view="members" />) },
-                  { path: "projects/:projectId/settings", element: taskRoute(<TaskProjectPage view="settings" />) },
-                  { path: "my-work", element: taskRoute(<TaskListPage mode="mine" />) },
-                  { path: "tasks", element: taskRoute(<TaskListPage mode="all" />) },
+                  {
+                    path: "task-management",
+                    element: taskRoute(<TaskManagementLayout />),
+                    children: [
+                      { index: true, element: taskRoute(<TaskManagementOverviewPage />) },
+                      { path: "projects", element: taskRoute(<TaskProjectsPage />) },
+                      { path: "projects/:projectId/board", element: taskRoute(<TaskProjectPage view="board" />) },
+                      { path: "projects/:projectId/list", element: taskRoute(<TaskProjectPage view="list" />) },
+                      { path: "projects/:projectId/members", element: taskRoute(<TaskProjectPage view="members" />) },
+                      { path: "projects/:projectId/settings", element: taskRoute(<TaskProjectPage view="settings" />) },
+                      { path: "my-work", element: taskRoute(<TaskListPage mode="mine" />) },
+                      { path: "tasks", element: taskRoute(<TaskListPage mode="all" />) },
+                    ],
+                  },
                 ],
               },
             ],

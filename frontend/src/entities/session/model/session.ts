@@ -1,11 +1,11 @@
+export type AccessLevel = "none" | "view" | "modify";
+
 export const TENANT_ROLES = [
   "Tenant Admin",
-  "Project Manager",
-  "Employee",
 ] as const;
 
-export type TenantRole = (typeof TENANT_ROLES)[number];
-export type PlatformRole = "Platform Admin";
+export type TenantRole = (typeof TENANT_ROLES)[number] | (string & {});
+export type PlatformRole = "Platform Admin" | (string & {});
 export type SessionRole = PlatformRole | TenantRole;
 
 export interface SessionTenant {
@@ -26,14 +26,25 @@ export interface SessionOffering {
   sort_order: number;
 }
 
+export interface SessionPageAccess {
+  page_code: string;
+  module: string;
+  page_name: string;
+  route: string;
+  access_level: AccessLevel;
+  offering_code: string | null;
+}
+
 export interface PlatformPrincipal {
   principal_type: "platform_admin";
   principal_id: string;
   name: string;
   email: string;
   role: PlatformRole;
+  roles?: string[];
+  page_access?: SessionPageAccess[];
   tenant: null;
-  password_change_required: false;
+  password_change_required: boolean;
 }
 
 export interface TenantPrincipal {
@@ -42,6 +53,8 @@ export interface TenantPrincipal {
   name: string;
   email: string;
   role: TenantRole;
+  roles?: string[];
+  page_access?: SessionPageAccess[];
   tenant: SessionTenant;
   password_change_required: boolean;
 }

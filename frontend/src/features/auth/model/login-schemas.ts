@@ -1,11 +1,16 @@
 import { z } from "zod";
 
-const emailSchema = z
+const identifierSchema = z
   .string()
   .trim()
-  .min(1, "Enter your work email.")
-  .max(254, "Email must be 254 characters or fewer.")
-  .email("Enter a valid email address.");
+  .min(1, "Enter your work email or username.")
+  .max(254, "Must be 254 characters or fewer.")
+  .refine((value) => {
+    if (value.includes("@")) {
+      return z.string().email().safeParse(value).success;
+    }
+    return /^[A-Za-z][A-Za-z0-9._-]{2,49}$/.test(value);
+  }, "Enter a valid work email or username.");
 
 const passwordSchema = z
   .string()
@@ -13,12 +18,12 @@ const passwordSchema = z
   .max(128, "Password must be 128 characters or fewer.");
 
 export const tenantLoginSchema = z.object({
-  email: emailSchema,
+  email: identifierSchema,
   password: passwordSchema,
 });
 
 export const platformLoginSchema = z.object({
-  email: emailSchema,
+  email: identifierSchema,
   password: passwordSchema,
 });
 
