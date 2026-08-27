@@ -46,6 +46,8 @@ from app.core_hr.models.payroll_record_component import PayrollRecordComponent
 from app.core_hr.models.payroll_run import PayrollRun
 from app.tenant_management.models.platform_activity_event import PlatformActivityEvent
 from app.auth.models.platform_admin import PlatformAdmin
+from app.auth.models.platform_default_role import PlatformDefaultRole
+from app.auth.models.platform_default_role_page_access import PlatformDefaultRolePageAccess
 from app.auth.models.platform_role import PlatformRole
 from app.auth.models.platform_role_page_access import PlatformRolePageAccess
 from app.auth.models.platform_role_permission import PlatformRolePermission
@@ -118,6 +120,8 @@ __all__ = [
     "PlatformActivityType",
     "PlatformActorType",
     "PlatformAdmin",
+    "PlatformDefaultRole",
+    "PlatformDefaultRolePageAccess",
     "PlatformPermission",
     "PlatformRole",
     "PlatformRolePageAccess",

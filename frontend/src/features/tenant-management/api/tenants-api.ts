@@ -59,12 +59,16 @@ const decimalSchema = z
   .union([z.number().finite(), z.string().regex(/^-?\d+(?:\.\d+)?$/)])
   .nullable();
 
-const firstAccessSchema = z.object({
-  email: z.string().email(),
+const credentialSchema = z.object({
+  email: z.union([z.string().email(), z.literal("")]).nullable().optional(),
   username: z.string().min(1).nullable().optional(),
   temporary_password: z.string().min(1),
   login_path: z.string().min(1).optional().default("/login"),
   password_change_required: z.boolean().optional().default(true),
+});
+
+const firstAccessSchema = credentialSchema.extend({
+  smartskale_access: credentialSchema.nullable().optional(),
 });
 
 const tenantSchema = z.object({

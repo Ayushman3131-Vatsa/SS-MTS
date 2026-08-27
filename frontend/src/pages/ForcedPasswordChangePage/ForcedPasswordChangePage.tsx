@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { Navigate, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
-import { getPrincipalHome } from "../../entities/session/model/routing";
+import { getPrincipalHome, getTenantLoginPath } from "../../entities/session/model/routing";
 import { useSession } from "../../entities/session/model/session-context";
 import { getLoginErrorContent } from "../../features/auth/model/login-errors";
 import { AuthShell } from "../../features/auth/ui/AuthShell/AuthShell";
@@ -88,7 +88,7 @@ export const ForcedPasswordChangePage = () => {
     }
   };
 
-  const handleSignOut = async (destination: "/login" | "/platform/login") => {
+  const handleSignOut = async (destination: string) => {
     setIsSigningOut(true);
     setSignOutError(null);
     try {
@@ -167,7 +167,11 @@ export const ForcedPasswordChangePage = () => {
           loading={isSigningOut}
           loadingLabel="Signing out…"
           onClick={() =>
-            handleSignOut(principal.principal_type === "platform_admin" ? "/platform/login" : "/login")
+            handleSignOut(
+              principal.principal_type === "platform_admin"
+                ? "/platform/login"
+                : getTenantLoginPath(principal),
+            )
           }
         >
           <LogOut size={16} aria-hidden="true" />

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { NavLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useSession } from "../../entities/session/model/session-context";
+import { useTenantAppPath } from "../../entities/session/model/routing";
 import { taskManagementApi } from "../../features/task-management/api/task-management-api";
 import { DEFAULT_PAGE_SIZE } from "../../features/task-management/model/constants";
 import { formatDate } from "../../features/task-management/model/format";
@@ -26,6 +27,7 @@ export const TaskProjectPage = ({ view }: { view: ProjectView }) => {
   const { projectId = "" } = useParams();
   const { principal } = useSession();
   const navigate = useNavigate();
+  const appPath = useTenantAppPath();
   const [params, setParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
   const [taskArchive, setTaskArchive] = useState<Task | null>(null);
@@ -55,8 +57,8 @@ export const TaskProjectPage = ({ view }: { view: ProjectView }) => {
   if (!project) return null;
   const progress = allCount.data?.total ? Math.round(((completedCount.data?.total ?? 0) / allCount.data.total) * 100) : 0;
   return <div className={styles.content}>
-    <header className={styles.projectHeader}><div><button type="button" onClick={() => navigate("/app/task-management/projects")}>Projects</button><span>/</span><strong>{project.project_key}</strong></div><section><div><h1>{project.name}</h1><p>{project.client_name ?? "Internal project"}</p></div><StatusBadge value={project.status} /><PriorityBadge value={project.priority} />{project.archived_at && <span className={styles.readOnlyFlag}>Archived · read only</span>}<dl><div><dt>Start</dt><dd>{formatDate(project.start_date)}</dd></div><div><dt>Target</dt><dd>{formatDate(project.expected_end_date)}</dd></div><div><dt>Progress</dt><dd>{progress}%</dd></div></dl></section><div className={styles.progressTrack}><span style={{ width: `${progress}%` }} /></div></header>
-    <nav className={styles.projectTabs} aria-label="Project workspace"><NavLink to={`/app/task-management/projects/${projectId}/board`}>Board</NavLink><NavLink to={`/app/task-management/projects/${projectId}/list`}>List</NavLink><NavLink to={`/app/task-management/projects/${projectId}/members`}><Users size={14} /> Members</NavLink>{mayManage && <NavLink to={`/app/task-management/projects/${projectId}/settings`}><Settings2 size={14} /> Settings</NavLink>}{mayCreate && <Button type="button" className={styles.compactButton} onClick={() => setCreating(true)}><ListPlus size={14} /> Create task</Button>}</nav>
+    <header className={styles.projectHeader}><div><button type="button" onClick={() => navigate(appPath("/app/task-management/projects"))}>Projects</button><span>/</span><strong>{project.project_key}</strong></div><section><div><h1>{project.name}</h1><p>{project.client_name ?? "Internal project"}</p></div><StatusBadge value={project.status} /><PriorityBadge value={project.priority} />{project.archived_at && <span className={styles.readOnlyFlag}>Archived · read only</span>}<dl><div><dt>Start</dt><dd>{formatDate(project.start_date)}</dd></div><div><dt>Target</dt><dd>{formatDate(project.expected_end_date)}</dd></div><div><dt>Progress</dt><dd>{progress}%</dd></div></dl></section><div className={styles.progressTrack}><span style={{ width: `${progress}%` }} /></div></header>
+    <nav className={styles.projectTabs} aria-label="Project workspace"><NavLink to={appPath(`/app/task-management/projects/${projectId}/board`)}>Board</NavLink><NavLink to={appPath(`/app/task-management/projects/${projectId}/list`)}>List</NavLink><NavLink to={appPath(`/app/task-management/projects/${projectId}/members`)}><Users size={14} /> Members</NavLink>{mayManage && <NavLink to={appPath(`/app/task-management/projects/${projectId}/settings`)}><Settings2 size={14} /> Settings</NavLink>}{mayCreate && <Button type="button" className={styles.compactButton} onClick={() => setCreating(true)}><ListPlus size={14} /> Create task</Button>}</nav>
     {(view === "board" || view === "list") && <TaskFilters value={filterValues} projects={[project]} users={usersQuery.data ?? []} hideProject hideStatus={view === "board"} onChange={updateFilters} />}
     {view === "board" && <TaskBoard projectId={projectId} filters={{ ...apiFilters, status: undefined, page: undefined, page_size: undefined }} users={usersQuery.data ?? []} canMove={(task) => !project.archived_at && (mayManage || canExecuteTask(access, task))} onOpen={openTask} />}
     {view === "list" && <section className={styles.panel}>{tasksQuery.isPending ? <LoadingState /> : tasksQuery.isError ? <ErrorState message={tasksQuery.error.message} onRetry={() => void tasksQuery.refetch()} /> : <TaskTable tasks={tasksQuery.data.items} total={tasksQuery.data.total} page={page} pageSize={DEFAULT_PAGE_SIZE} projects={[project]} users={usersQuery.data ?? []} filtered={Object.values(filterValues).some(Boolean)} onOpen={openTask} onPageChange={(nextPage) => { const output = new URLSearchParams(params); output.set("page", String(nextPage)); setParams(output, { replace: true }); }} onArchive={mayManage ? (task) => setTaskArchive(task) : undefined} />}</section>}

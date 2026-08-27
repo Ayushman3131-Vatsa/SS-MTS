@@ -145,13 +145,13 @@ class CreationSchemaTests(unittest.TestCase):
         self.assertEqual(str(payload.contact_email), "contact@example.com")
         self.assertEqual(payload.offering_ids, [offering_id])
 
-    def test_tenant_registration_rejects_duplicate_offerings(self) -> None:
-        offering_id = uuid.uuid4()
+    def test_tenant_registration_rejects_duplicate_bootstrap_roles(self) -> None:
+        role_id = uuid.uuid4()
         with self.assertRaisesRegex(ValidationError, "must not contain duplicates"):
             TenantCreateRequest(
                 **REQUIRED_TENANT_PROFILE,
                 org_name="Northstar Labs",
-                offering_ids=[offering_id, offering_id],
+                bootstrap_role_ids=[role_id, role_id],
             )
 
     def test_tenant_creation_accepts_stable_and_legacy_plan_codes(self) -> None:

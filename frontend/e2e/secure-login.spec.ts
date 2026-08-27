@@ -11,7 +11,11 @@ const PASSWORD = "ExistingAccountPassword!";
 
 const submitTenantLogin = async (
   page: Parameters<typeof installSessionApiMock>[0],
+  options?: { tenantCode?: string; lockedUrl?: boolean },
 ) => {
+  if (!options?.lockedUrl) {
+    await page.getByRole("textbox", { name: "Organization code" }).fill(options?.tenantCode ?? "NORTHSTAR");
+  }
   await page
     .getByRole("textbox", { name: "Work email or username", exact: true })
     .fill("Member@Northstar.Example");
@@ -91,18 +95,18 @@ test.describe("secure multi-tenant login", () => {
     },
     {
       principal: tenantPrincipal("Tenant Admin"),
-      expectedPath: "/app/overview",
+      expectedPath: "/t/NORTHSTAR/app/overview",
       expectedHeading: "Your workspace is ready",
     },
     {
       principal: tenantPrincipal("Project Manager"),
-      expectedPath: "/app/overview",
+      expectedPath: "/t/NORTHSTAR/app/overview",
       expectedHeading: "Your workspace is ready",
     },
     {
       principal: tenantPrincipal("Employee"),
-      expectedPath: "/app/my-work",
-      expectedHeading: /securely signed in$/,
+      expectedPath: "/t/NORTHSTAR/app/overview",
+      expectedHeading: "Your workspace is ready",
     },
   ];
 
@@ -142,6 +146,7 @@ test.describe("secure multi-tenant login", () => {
               password: PASSWORD,
             }
           : {
+              tenant_code: "NORTHSTAR",
               email: "member@northstar.example",
               password: PASSWORD,
             },
@@ -160,7 +165,7 @@ test.describe("secure multi-tenant login", () => {
     await page.goto("/login");
     await submitTenantLogin(page);
 
-    await expect(page).toHaveURL("/app/suspended");
+    await expect(page).toHaveURL("/t/NORTHSTAR/app/suspended");
     await expect(
       page.getByRole("heading", { name: /temporarily suspended/i }),
     ).toBeVisible();
@@ -227,7 +232,7 @@ test.describe("secure multi-tenant login", () => {
 
     await page.getByRole("button", { name: "Sign out" }).click();
 
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/t\/NORTHSTAR\/login$/);
     await expect(page.getByRole("status")).toContainText(
       "You have signed out securely.",
     );
@@ -266,7 +271,7 @@ test.describe("secure multi-tenant login", () => {
     await page.goto("/login");
 
     await submitTenantLogin(page);
-    await expect(page).toHaveURL("/app/my-work");
+    await expect(page).toHaveURL("/t/NORTHSTAR/app/overview");
 
     const storage = await page.evaluate(() => ({
       local: Object.fromEntries(
@@ -310,7 +315,7 @@ test.describe("secure multi-tenant login", () => {
     await page.locator("#confirm-password").fill("Permanent!Password84");
     await page.getByRole("button", { name: "Save password and continue" }).click();
 
-    await expect(page).toHaveURL("/app/overview");
+    await expect(page).toHaveURL("/t/NORTHSTAR/app/overview");
     const changeCall = api.calls.find(
       (call) => call.path === "/api/auth/password/change",
     );
@@ -343,7 +348,7 @@ test.describe("secure multi-tenant login", () => {
     ).toHaveAttribute("aria-pressed", "true");
 
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(page.getByText("Enter a valid email address.")).toBeVisible();
+    await expect(page.getByText("Enter your organization code.")).toBeVisible();
     expect(api.calls.filter((call) => call.method === "POST")).toHaveLength(0);
   });
 });

@@ -72,7 +72,7 @@ const tenantPrincipalSchema = z.object({
 
   name: z.string().min(1),
 
-  email: z.string().email(),
+  email: z.string().email().nullable().optional(),
 
   username: z.string().min(1).optional(),
 

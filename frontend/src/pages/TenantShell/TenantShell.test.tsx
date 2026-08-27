@@ -31,9 +31,9 @@ const principal = (enabled: boolean): TenantPrincipal => ({
   },
 });
 
-const renderShell = (enabled: boolean, path = "/app/overview") => {
+const renderShell = (enabled: boolean, path = "/t/NORTHSTAR/app/overview") => {
   const context: SessionContextValue = { status: "authenticated", principal: principal(enabled), notice: null, clearNotice: vi.fn(), loginTenant: vi.fn(), loginPlatform: vi.fn(), changePassword: vi.fn(), logout: vi.fn(), retryBootstrap: vi.fn() };
-  render(<SessionContext.Provider value={context}><MemoryRouter initialEntries={[path]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}><Routes><Route path="/app" element={<TenantShell />}><Route path="overview" element={<div>Tenant home</div>} /><Route path="task-management/*" element={<div>Task workspace</div>} /></Route></Routes></MemoryRouter></SessionContext.Provider>);
+  render(<SessionContext.Provider value={context}><MemoryRouter initialEntries={[path]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}><Routes><Route path="/t/:tenantCode/app" element={<TenantShell />}><Route path="overview" element={<div>Tenant home</div>} /><Route path="task-management/*" element={<div>Task workspace</div>} /></Route></Routes></MemoryRouter></SessionContext.Provider>);
 };
 
 describe("TenantShell task navigation", () => {
@@ -53,15 +53,23 @@ describe("TenantShell task navigation", () => {
     group.focus();
     await user.keyboard("{Enter}");
     expect(group).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("link", { name: "All Tasks" })).toHaveAttribute("href", "/app/task-management/tasks");
+    expect(screen.getByRole("link", { name: "All Tasks" })).toHaveAttribute("href", "/t/NORTHSTAR/app/task-management/tasks");
     expect(window.localStorage.getItem("task-management-navigation:22222222-2222-4222-8222-222222222222")).toBe("expanded");
   });
 
   it("automatically expands on Task Management routes", () => {
-    renderShell(true, "/app/task-management/projects");
+    renderShell(true, "/t/NORTHSTAR/app/task-management/projects");
     expect(screen.getByRole("button", { name: "Task Management" })).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(screen.getByRole("button", { name: "Task Management" }));
     expect(screen.getByRole("button", { name: "Task Management" })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("groups users and roles under User Access Management", () => {
+    renderShell(false);
+    fireEvent.click(screen.getByRole("button", { name: "User Access Management" }));
+    expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute("href", "/t/NORTHSTAR/app/users");
+    expect(screen.getByRole("link", { name: "Roles & permissions" })).toHaveAttribute("href", "/t/NORTHSTAR/app/roles");
+    expect(screen.queryByRole("link", { name: "Permissions" })).not.toBeInTheDocument();
   });
 });
 

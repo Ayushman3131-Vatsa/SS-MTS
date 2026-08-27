@@ -13,7 +13,7 @@ from app.auth.username_identity import reserve_tenant_username
 from app.auth.models.user_session import UserSession
 from app.auth.roles import assign_role, get_active_role_names
 from app.access_control.tenant.roles.service import load_tenant_roles
-from app.common.exceptions import ConflictError, ForbiddenError, NotFoundError
+from app.common.exceptions import BusinessRuleError, ConflictError, ForbiddenError, NotFoundError
 from app.common.security import hash_password, validate_password
 from app.tenant_management.models.tenant import Tenant
 from app.auth.models.user_account import UserAccount
@@ -47,7 +47,7 @@ def to_user_response(view: UserView, *, temporary_password: str | None = None) -
         user_id=account.id,
         name=account.display_name,
         username=str(account.username),
-        email=str(account.email),
+        email=str(account.email) if account.email else None,
         employee_id=account.employee_id,
         role=view.role,
         roles=role_names,
@@ -86,17 +86,19 @@ async def create_user(db: AsyncSession, principal: Principal, payload: UserCreat
     """Only a Tenant Admin may create tenant users."""
     _assert_tenant_admin(principal)
 
-    normalized_email = await reserve_new_user_email(
-        db,
-        str(payload.email),
-        tenant_id=principal.tenant_id,
-    )
+    normalized_email = None
+    if payload.email:
+        normalized_email = await reserve_new_user_email(
+            db,
+            str(payload.email),
+            tenant_id=principal.tenant_id,
+        )
     username = await reserve_tenant_username(db, payload.username)
     tenant = await db.get(Tenant, principal.tenant_id)
     if tenant is None:
         raise NotFoundError("Tenant not found")
     temporary_password = payload.password or generate_temporary_password(
-        email=normalized_email,
+        email=normalized_email or f"{username}@accounts.local",
         name=str(payload.name),
         org_name=tenant.org_name,
     )
@@ -185,9 +187,7 @@ async def update_user(
     next_name = payload.name if payload.name is not None else current.display_name
     next_username = current.username
     if payload.username is not None and payload.username != current.username:
-        next_username = await reserve_tenant_username(
-            db, payload.username, exclude_user_id=user_id
-        )
+        raise BusinessRuleError("Usernames cannot be changed after the user is created")
     next_employee_id = (
         payload.employee_id
         if "employee_id" in payload.model_fields_set

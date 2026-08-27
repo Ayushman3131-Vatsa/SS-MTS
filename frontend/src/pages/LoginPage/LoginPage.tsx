@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
-import { getPrincipalHome } from "../../entities/session/model/routing";
+import { getPrincipalHome, normalizeTenantCode } from "../../entities/session/model/routing";
 import { useSession } from "../../entities/session/model/session-context";
 import { AuthShell } from "../../features/auth/ui/AuthShell/AuthShell";
 import { TenantLoginForm } from "../../features/auth/ui/LoginForm/TenantLoginForm";
@@ -10,6 +10,8 @@ import type { TenantLoginValues } from "../../features/auth/model/login-schemas"
 
 export const LoginPage = () => {
   const navigate = useNavigate();
+  const { tenantCode } = useParams<{ tenantCode?: string }>();
+  const lockedTenantCode = tenantCode ? normalizeTenantCode(tenantCode) : null;
   const { loginTenant, notice } = useSession();
   const [serverError, setServerError] = useState<ReturnType<
     typeof getLoginErrorContent
@@ -20,6 +22,7 @@ export const LoginPage = () => {
 
     try {
       const principal = await loginTenant({
+        tenant_code: values.tenant_code,
         email: values.email.toLowerCase(),
         password: values.password,
       });
@@ -32,11 +35,16 @@ export const LoginPage = () => {
   return (
     <AuthShell
       eyebrow="Organization access"
-      title="Welcome back"
-      description="Enter your work email and password to continue."
+      title={lockedTenantCode ? `Sign in to ${lockedTenantCode}` : "Welcome back"}
+      description={
+        lockedTenantCode
+          ? "Enter your work email or username and password to continue."
+          : "Enter your organization code, work email or username, and password."
+      }
     >
       <TenantLoginForm
         notice={notice}
+        lockedTenantCode={lockedTenantCode}
         onSubmit={handleLogin}
         serverError={serverError}
       />

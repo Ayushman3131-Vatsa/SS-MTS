@@ -1,17 +1,18 @@
-import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Lock, Pencil, Plus, Search, Shield, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import {
   createPlatformRole,
   createTenantRole,
-  deletePlatformRole,
-  deleteTenantRole,
   listPlatformPageAccess,
   listPlatformPages,
   listPlatformRoles,
+  listPlatformUsers,
   listTenantPageAccess,
   listTenantPages,
   listTenantRoles,
+  listTenantUsers,
   savePlatformPageAccess,
   saveTenantPageAccess,
   updatePlatformRole,
@@ -19,8 +20,14 @@ import {
   type AccessLevel,
   type Page,
   type PageAccess,
+  type PlatformUser,
   type Role,
+  type TenantUser,
 } from "../../features/access-management/api/access-management-api";
+import { defaultRolesApi } from "../../features/default-role-management/api/default-roles-api";
+import type { DefaultRoleListItem } from "../../features/default-role-management/model/default-roles";
+import { offeringsApi } from "../../features/offering-management/api/offerings-api";
+import type { OfferingCatalogItem } from "../../features/offering-management/model/offerings";
 import { useSession } from "../../entities/session/model/session-context";
 import { getLoginErrorContent } from "../../features/auth/model/login-errors";
 import { Alert } from "../../shared/ui/Alert/Alert";
@@ -31,6 +38,11 @@ import styles from "./AccessManagementPage.module.css";
 import type { AccessRealm } from "./UsersManagementPage";
 
 const accessLevels: AccessLevel[] = ["none", "view", "modify"];
+const accessLevelLabels: Record<AccessLevel, string> = {
+  none: "None",
+  view: "View",
+  modify: "Modify",
+};
 
 const toRoleCode = (name: string) =>
   name
@@ -47,35 +59,82 @@ const humanModule = (value: string) =>
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+const isSensitivePage = (page: Page) =>
+  /USER|ROLE|CONFIG|ACCESS|ADMIN|PERMISSION/i.test(`${page.page_code} ${page.page_name}`);
+
 interface RolesPermissionsPageProps {
   realm: AccessRealm;
 }
 
+const toListedRole = (item: DefaultRoleListItem): Role => ({
+  role_id: item.role_id,
+  role_code: item.role_code,
+  role_name: item.role_name,
+  description: item.description,
+  is_system: item.is_system,
+  is_active: item.is_active,
+  module_scope: item.module_scope,
+  users_count: 0,
+  created_at: item.created_at,
+});
+
+const emptyRoleForm = {
+  role_name: "",
+  role_code: "",
+  description: "",
+  module_scope: "",
+  role_type: "platform" as "platform" | "tenant",
+};
+
 export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
   const { principal } = useSession();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const roleKind = realm === "tenant" ? "tenant" : searchParams.get("type") === "tenant" ? "tenant" : "platform";
+  const offeringId = roleKind === "tenant" ? (searchParams.get("offering_id") ?? "") : "";
+  const coreSelected = roleKind === "tenant" && !offeringId;
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState("");
   const [pageAccess, setPageAccess] = useState<PageAccess[]>([]);
   const [originalAccess, setOriginalAccess] = useState<PageAccess[]>([]);
+  const [templateVersion, setTemplateVersion] = useState(1);
+  const [offerings, setOfferings] = useState<OfferingCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [moduleFilter, setModuleFilter] = useState("all");
+  const [sensitiveOnly, setSensitiveOnly] = useState(false);
+  const [detailTab, setDetailTab] = useState<"permissions" | "users">("permissions");
+  const [assignedUsers, setAssignedUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [roleForm, setRoleForm] = useState({ role_name: "", role_code: "", description: "", module_scope: "" });
+  const [roleForm, setRoleForm] = useState(emptyRoleForm);
   const [catalogPages, setCatalogPages] = useState<Page[]>([]);
 
-  const selectedRole = roles.find((role) => role.role_id === selectedRoleId) ?? null;
-  const unsaved = useMemo(
+  const isTenantTemplate = realm === "platform" && roleKind === "tenant";
+  const licensedOfferings = principal?.principal_type === "tenant_user" ? principal.tenant.offerings : [];
+  const showOfferingFilter = realm === "tenant" || isTenantTemplate;
+  const selectedOffering =
+    realm === "tenant"
+      ? licensedOfferings.find((item) => item.offering_id === offeringId)
+      : offerings.find((item) => item.offering_id === offeringId);
+  const activeModuleCode =
+    realm === "tenant" ? (selectedOffering?.code ?? "CORE") : selectedOffering?.code ?? (coreSelected ? "CORE" : "");
+  const moduleRoles = useMemo(() => {
+    if (realm !== "tenant") return roles;
+    return roles.filter((role) => {
+      const scope = role.module_scope || "CORE";
+      return activeModuleCode === "CORE" ? scope === "CORE" : scope === activeModuleCode;
+    });
+  }, [activeModuleCode, realm, roles]);
+  const selectedRole = moduleRoles.find((role) => role.role_id === selectedRoleId) ?? null;
+  const unsavedCount = useMemo(
     () =>
-      pageAccess.some(
+      pageAccess.filter(
         (entry) =>
           originalAccess.find((item) => item.page.page_id === entry.page.page_id)?.access_level !==
           entry.access_level,
-      ),
+      ).length,
     [originalAccess, pageAccess],
   );
 
@@ -83,19 +142,37 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
     setLoading(true);
     setError(null);
     try {
+      if (realm === "platform") {
+        const catalog = await offeringsApi.list();
+        setOfferings(catalog);
+      }
+      if (realm === "platform" && roleKind === "tenant") {
+        const templates = await defaultRolesApi.list({
+          offeringId: offeringId || null,
+          coreOnly: !offeringId,
+        });
+        setRoles(templates.map(toListedRole));
+        setCatalogPages([]);
+        setSelectedRoleId((current) =>
+          templates.some((item) => item.role_id === current) ? current : templates[0]?.role_id || "",
+        );
+        return;
+      }
       const [rolesResult, pagesResult] = await Promise.all([
         realm === "platform" ? listPlatformRoles() : listTenantRoles(),
         realm === "platform" ? listPlatformPages() : listTenantPages(),
       ]);
       setRoles(rolesResult);
       setCatalogPages(pagesResult);
-      setSelectedRoleId((current) => current || rolesResult[0]?.role_id || "");
+      setSelectedRoleId((current) =>
+        rolesResult.some((role) => role.role_id === current) ? current : rolesResult[0]?.role_id || "",
+      );
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
       setLoading(false);
     }
-  }, [realm]);
+  }, [offeringId, realm, roleKind]);
 
   useEffect(() => {
     void load();
@@ -107,8 +184,19 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
       setOriginalAccess([]);
       return;
     }
+    const scopedRoles = realm === "tenant" ? moduleRoles : roles;
+    if (scopedRoles.length > 0 && !scopedRoles.some((role) => role.role_id === selectedRoleId)) {
+      return;
+    }
     const loadAccess = async () => {
       try {
+        if (realm === "platform" && roleKind === "tenant") {
+          const detail = await defaultRolesApi.get(selectedRoleId);
+          setPageAccess(detail.page_access);
+          setOriginalAccess(detail.page_access);
+          setTemplateVersion(detail.version);
+          return;
+        }
         const access =
           realm === "platform"
             ? await listPlatformPageAccess(selectedRoleId)
@@ -120,63 +208,111 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
       }
     };
     void loadAccess();
-  }, [realm, selectedRoleId]);
+  }, [moduleRoles, realm, roleKind, roles, selectedRoleId]);
 
-  const createModuleOptions = useMemo(() => {
-    if (realm === "tenant" && principal?.principal_type === "tenant_user") {
-      return [
-        { value: "CORE", label: "Workspace" },
-        ...principal.tenant.offerings.map((offering) => ({
-          value: offering.code,
-          label: offering.display_name,
-        })),
-      ];
+  useEffect(() => {
+    if (detailTab !== "users" || !selectedRole) {
+      setAssignedUsers([]);
+      return;
     }
-    const modules = [...new Set(catalogPages.map((page) => page.module).filter(Boolean))];
-    return modules.map((value) => ({ value, label: humanModule(value) }));
-  }, [catalogPages, principal, realm]);
-
-  const offeringLabel = (code: string | null | undefined, fallbackModule: string) => {
-    if (principal?.principal_type === "tenant_user" && code) {
-      const offering = principal.tenant.offerings.find((item) => item.code === code);
-      if (offering) return offering.display_name;
-    }
-    return humanModule(code || fallbackModule);
-  };
-
-  const moduleOptions = useMemo(() => {
-    const options = new Map<string, string>();
-    for (const entry of pageAccess) {
-      const key = entry.page.offering_code || entry.page.module || "workspace";
-      if (!options.has(key)) {
-        options.set(key, offeringLabel(entry.page.offering_code, entry.page.module));
+    const loadUsers = async () => {
+      try {
+        if (isTenantTemplate) {
+          setAssignedUsers([]);
+          return;
+        }
+        if (realm === "platform") {
+          const users = await listPlatformUsers();
+          setAssignedUsers(
+            users
+              .filter((user) => user.roles.some((role) => role.role_id === selectedRole.role_id))
+              .map((user: PlatformUser) => ({ id: user.admin_id, name: user.name, email: user.email })),
+          );
+          return;
+        }
+        const users = await listTenantUsers();
+        setAssignedUsers(
+          users
+            .filter((user: TenantUser) => user.roles.includes(selectedRole.role_name) || user.role === selectedRole.role_name)
+            .map((user) => ({ id: user.user_id, name: user.name, email: user.email })),
+        );
+      } catch {
+        setAssignedUsers([]);
       }
-    }
-    return [...options.entries()].sort((left, right) => left[1].localeCompare(right[1]));
-  }, [pageAccess, principal]);
+    };
+    void loadUsers();
+  }, [detailTab, isTenantTemplate, realm, selectedRole]);
+
+  useEffect(() => {
+    if (moduleRoles.some((role) => role.role_id === selectedRoleId)) return;
+    setSelectedRoleId(moduleRoles[0]?.role_id || "");
+  }, [moduleRoles, selectedRoleId]);
+
+  const tenantModuleOptions = useMemo(() => {
+    const source = realm === "tenant" ? licensedOfferings : offerings;
+    return [
+      { value: "CORE", label: "Workspace" },
+      ...source.map((offering) => ({ value: offering.code, label: offering.display_name })),
+    ];
+  }, [licensedOfferings, offerings, realm]);
 
   const grouped = useMemo(() => {
     const filtered = pageAccess.filter((entry) => {
-      const moduleKey = entry.page.offering_code || entry.page.module || "workspace";
-      if (moduleFilter !== "all" && moduleKey !== moduleFilter) return false;
+      if (sensitiveOnly && !isSensitivePage(entry.page)) return false;
       const haystack = `${entry.page.module} ${entry.page.page_name} ${entry.page.page_code} ${entry.page.route}`.toLowerCase();
       return haystack.includes(query.trim().toLowerCase());
     });
     const modules = new Map<string, PageAccess[]>();
     for (const entry of filtered) {
-      const key = entry.page.offering_code || entry.page.module || "General";
+      const key = entry.page.module || entry.page.offering_code || "General";
       modules.set(key, [...(modules.get(key) ?? []), entry]);
     }
     return [...modules.entries()];
-  }, [moduleFilter, pageAccess, query]);
+  }, [pageAccess, query, sensitiveOnly]);
 
   const setModuleAccess = (moduleKey: string, accessLevel: AccessLevel) => {
     setPageAccess((current) =>
       current.map((entry) => {
-        const key = entry.page.offering_code || entry.page.module || "workspace";
+        const key = entry.page.module || entry.page.offering_code || "workspace";
         return key === moduleKey ? { ...entry, access_level: accessLevel } : entry;
       }),
     );
+  };
+
+  const selectRoleKind = (nextKind: "platform" | "tenant") => {
+    if (realm === "tenant") return;
+    const next = new URLSearchParams(searchParams);
+    if (nextKind === "tenant") {
+      next.set("type", "tenant");
+    } else {
+      next.delete("type");
+      next.delete("offering_id");
+      next.delete("scope");
+    }
+    setSelectedRoleId("");
+    setDetailTab("permissions");
+    setSearchParams(next, { replace: true });
+  };
+
+  const selectOfferingModule = (id: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (realm === "platform") next.set("type", "tenant");
+    if (id === "core") next.delete("offering_id");
+    else next.set("offering_id", id);
+    setSelectedRoleId("");
+    setDetailTab("permissions");
+    setQuery("");
+    setSearchParams(next, { replace: true });
+  };
+
+  const openCreate = () => {
+    setCreateOpen(true);
+    setError(null);
+    setRoleForm({
+      ...emptyRoleForm,
+      role_type: realm === "tenant" ? "tenant" : roleKind,
+      module_scope: roleKind === "tenant" ? (selectedOffering?.code ?? "CORE") : catalogPages[0]?.module ?? "",
+    });
   };
 
   const handleCreateRole = async (event: FormEvent<HTMLFormElement>) => {
@@ -184,17 +320,47 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
     setSaving(true);
     setError(null);
     try {
+      const createAsTenant = realm === "tenant" || roleForm.role_type === "tenant";
       const payload = {
         role_name: roleForm.role_name,
         role_code: toRoleCode(roleForm.role_code || roleForm.role_name),
         description: roleForm.description || undefined,
         module_scope: roleForm.module_scope || undefined,
       };
-      const role = realm === "platform" ? await createPlatformRole(payload) : await createTenantRole(payload);
-      setRoleForm({ role_name: "", role_code: "", description: "", module_scope: "" });
-      setModuleFilter("all");
+      let role: Role;
+      if (realm === "platform" && createAsTenant) {
+        const selectedCreateOffering = offerings.find((item) => item.code === roleForm.module_scope);
+        const created = await defaultRolesApi.create({
+          role_name: payload.role_name,
+          role_code: payload.role_code,
+          description: payload.description ?? null,
+          offering_id: selectedCreateOffering?.offering_id ?? null,
+        });
+        role = toListedRole(created);
+        const next = new URLSearchParams(searchParams);
+        next.set("type", "tenant");
+        if (selectedCreateOffering) next.set("offering_id", selectedCreateOffering.offering_id);
+        else next.delete("offering_id");
+        setSearchParams(next, { replace: true });
+      } else {
+        role = realm === "platform" ? await createPlatformRole(payload) : await createTenantRole(payload);
+        if (realm === "tenant") {
+          const createdOffering = licensedOfferings.find((item) => item.code === payload.module_scope);
+          const next = new URLSearchParams(searchParams);
+          if (createdOffering) next.set("offering_id", createdOffering.offering_id);
+          else next.delete("offering_id");
+          setSearchParams(next, { replace: true });
+        } else if (realm === "platform" && roleKind !== "platform") {
+          const next = new URLSearchParams(searchParams);
+          next.delete("type");
+          next.delete("offering_id");
+          next.delete("scope");
+          setSearchParams(next, { replace: true });
+        }
+      }
+      setRoleForm(emptyRoleForm);
       setCreateOpen(false);
-      setNotice(`${role.role_name} created with code ${role.role_code}. Set page access below, then save.`);
+      setNotice(`${role.role_name} created. Set None, View, or Modify, then save.`);
       setSelectedRoleId(role.role_id);
       await load();
       setSelectedRoleId(role.role_id);
@@ -215,36 +381,27 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
         role_name: roleForm.role_name,
         description: roleForm.description || null,
       };
-      const role =
-        realm === "platform"
-          ? await updatePlatformRole(selectedRoleId, payload)
-          : await updateTenantRole(selectedRoleId, payload);
-      setEditOpen(false);
-      setNotice(`${role.role_name} updated.`);
-      await load();
-      setSelectedRoleId(role.role_id);
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeleteRole = async () => {
-    if (!selectedRole || selectedRole.is_system) return;
-    const confirmed = window.confirm(`Delete role “${selectedRole.role_name}”? Users must be unassigned first.`);
-    if (!confirmed) return;
-    setSaving(true);
-    setError(null);
-    try {
-      if (realm === "platform") {
-        await deletePlatformRole(selectedRole.role_id);
+      if (isTenantTemplate) {
+        await defaultRolesApi.update(selectedRoleId, {
+          role_name: payload.role_name,
+          description: payload.description,
+          version: templateVersion,
+        });
       } else {
-        await deleteTenantRole(selectedRole.role_id);
+        const role =
+          realm === "platform"
+            ? await updatePlatformRole(selectedRoleId, payload)
+            : await updateTenantRole(selectedRoleId, payload);
+        setNotice(`${role.role_name} updated.`);
+        setEditOpen(false);
+        await load();
+        setSelectedRoleId(role.role_id);
+        return;
       }
-      setNotice(`${selectedRole.role_name} deleted.`);
-      setSelectedRoleId("");
+      setEditOpen(false);
+      setNotice(`${roleForm.role_name} updated.`);
       await load();
+      setSelectedRoleId(selectedRoleId);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -261,6 +418,17 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
         page_id: entry.page.page_id,
         access_level: entry.access_level,
       }));
+      if (isTenantTemplate) {
+        const saved = await defaultRolesApi.update(selectedRoleId, {
+          version: templateVersion,
+          entries,
+        });
+        setPageAccess(saved.page_access);
+        setOriginalAccess(saved.page_access);
+        setTemplateVersion(saved.version);
+        setNotice("Page access saved.");
+        return;
+      }
       const saved =
         realm === "platform"
           ? await savePlatformPageAccess(selectedRoleId, entries)
@@ -276,204 +444,293 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
   };
 
   return (
-    <section className={styles.page}>
-      <header className={styles.header}>
+    <section className={`${styles.page} ${styles.rolesPage}`}>
+      <header className={styles.rolesHeader}>
         <div>
-          <h1>Roles & Permissions</h1>
-          <p className={styles.lede}>Define a role for one module, then set page access.</p>
+          <p>Access control</p>
+          <h1>Roles & permissions</h1>
+          <span className={styles.lede}>
+            {realm === "tenant"
+              ? "Create tenant roles and grant page access for Workspace and licensed modules."
+              : roleKind === "tenant"
+                ? "Define default tenant roles that are copied when a workspace is registered."
+                : "Manage platform console roles and the pages each role can view or modify."}
+          </span>
         </div>
-        <Button type="button" onClick={() => { setCreateOpen(true); setError(null); setRoleForm({ role_name: "", role_code: "", description: "", module_scope: "" }); }}>
-          <Plus size={16} aria-hidden="true" />
-          New Role
-        </Button>
+        <div className={styles.studioPageActions}>
+          <Button type="button" onClick={openCreate}>
+            <Plus size={16} aria-hidden="true" />
+            New role
+          </Button>
+        </div>
       </header>
 
-      {error && <Alert tone="error">{error}</Alert>}
+      {error && !createOpen && !editOpen && <Alert tone="error">{error}</Alert>}
       {notice && <Alert tone="success">{notice}</Alert>}
 
       {loading ? (
         <div className={styles.loading}>Loading roles…</div>
+      ) : !selectedRole ? (
+        <div className={styles.rolesEmpty}>
+          <Shield size={28} aria-hidden="true" />
+          <h2>Create a role to set page access</h2>
+          <p>
+            {realm === "tenant"
+              ? "Choose Workspace or a licensed module such as Task Management, then assign None, View, or Modify."
+              : "Pick Platform or Tenant, create a role, then set page access."}
+          </p>
+          {showOfferingFilter && (
+            <label className={styles.offeringFilter}>
+              Offering
+              <select
+                aria-label="Offering"
+                value={coreSelected ? "core" : offeringId}
+                onChange={(event) => selectOfferingModule(event.target.value)}
+              >
+                <option value="core">Workspace</option>
+                {(realm === "tenant" ? licensedOfferings : offerings).map((offering) => (
+                  <option key={offering.offering_id} value={offering.offering_id}>
+                    {offering.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <Button type="button" onClick={openCreate}>
+            <Plus size={16} aria-hidden="true" />
+            New role
+          </Button>
+        </div>
       ) : (
-        <div className={styles.layout}>
-          <aside className={styles.roleList}>
-            <header>
-              <h2>Roles</h2>
-              <small>{roles.filter((role) => role.is_active).length} active</small>
-            </header>
-            {roles.length === 0 && (
-              <div className={styles.empty}>No roles yet. Create one to set None / View / Modify.</div>
-            )}
-            {roles.map((role) => (
-              <button
+        <article className={styles.studio}>
+          <div className={styles.studioHeader}>
+            <div>
+              <h2>{selectedRole.role_name}</h2>
+              <p>Code: {selectedRole.role_code}</p>
+            </div>
+            <div className={styles.studioActions}>
+              <Button
                 type="button"
-                key={role.role_id}
-                className={`${styles.roleCard} ${role.role_id === selectedRoleId ? styles.roleCardActive : ""}`}
+                variant="secondary"
                 onClick={() => {
-                  setSelectedRoleId(role.role_id);
-                  setModuleFilter("all");
-                  setQuery("");
+                  setRoleForm({
+                    role_name: selectedRole.role_name,
+                    role_code: selectedRole.role_code,
+                    description: selectedRole.description ?? "",
+                    module_scope: selectedRole.module_scope ?? "",
+                    role_type: roleKind,
+                  });
+                  setEditOpen(true);
+                  setError(null);
                 }}
               >
-                <strong>{role.role_name}</strong>
-                <span>
-                  {role.role_code} · {role.module_scope ? humanModule(role.module_scope) : "All modules"} · {role.users_count} users
-                </span>
-              </button>
-            ))}
-          </aside>
+                <Pencil size={15} aria-hidden="true" />
+                Edit details
+              </Button>
+              <Button type="button" onClick={() => void handleSave()} loading={saving} disabled={unsavedCount === 0}>
+                Save changes
+              </Button>
+            </div>
+          </div>
 
-          <section className={styles.detail}>
-            {selectedRole ? (
-              <>
-                <div className={styles.detailHeader}>
-                  <div>
-                    <h2>{selectedRole.role_name}</h2>
-                    <p>
-                      Role code <strong>{selectedRole.role_code}</strong>
-                      {" · "}
-                      {selectedRole.description || "No description yet."}
-                    </p>
-                  </div>
-                  <div className={styles.detailActions}>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => {
-                        setRoleForm({
-                          role_name: selectedRole.role_name,
-                          role_code: selectedRole.role_code,
-                          description: selectedRole.description ?? "",
-                          module_scope: selectedRole.module_scope ?? "",
-                        });
-                        setEditOpen(true);
-                        setError(null);
-                      }}
-                    >
-                      <Pencil size={15} aria-hidden="true" />
-                      Edit role
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => void handleDeleteRole()}
-                      disabled={selectedRole.is_system || saving}
-                    >
-                      <Trash2 size={15} aria-hidden="true" />
-                      Delete role
-                    </Button>
-                    <Button type="button" onClick={() => void handleSave()} loading={saving} disabled={!unsaved}>
-                      Save changes
-                    </Button>
-                  </div>
-                </div>
-                <div className={styles.cards}>
-                  <article><strong>{selectedRole.role_code}</strong><small>Role code</small></article>
-                  <article><strong>{selectedRole.is_active ? "Active" : "Inactive"}</strong><small>Status</small></article>
-                  <article><strong>{selectedRole.is_system ? "System" : "Custom"}</strong><small>Role type</small></article>
-                  <article><strong>{selectedRole.users_count}</strong><small>Users assigned</small></article>
-                </div>
-                <div className={styles.matrixToolbar}>
-                  {!selectedRole.module_scope && (
-                  <label className={styles.moduleFilter}>
-                    {realm === "tenant" ? "Module" : "Module"}
-                    <select
-                      value={moduleFilter}
-                      onChange={(event) => setModuleFilter(event.target.value)}
-                    >
-                      <option value="all">All modules</option>
-                      {moduleOptions.map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  )}
-                  <InputField
-                    id={`${realm}-permission-search`}
-                    label="Search pages"
-                    placeholder="Search pages in the selected module"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    leadingIcon={<Search size={16} />}
-                  />
-                </div>
-                <p className={styles.matrixHint}>
-                  {selectedRole.module_scope
-                    ? "This role is limited to the selected module."
-                    : "Set None, View, or Modify for each page, then save."}
-                </p>
-                {grouped.map(([module, entries]) => (
-                  <div className={styles.module} key={module}>
-                    <div className={styles.moduleHeader}>
-                      <h3>
-                        {offeringLabel(entries[0]?.page.offering_code, module)} · {entries.length} pages
-                      </h3>
-                      <div className={styles.bulk}>
-                        <button type="button" onClick={() => setModuleAccess(module, "none")}>None</button>
-                        <button type="button" onClick={() => setModuleAccess(module, "view")}>View all</button>
-                        <button type="button" onClick={() => setModuleAccess(module, "modify")}>Modify all</button>
+          {realm === "platform" && (
+            <div className={styles.typeRow}>
+              <span>Role type</span>
+              <label>
+                <input
+                  type="radio"
+                  name="catalog-role-type"
+                  checked={roleKind === "platform"}
+                  onChange={() => selectRoleKind("platform")}
+                />
+                Platform
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="catalog-role-type"
+                  checked={roleKind === "tenant"}
+                  onChange={() => selectRoleKind("tenant")}
+                />
+                Tenant
+              </label>
+              <small>
+                <Lock size={12} aria-hidden="true" />
+                Locked once users are assigned
+              </small>
+            </div>
+          )}
+
+          <div className={styles.summaryRow}>
+            <article>
+              <small>Status</small>
+              <strong>{selectedRole.is_active ? "Active" : "Inactive"}</strong>
+            </article>
+            <article>
+              <small>System role</small>
+              <strong>{selectedRole.is_system ? "System" : "Custom"}</strong>
+            </article>
+            <article>
+              <small>Users assigned</small>
+              <strong>{isTenantTemplate ? "—" : selectedRole.users_count}</strong>
+            </article>
+            <label className={styles.offeringCard}>
+              <small>{showOfferingFilter ? "Roles in offering" : "Roles"}</small>
+              <select
+                aria-label={showOfferingFilter ? "Roles in offering" : "Roles"}
+                value={selectedRoleId}
+                onChange={(event) => {
+                  setSelectedRoleId(event.target.value);
+                  setQuery("");
+                  setDetailTab("permissions");
+                }}
+              >
+                {moduleRoles.map((role) => (
+                  <option key={role.role_id} value={role.role_id}>
+                    {role.role_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {showOfferingFilter && (
+              <label className={styles.offeringCard}>
+                <small>Offering</small>
+                <select
+                  aria-label="Offering"
+                  value={coreSelected ? "core" : offeringId}
+                  onChange={(event) => selectOfferingModule(event.target.value)}
+                >
+                  <option value="core">Workspace</option>
+                  {(realm === "tenant" ? licensedOfferings : offerings).map((offering) => (
+                    <option key={offering.offering_id} value={offering.offering_id}>
+                      {offering.display_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+
+          <div className={styles.studioTabs}>
+            <button
+              type="button"
+              className={detailTab === "permissions" ? styles.studioTabActive : ""}
+              onClick={() => setDetailTab("permissions")}
+            >
+              Permissions
+            </button>
+            <button
+              type="button"
+              className={detailTab === "users" ? styles.studioTabActive : ""}
+              onClick={() => setDetailTab("users")}
+            >
+              Users assigned
+            </button>
+          </div>
+
+          {detailTab === "permissions" ? (
+            <>
+              <div className={styles.studioToolbar}>
+                <InputField
+                  id={`${realm}-permission-search`}
+                  label="Search permissions"
+                  placeholder="Search permissions by module, page, or code"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  leadingIcon={<Search size={16} />}
+                />
+                <button
+                  type="button"
+                  className={`${styles.sensitiveToggle} ${sensitiveOnly ? styles.sensitiveOn : ""}`}
+                  aria-pressed={sensitiveOnly}
+                  onClick={() => setSensitiveOnly((current) => !current)}
+                >
+                  Sensitive only
+                </button>
+              </div>
+              {grouped.map(([module, entries]) => (
+                <section className={styles.permGroup} key={module}>
+                  <header>
+                    <div>
+                      <h3>{humanModule(module)}</h3>
+                      <span>{entries.length} {entries.length === 1 ? "page" : "pages"}</span>
+                    </div>
+                    <div className={styles.bulk}>
+                      <button type="button" onClick={() => setModuleAccess(module, "none")}>None</button>
+                      <button type="button" className={styles.bulkView} onClick={() => setModuleAccess(module, "view")}>View all</button>
+                      <button type="button" className={styles.bulkModify} onClick={() => setModuleAccess(module, "modify")}>Modify all</button>
+                    </div>
+                  </header>
+                  {entries.map((entry) => (
+                    <div className={styles.permRow} key={entry.page.page_id}>
+                      <div>
+                        <strong>{entry.page.page_name}</strong>
+                        <small>{entry.page.page_code}</small>
+                      </div>
+                      <div className={styles.segmented} role="group" aria-label={`${entry.page.page_name} access`}>
+                        {accessLevels.map((level) => (
+                          <button
+                            type="button"
+                            key={level}
+                            className={
+                              entry.access_level === level
+                                ? `${styles.segmentActive} ${level === "none" ? styles.segmentNone : ""} ${level === "view" ? styles.segmentView : ""}`
+                                : ""
+                            }
+                            onClick={() =>
+                              setPageAccess((current) =>
+                                current.map((item) =>
+                                  item.page.page_id === entry.page.page_id ? { ...item, access_level: level } : item,
+                                ),
+                              )
+                            }
+                          >
+                            {accessLevelLabels[level]}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    {entries.map((entry) => (
-                      <div className={styles.pageRow} key={entry.page.page_id}>
-                        <div>
-                          <strong>{entry.page.page_name}</strong>
-                          <small>
-                            {entry.page.page_code}
-                            {entry.page.offering_code ? ` · ${entry.page.offering_code}` : " · always included"}
-                          </small>
-                        </div>
-                        <div className={styles.segmented}>
-                          {accessLevels.map((level) => (
-                            <button
-                              type="button"
-                              key={level}
-                              className={
-                                entry.access_level === level
-                                  ? `${styles.segmentActive} ${level === "view" ? styles.segmentView : ""} ${level === "none" ? styles.segmentNone : ""}`
-                                  : ""
-                              }
-                              onClick={() =>
-                                setPageAccess((current) =>
-                                  current.map((item) =>
-                                    item.page.page_id === entry.page.page_id
-                                      ? { ...item, access_level: level }
-                                      : item,
-                                  ),
-                                )
-                              }
-                            >
-                              {level}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                {grouped.length === 0 && (
-                  <div className={styles.empty}>
-                    {moduleFilter !== "all"
-                      ? "No pages match this module. Choose another purchased offering from the dropdown."
-                      : realm === "tenant"
-                        ? "No entitled pages are available for this organisation yet."
-                        : "No platform pages are registered yet."}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className={styles.empty}>Create a role to start defining page access.</div>
-            )}
-          </section>
-        </div>
+                  ))}
+                </section>
+              ))}
+              {grouped.length === 0 && (
+                <div className={styles.empty}>
+                  {sensitiveOnly || query
+                    ? "No pages match this search."
+                    : "No pages are available for this role yet."}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className={styles.assignedList}>
+              {isTenantTemplate && (
+                <p>Tenant default roles are copied at registration. Assign users inside each tenant.</p>
+              )}
+              {assignedUsers.length === 0 && !isTenantTemplate && (
+                <p>No users are assigned to this role yet.</p>
+              )}
+              {assignedUsers.map((user) => (
+                <article key={user.id}>
+                  <strong>{user.name}</strong>
+                  <span>{user.email}</span>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
       )}
 
       {createOpen && (
         <div className={styles.backdrop}>
-          <form className={styles.dialog} onSubmit={handleCreateRole}>
+          <form className={styles.dialog} role="dialog" aria-labelledby={`${realm}-new-role-title`} onSubmit={handleCreateRole}>
             <div className={styles.dialogHeader}>
               <div>
-                <h2>New role</h2>
-                <p>Name the role and choose the module it can access.</p>
+                <h2 id={`${realm}-new-role-title`}>New role</h2>
+                <p>
+                  {realm === "tenant"
+                    ? "Choose a licensed module. Permissions will include only that module’s pages."
+                    : "Platform roles use the console. Tenant defaults use Workspace or a licensed module."}
+                </p>
               </div>
               <button type="button" className={styles.close} onClick={() => setCreateOpen(false)} aria-label="Close">
                 <X size={18} />
@@ -490,6 +747,46 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
                   required
                 />
               </div>
+              {realm === "platform" && (
+                <fieldset className={styles.span2}>
+                  <legend>Role type</legend>
+                  <div className={styles.typeChoices}>
+                    <label>
+                      <input
+                        type="radio"
+                        name="new-role-type"
+                        checked={roleForm.role_type === "platform"}
+                        onChange={() => setRoleForm((current) => ({ ...current, role_type: "platform", module_scope: catalogPages[0]?.module ?? "" }))}
+                      />
+                      Platform
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="new-role-type"
+                        checked={roleForm.role_type === "tenant"}
+                        onChange={() => setRoleForm((current) => ({ ...current, role_type: "tenant", module_scope: "CORE" }))}
+                      />
+                      Tenant
+                    </label>
+                  </div>
+                </fieldset>
+              )}
+              {roleForm.role_type === "tenant" && (
+                <label className={styles.span2}>
+                  Module
+                  <select
+                    required
+                    aria-label="Module"
+                    value={roleForm.module_scope}
+                    onChange={(event) => setRoleForm((current) => ({ ...current, module_scope: event.target.value }))}
+                  >
+                    {tenantModuleOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <div className={styles.span2}>
                 <InputField
                   id={`${realm}-new-role-code`}
@@ -504,19 +801,6 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
                   hint="Optional. Generated from the name if blank."
                 />
               </div>
-              <label className={styles.span2}>
-                Module
-                <select
-                  required
-                  value={roleForm.module_scope}
-                  onChange={(event) => setRoleForm((current) => ({ ...current, module_scope: event.target.value }))}
-                >
-                  <option value="">Select a module</option>
-                  {createModuleOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
               <div className={styles.span2}>
                 <InputField
                   id={`${realm}-new-role-description`}
@@ -536,11 +820,11 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
 
       {editOpen && selectedRole && (
         <div className={styles.backdrop}>
-          <form className={styles.dialog} onSubmit={handleEditRole}>
+          <form className={styles.dialog} role="dialog" aria-labelledby={`${realm}-edit-role-title`} onSubmit={handleEditRole}>
             <div className={styles.dialogHeader}>
               <div>
-                <h2>Edit role</h2>
-                <p>Update the name and description.</p>
+                <h2 id={`${realm}-edit-role-title`}>Edit details</h2>
+                <p>Update the name and description. The module cannot be changed after the role is created.</p>
               </div>
               <button type="button" className={styles.close} onClick={() => setEditOpen(false)} aria-label="Close">
                 <X size={18} />

@@ -19,6 +19,7 @@ from app.tenant_management.schemas.tenant import (
     TenantRegistrationOptionsResponse,
     TenantResponse,
     TenantFirstAccessResponse,
+    TenantCredentialResponse,
     OfferingCatalogResponse,
 )
 
@@ -40,12 +41,22 @@ async def create_tenant(
     db: AsyncSession = Depends(get_db),
 ) -> TenantResponse:
     created = await service.create_tenant(db, principal, payload)
+    login_path = f"/t/{created.tenant.tenant_code}/login"
     return TenantResponse.model_validate(created.tenant).model_copy(
         update={
             "first_access": TenantFirstAccessResponse(
                 email=created.first_admin_email,
                 username=created.first_admin_username,
                 temporary_password=created.temporary_password,
+                login_path=login_path,
+                password_change_required=True,
+                smartskale_access=TenantCredentialResponse(
+                    email=created.smartskale_email,
+                    username=created.smartskale_username,
+                    temporary_password=created.smartskale_password,
+                    login_path=login_path,
+                    password_change_required=False,
+                ),
             )
         }
     )

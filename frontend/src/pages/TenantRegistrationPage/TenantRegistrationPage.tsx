@@ -282,23 +282,33 @@ export const TenantRegistrationPage = () => {
 
   if (createdTenant) {
     const access = createdTenant.first_access;
+    const smartskale = access?.smartskale_access;
     return (
       <div className={styles.page}>
         <header className={styles.pageHeader}>
           <div>
             <p>Tenant onboarding</p>
             <h1>{createdTenant.org_name} is ready</h1>
-            <span>Share the admin credentials securely. The temporary password is shown once.</span>
+            <span>Share the admin credentials securely. Temporary passwords are shown once.</span>
           </div>
         </header>
         <section className={styles.credentialsCard}>
-          <p className={styles.credentialsEyebrow}>Admin credentials</p>
+          {access?.login_path && (
+            <p className={styles.credentialsEyebrow}>Sign-in URL: {access.login_path}</p>
+          )}
+          <p className={styles.credentialsEyebrow}>Contact admin</p>
           {access ? (
             <TenantAdminCredentialsPanel access={access} />
           ) : (
             <Alert tone="warning" title="Credentials unavailable">
               The tenant was created, but admin credentials were not returned. Open the tenant record to reset access if needed.
             </Alert>
+          )}
+          {smartskale && (
+            <>
+              <p className={styles.credentialsEyebrow}>Smartskale Admin</p>
+              <TenantAdminCredentialsPanel access={smartskale} />
+            </>
           )}
           <div className={styles.credentialsActions}>
             <Button type="button" variant="secondary" onClick={() => navigate(`/platform/tenants/${createdTenant.tenant_id}`)}>

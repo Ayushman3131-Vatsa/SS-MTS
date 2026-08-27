@@ -23,6 +23,7 @@ import {
 import type { ConfigTemplateDetailResponse } from "../../features/configurations/model/types";
 import { TemplatePreviewModal } from "../../features/configurations/ui/TemplatePreviewModal";
 import { useWindowFocusRefresh } from "../../shared/model/useWindowFocusRefresh";
+import { useTenantAppPath } from "../../entities/session/model/routing";
 import styles from "./ConfigTemplateEditorPage.module.css";
 
 interface TemplateDraft {
@@ -43,6 +44,7 @@ const toSampleData = (data: ConfigTemplateDetailResponse): Record<string, string
 export const ConfigTemplateEditorPage: React.FC = () => {
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
+  const appPath = useTenantAppPath();
   const focusRefreshKey = useWindowFocusRefresh();
 
   const [template, setTemplate] = useState<ConfigTemplateDetailResponse | null>(null);
@@ -239,7 +241,7 @@ export const ConfigTemplateEditorPage: React.FC = () => {
       {/* Top Navbar / Breadcrumb */}
       <header className={styles.header}>
         <div className={styles.leftNav}>
-          <Link to="/app/configurations" className={styles.backLink}>
+          <Link to={appPath("/app/configurations")} className={styles.backLink}>
             <ArrowLeft size={18} />
             <span>Configurations</span>
           </Link>

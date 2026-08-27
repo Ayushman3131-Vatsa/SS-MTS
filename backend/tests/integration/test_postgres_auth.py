@@ -126,6 +126,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
     server_log: Any
     server_port: int
     head_revision: str
+    orchid_temp_password: str | None = None
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -855,7 +856,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 {"tenant_id": tenant_id},
             )
 
-    def test_20_citext_uniqueness_is_global_for_tenant_users(self) -> None:
+    def test_20_citext_uniqueness_is_scoped_for_tenant_users(self) -> None:
         with self.assertRaises(IntegrityError):
             self._db_execute(
                 """
@@ -870,16 +871,37 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             self._db_execute(
                 """
                 INSERT INTO user_accounts
-                    (tenant_id, id, display_name, email, password_hash, is_active)
+                    (tenant_id, id, display_name, email, username, password_hash, is_active)
                 VALUES
                     (:tenant_id, :user_id, 'Duplicate',
-                     'MEMBER@EXAMPLE.COM', 'not-used', true)
+                     'MEMBER@EXAMPLE.COM', :username, 'not-used', true)
                 """,
                 {
                     "tenant_id": TENANT_ONE_ID,
                     "user_id": uuid.uuid4(),
+                    "username": f"dup_{uuid.uuid4().hex[:12]}",
                 },
             )
+
+        cross_user_id = uuid.uuid4()
+        self._db_execute(
+            """
+            INSERT INTO user_accounts
+                (tenant_id, id, display_name, email, username, password_hash, is_active)
+            VALUES
+                (:tenant_id, :user_id, 'Shared Email Other Tenant',
+                 'MEMBER@EXAMPLE.COM', :username, 'not-used', true)
+            """,
+            {
+                "tenant_id": TENANT_TWO_ID,
+                "user_id": cross_user_id,
+                "username": f"cross_{uuid.uuid4().hex[:12]}",
+            },
+        )
+        self._db_execute(
+            "DELETE FROM user_accounts WHERE id = :user_id",
+            {"user_id": cross_user_id},
+        )
 
         with self.assertRaises(IntegrityError):
             self._db_execute(
@@ -1070,7 +1092,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             ),
             0,
         )
-    def test_50_email_only_login_resolves_the_account_tenant(self) -> None:
+    def test_50_tenant_scoped_login_resolves_the_account_tenant(self) -> None:
         expected = (
             (SHARED_MEMBER_EMAIL, TENANT_ONE_USER_ID, TENANT_ONE_ID, "TENANT_11111111", "Tenant Admin"),
             (SECOND_MEMBER_EMAIL, TENANT_TWO_USER_ID, TENANT_TWO_ID, "TENANT_22222222", "Employee"),
@@ -1081,6 +1103,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                     "POST",
                     "/auth/session/tenant",
                     payload={
+                        "tenant_code": tenant_code,
                         "email": f" {email.upper()} ",
                         "password": SHARED_MEMBER_PASSWORD,
                     },
@@ -1095,10 +1118,12 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
     def test_55_authentication_failures_are_generic(self) -> None:
         cases = (
             {
+                "tenant_code": "TENANT_11111111",
                 "email": "missing-member@example.com",
                 "password": SHARED_MEMBER_PASSWORD,
             },
             {
+                "tenant_code": "TENANT_11111111",
                 "email": SHARED_MEMBER_EMAIL,
                 "password": "wrong-password",
             },
@@ -1131,6 +1156,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 "POST",
                 "/auth/session/tenant",
                 payload={
+                    "tenant_code": "TENANT_11111111",
                     "email": SHARED_MEMBER_EMAIL,
                     "password": SHARED_MEMBER_PASSWORD,
                 },
@@ -1162,6 +1188,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 "POST",
                 "/auth/session/tenant",
                 payload={
+                    "tenant_code": "TENANT_11111111",
                     "email": SHARED_MEMBER_EMAIL,
                     "password": SHARED_MEMBER_PASSWORD,
                 },
@@ -1225,6 +1252,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             "POST",
             "/auth/login",
             payload={
+                "tenant_code": "TENANT_11111111",
                 "email": SHARED_MEMBER_EMAIL,
                 "password": SHARED_MEMBER_PASSWORD,
             },
@@ -1292,7 +1320,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             response.json(),
             {
                 "code": "APP_ERROR",
-                "detail": "This primary contact email is already used by a tenant account",
+                "detail": "This primary contact email is already reserved by another tenant",
             },
         )
 
@@ -1371,72 +1399,37 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
                 "SELECT count(*) FROM user_accounts WHERE tenant_id = :tenant_id",
                 {"tenant_id": tenant_id},
             ),
-            0,
+            2,
         )
-        self.assertEqual(
+        self.assertGreaterEqual(
             self._db_scalar(
                 "SELECT count(*) FROM roles WHERE tenant_id = :tenant_id",
                 {"tenant_id": tenant_id},
             ),
-            0,
+            1,
         )
+        first_access = body["first_access"]
+        self.assertEqual(first_access["login_path"], "/t/ORCHID_SYSTEMS/login")
+        self.assertEqual(first_access["email"], "owner@orchid.example")
+        self.assertIsNotNone(first_access["temporary_password"])
+        smartskale = first_access["smartskale_access"]
+        self.assertEqual(smartskale["username"], "ss_ORCHID_SYSTEMS_admin")
+        self.assertFalse(smartskale["password_change_required"])
+        type(self).orchid_temp_password = first_access["temporary_password"]
 
     def test_71_bootstrap_forces_password_change_and_rotates_credentials(self) -> None:
         tenant_id = self._db_scalar(
             "SELECT tenant_id FROM tenants WHERE tenant_code = 'ORCHID_SYSTEMS'"
         )
         self.assertIsNotNone(tenant_id)
-        self._db_execute(
-            """
-            INSERT INTO roles
-                (id, tenant_id, role_code, role_name, description, is_system, is_active)
-            VALUES
-                (:role_id, :tenant_id, 'TENANT_ADMIN', 'Tenant Admin',
-                 'Provisioned by UAM integration fixture', true, true)
-            """,
-            {"role_id": uuid.uuid4(), "tenant_id": tenant_id},
-        )
-
-        def run_bootstrap(*extra: str) -> subprocess.CompletedProcess[str]:
-            return subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "scripts.bootstrap_tenant_admin",
-                    "--tenant-code",
-                    "ORCHID_SYSTEMS",
-                    *extra,
-                ],
-                cwd=REPOSITORY_ROOT,
-                env=self._test_environment(),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=30,
-                check=False,
-            )
-
-        created = run_bootstrap()
-        self.assertEqual(created.returncode, 0, created.stdout)
-        first_password = re.search(r"Temporary password: (\S+)", created.stdout)
-        self.assertIsNotNone(first_password, created.stdout)
-
-        duplicate = run_bootstrap()
-        self.assertNotEqual(duplicate.returncode, 0)
-        self.assertIn("A Tenant Admin already exists", duplicate.stdout)
-        self.assertNotIn("Temporary password:", duplicate.stdout)
-
-        rotated = run_bootstrap("--rotate-pending")
-        self.assertEqual(rotated.returncode, 0, rotated.stdout)
-        rotated_match = re.search(r"Temporary password: (\S+)", rotated.stdout)
-        self.assertIsNotNone(rotated_match, rotated.stdout)
-        temporary_password = rotated_match.group(1)
-        self.assertNotEqual(temporary_password, first_password.group(1))
+        temporary_password = type(self).orchid_temp_password
+        self.assertIsNotNone(temporary_password)
 
         browser_login = self._request(
             "POST",
             "/auth/session/tenant",
             payload={
+                "tenant_code": "ORCHID_SYSTEMS",
                 "email": "OWNER@ORCHID.EXAMPLE",
                 "password": temporary_password,
             },
@@ -1452,6 +1445,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             "POST",
             "/auth/login",
             payload={
+                "tenant_code": "ORCHID_SYSTEMS",
                 "email": "owner@orchid.example",
                 "password": temporary_password,
             },
@@ -1495,6 +1489,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             "POST",
             "/auth/login",
             payload={
+                "tenant_code": "ORCHID_SYSTEMS",
                 "email": "owner@orchid.example",
                 "password": "Permanent!Harbor96",
             },
@@ -1731,6 +1726,7 @@ class SecureAuthPostgresIntegrationTests(unittest.TestCase):
             "POST",
             "/auth/login",
             payload={
+                "tenant_code": "TENANT_11111111",
                 "email": SHARED_MEMBER_EMAIL,
                 "password": SHARED_MEMBER_PASSWORD,
             },

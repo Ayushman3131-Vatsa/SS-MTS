@@ -105,6 +105,7 @@ class TenantCreateRequest(StrictRequestModel):
     )
     offering_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
     offering_grants: list[TenantOfferingGrantRequest] = Field(default_factory=list, max_length=50)
+    bootstrap_role_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
 
     @field_validator(
         "org_name",
@@ -186,6 +187,8 @@ class TenantCreateRequest(StrictRequestModel):
     def enforce_creation_policies(self) -> Self:
         if len(set(self.offering_ids)) != len(self.offering_ids):
             raise ValueError("offering_ids must not contain duplicates")
+        if len(set(self.bootstrap_role_ids)) != len(self.bootstrap_role_ids):
+            raise ValueError("bootstrap_role_ids must not contain duplicates")
         grant_ids = [grant.offering_id for grant in self.offering_grants]
         if len(set(grant_ids)) != len(grant_ids):
             raise ValueError("offering_grants must not contain duplicates")
@@ -354,12 +357,16 @@ class TenantRegistrationOptionsResponse(BaseModel):
     defaults: RegistrationDefaultsResponse
 
 
-class TenantFirstAccessResponse(BaseModel):
-    email: str
+class TenantCredentialResponse(BaseModel):
+    email: str | None = None
     username: str | None = None
     temporary_password: str
     login_path: str = "/login"
     password_change_required: bool = True
+
+
+class TenantFirstAccessResponse(TenantCredentialResponse):
+    smartskale_access: TenantCredentialResponse | None = None
 
 
 class TenantResponse(BaseModel):

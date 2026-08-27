@@ -75,8 +75,8 @@ def platform_account_throttle_key(email: str) -> str:
     return _throttle_key("account:platform", normalize_email(email))
 
 
-def tenant_account_throttle_key(email: str) -> str:
-    return _throttle_key("account:tenant", normalize_email(email))
+def tenant_account_throttle_key(tenant_code: str, email: str) -> str:
+    return _throttle_key("account:tenant", f"{tenant_code.strip().upper()}:{normalize_email(email)}")
 
 
 @dataclass(frozen=True)
@@ -192,16 +192,26 @@ async def _authenticate_platform_admin(
 async def _authenticate_tenant_user(
     db: AsyncSession,
     *,
+    tenant_code: str,
     email: str,
     password: str,
     ip_address: str,
 ) -> UserAccount:
     del ip_address
     now = _utc_now()
+    normalized_code = tenant_code.strip().upper()
+    tenant = await tenant_repository.get_tenant_by_code(db, normalized_code)
+    if tenant is None:
+        verify_password_or_dummy(password, None)
+        await _authentication_failed_anonymous()
+
     identifier = email.strip()
     if "@" in identifier:
         result = await db.execute(
-            select(UserAccount).where(UserAccount.email == normalize_email(identifier)).limit(1)
+            select(UserAccount).where(
+                UserAccount.tenant_id == tenant.tenant_id,
+                UserAccount.email == normalize_email(identifier),
+            ).limit(1)
         )
     else:
         try:
@@ -209,7 +219,10 @@ async def _authenticate_tenant_user(
         except ValueError:
             username = identifier
         result = await db.execute(
-            select(UserAccount).where(UserAccount.username == username).limit(1)
+            select(UserAccount).where(
+                UserAccount.tenant_id == tenant.tenant_id,
+                UserAccount.username == username,
+            ).limit(1)
         )
     user: UserAccount | None = result.scalar_one_or_none()
 
@@ -279,7 +292,7 @@ async def _tenant_principal(
         principal_type="tenant_user",
         principal_id=user.id,
         name=user.display_name,
-        email=str(user.email),
+        email=str(user.email) if user.email else None,
         username=str(user.username),
         role=role_name,
         roles=role_names or [role_name],
@@ -355,6 +368,7 @@ async def login_tenant_user(
 ) -> TokenResponse:
     user = await _authenticate_tenant_user(
         db,
+        tenant_code=payload.tenant_code,
         email=str(payload.email),
         password=payload.password,
         ip_address=ip_address,
@@ -401,6 +415,7 @@ async def login_tenant_browser(
 ) -> BrowserAuthenticationResult:
     user = await _authenticate_tenant_user(
         db,
+        tenant_code=payload.tenant_code,
         email=str(payload.email),
         password=payload.password,
         ip_address=ip_address,
@@ -519,7 +534,7 @@ async def change_tenant_password(
     try:
         validate_password(
             payload.new_password,
-            email=str(user.email),
+            email=str(user.email) if user.email else None,
             name=user.display_name,
             org_name=tenant.org_name,
         )

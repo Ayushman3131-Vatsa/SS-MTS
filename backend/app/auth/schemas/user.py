@@ -46,12 +46,11 @@ class UserCreateRequest(StrictRequestModel):
         if not display_name:
             display_name = self.username
         object.__setattr__(self, "name", display_name)
-        # Email is optional for sign-in (username works), but the DB column is NOT NULL
-        # with a unique constraint — store an internal placeholder when none is provided.
-        email = str(self.email).strip() if self.email else f"{self.username}@accounts.local"
-        object.__setattr__(self, "email", normalize_email(email))
+        # Email is optional. Username is the guaranteed sign-in identifier.
+        if self.email:
+            object.__setattr__(self, "email", normalize_email(str(self.email).strip()))
         if self.password:
-            validate_password(self.password, email=email, name=display_name)
+            validate_password(self.password, email=str(self.email) if self.email else None, name=display_name)
         return self
 
 
@@ -87,7 +86,7 @@ class UserResponse(BaseModel):
     user_id: uuid.UUID
     name: str
     username: str
-    email: str
+    email: str | None
     employee_id: str | None = None
     role: str
     roles: list[str] = Field(default_factory=list)

@@ -154,15 +154,15 @@ authentication by database-backed dependencies and service rules.
 | Method | Path | Description |
 |---|---|---|
 | POST | `/auth/session/platform` | Platform Admin browser login using secure cookies |
-| POST | `/auth/session/tenant` | Tenant-user browser login using email and password |
+| POST | `/auth/session/tenant` | Tenant-user browser login using tenant code plus email or username |
 | POST | `/auth/password/change` | Replace a tenant user's temporary password and rotate credentials |
 | GET | `/auth/session` | Restore the current browser principal |
 | DELETE | `/auth/session` | Revoke the browser session and clear cookies |
 | POST | `/auth/admin/login` | Platform admin login → JWT |
-| POST | `/auth/login` | Tenant user login using email and password |
+| POST | `/auth/login` | Tenant user JWT login using tenant code plus email or username |
 
-> Tenant-user emails are globally case-insensitively unique. Both browser and
-> bearer login resolve the tenant from the matched account.
+> Tenant-user emails are unique within a tenant. Browser and bearer login
+> require `tenant_code`. Customer login URL is `/t/{TENANT_CODE}/login`.
 
 ### Tenants (`/tenants`) — platform admin only
 

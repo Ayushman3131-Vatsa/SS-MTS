@@ -429,7 +429,6 @@ export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
         if (realm === "platform") {
           await updatePlatformUser(selectedId, {
             name,
-            username: form.username.trim(),
             employee_id: form.employee_id || null,
           });
           await assignPlatformUserRoles(selectedId, form.roleIds);
@@ -437,7 +436,6 @@ export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
           const current = tenantUsers.find((user) => user.user_id === selectedId);
           await updateTenantUser(selectedId, {
             name,
-            username: form.username.trim(),
             employee_id: form.employee_id || null,
             status: form.status,
             version: current?.version ?? 1,
@@ -460,7 +458,7 @@ export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
       <header className={styles.header}>
         <div>
           <h1>Users</h1>
-          <p className={styles.lede}>Create accounts and assign roles.</p>
+          <p className={styles.lede}>Create accounts and assign roles from User Access Management.</p>
         </div>
         <Button type="button" onClick={openCreate}>
           <Plus size={16} aria-hidden="true" />
@@ -531,7 +529,7 @@ export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
                         <UserAvatar name={user.name} size="md" />
                         <div className={styles.identityText}>
                           <span className={styles.identityName}>{user.name}</span>
-                          <span className={styles.identityMeta}>@{user.username}</span>
+                          <span className={styles.identityMeta}>{user.username}</span>
                         </div>
                       </div>
                     </td>
@@ -668,8 +666,13 @@ export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
                   value={form.username}
                   onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
                   required
+                  disabled={dialog === "edit"}
                   autoComplete="off"
-                  hint="Unique. Letters, numbers, dots, hyphens, or underscores."
+                  hint={
+                    dialog === "edit"
+                      ? "Usernames cannot be changed after the user is created."
+                      : "Unique. Letters, numbers, dots, hyphens, or underscores."
+                  }
                 />
               </div>
               <div className={styles.span2}>

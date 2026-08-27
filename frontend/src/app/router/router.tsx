@@ -18,7 +18,7 @@ import { SuspendedTenantPage } from "../../pages/SuspendedTenantPage/SuspendedTe
 import { ForcedPasswordChangePage } from "../../pages/ForcedPasswordChangePage/ForcedPasswordChangePage";
 import { RouteLoader } from "../../shared/ui/RouteLoader/RouteLoader";
 import { NotFoundRoute, RootRoute } from "./redirect-routes";
-import { OfferingRoute, PageAccessRoute, ProtectedRoute, PublicOnlyRoute } from "./route-guards";
+import { OfferingRoute, PageAccessRoute, ProtectedRoute, PublicOnlyRoute, LegacyTenantAppRedirect, TenantPathNavigate, TenantWorkspaceGuard } from "./route-guards";
 
 const PlatformDashboardPage = lazy(async () => {
   const page = await import(
@@ -53,6 +53,16 @@ const DefaultTemplateEditorPage = lazy(async () => {
     "../../pages/DefaultTemplateEditorPage/DefaultTemplateEditorPage"
   );
   return { default: page.DefaultTemplateEditorPage };
+});
+
+const DefaultRolesPage = lazy(async () => {
+  const page = await import("../../pages/DefaultRolesPage/DefaultRolesPage");
+  return { default: page.DefaultRolesPage };
+});
+
+const DefaultRoleEditorPage = lazy(async () => {
+  const page = await import("../../pages/DefaultRoleEditorPage/DefaultRoleEditorPage");
+  return { default: page.DefaultRoleEditorPage };
 });
 
 const TaskManagementLayout = lazy(async () => {
@@ -93,6 +103,7 @@ export const router = createBrowserRouter([
     element: <PublicOnlyRoute />,
     children: [
       { path: "/login", element: <LoginPage /> },
+      { path: "/t/:tenantCode/login", element: <LoginPage /> },
       { path: "/login/platform", element: <PlatformLoginPage /> },
       { path: "/platform/login", element: <PlatformLoginPage /> },
     ],
@@ -163,6 +174,30 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: "default-roles",
+            element: (
+              <Suspense fallback={<RouteLoader label="Loading default roles&hellip;" />}>
+                <DefaultRolesPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: "default-roles/new",
+            element: (
+              <Suspense fallback={<RouteLoader label="Loading role editor&hellip;" />}>
+                <DefaultRoleEditorPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: "default-roles/:roleId",
+            element: (
+              <Suspense fallback={<RouteLoader label="Loading role editor&hellip;" />}>
+                <DefaultRoleEditorPage />
+              </Suspense>
+            ),
+          },
+          {
             path: "tenants/:tenantId",
             element: <TenantDetailPage />,
           },
@@ -183,8 +218,13 @@ export const router = createBrowserRouter([
     element: <ProtectedRoute area="tenant" allowSuspendedTenant />,
     children: [
       {
-        path: "/app/suspended",
-        element: <SuspendedTenantPage />,
+        element: <TenantWorkspaceGuard />,
+        children: [
+          {
+            path: "/t/:tenantCode/app/suspended",
+            element: <SuspendedTenantPage />,
+          },
+        ],
       },
     ],
   },
@@ -192,7 +232,10 @@ export const router = createBrowserRouter([
     element: <ProtectedRoute area="tenant" />,
     children: [
       {
-        path: "/app",
+        element: <TenantWorkspaceGuard />,
+        children: [
+      {
+        path: "/t/:tenantCode/app",
         element: <TenantShell />,
         children: [
           {
@@ -209,7 +252,7 @@ export const router = createBrowserRouter([
             children: [
               {
                 path: "access",
-                element: <Navigate to="/app/users" replace />,
+                element: <TenantPathNavigate to="/app/users" />,
               },
               {
                 path: "users",
@@ -259,7 +302,7 @@ export const router = createBrowserRouter([
           {
             element: <OfferingRoute code="TASK_MANAGEMENT" />,
             children: [
-              { path: "modules/task-management", element: <Navigate to="/app/task-management" replace /> },
+              { path: "modules/task-management", element: <TenantPathNavigate to="/app/task-management" /> },
               {
                 element: <PageAccessRoute route="/app/task-management" />,
                 children: [
@@ -287,7 +330,13 @@ export const router = createBrowserRouter([
           },
         ],
       },
+        ],
+      },
     ],
+  },
+  {
+    path: "/app/*",
+    element: <LegacyTenantAppRedirect />,
   },
   {
     element: <ProtectedRoute />,

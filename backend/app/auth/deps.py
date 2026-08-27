@@ -19,7 +19,7 @@ from app.tenant_management.tenants import repository as tenant_repository
 class Principal:
     type: Literal["admin", "user"]
     id: uuid.UUID
-    email: str
+    email: str | None
     tenant_id: uuid.UUID | None = None
     role: str | None = None  # primary display role; None for platform admins
     roles: tuple[str, ...] = ()

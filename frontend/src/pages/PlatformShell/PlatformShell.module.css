@@ -4,7 +4,7 @@
   grid-template:
     "topbar topbar" 4.5rem
     "sidebar main" minmax(calc(100dvh - 4.5rem), auto) /
-    16rem minmax(0, 1fr);
+    17.75rem minmax(0, 1fr);
   color: var(--color-slate-900);
   background: var(--color-slate-50);
 }
@@ -115,6 +115,8 @@
   position: sticky;
   top: 4.5rem;
   height: calc(100dvh - 4.5rem);
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   border-right: 1px solid #1e293b;
@@ -167,8 +169,25 @@
 }
 
 .sidebar nav {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
   display: grid;
+  align-content: start;
   gap: 0.28rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 0.35) transparent;
+}
+
+.sidebar nav::-webkit-scrollbar {
+  width: 0.35rem;
+}
+
+.sidebar nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(148 163 184 / 0.35);
 }
 
 .navLabel {
@@ -181,6 +200,7 @@
 }
 
 .navItem {
+  min-width: 0;
   min-height: 2.75rem;
   display: flex;
   align-items: center;
@@ -196,6 +216,13 @@
     color 150ms ease,
     border-color 150ms ease,
     background-color 150ms ease;
+}
+
+.navItem span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .navItem:hover {
@@ -216,6 +243,72 @@
 
 .navItem.active svg {
   color: var(--color-blue-300);
+}
+
+.navGroup {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.groupToggle {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.78rem;
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  padding: 0.7rem 0.75rem;
+  color: var(--color-slate-300);
+  background: transparent;
+  font: inherit;
+  font-size: 0.79rem;
+  font-weight: 590;
+  text-align: left;
+  cursor: pointer;
+}
+
+.groupToggle:hover,
+.groupToggle.groupActive {
+  color: var(--color-white);
+  background: rgb(255 255 255 / 0.055);
+}
+
+.groupToggle.groupActive > svg:first-child {
+  color: var(--color-blue-300);
+}
+
+.groupToggle span {
+  min-width: 0;
+  flex: 1;
+  overflow: visible;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.groupToggle svg:last-child {
+  flex-shrink: 0;
+  transition: transform 160ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.subnav {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+  margin: 0 0 0.2rem 0.35rem;
+  padding-left: 0.7rem;
+  border-left: 1px solid rgb(148 163 184 / 0.22);
+}
+
+.subnav .navItem {
+  min-height: 2.35rem;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.74rem;
 }
 
 .sidebarFooter {
@@ -266,7 +359,24 @@
   .sidebarHeader > div > div,
   .sidebarFooter > div,
   .navLabel,
-  .navItem span {
+  .navItem span,
+  .groupToggle span {
+    display: none;
+  }
+
+  .subnav {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .groupToggle {
+    justify-content: center;
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .groupToggle svg:last-child {
     display: none;
   }
 
@@ -363,6 +473,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .navItem,
+  .groupToggle svg:last-child,
   .sidebar {
     transition: none;
   }

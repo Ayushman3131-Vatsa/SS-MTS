@@ -40,9 +40,11 @@ from app.auth.schemas.auth import (
 class AuthSchemaTests(unittest.TestCase):
     def test_tenant_login_normalizes_only_email(self) -> None:
         payload = TenantSessionLoginRequest(
+            tenant_code="northstar",
             email=" Person@Example.COM ",
             password="  exact password  ",
         )
+        self.assertEqual(payload.tenant_code, "NORTHSTAR")
         self.assertEqual(str(payload.email), "person@example.com")
         self.assertEqual(payload.password, "  exact password  ")
 
@@ -89,6 +91,7 @@ class AuthSchemaTests(unittest.TestCase):
                 "principal_id",
                 "name",
                 "email",
+                "username",
                 "role",
                 "roles",
                 "page_access",
@@ -188,6 +191,11 @@ class SessionSecurityTests(unittest.TestCase):
 
 class SuspendedTenantAuthenticationTests(unittest.IsolatedAsyncioTestCase):
     async def test_valid_suspended_tenant_credentials_still_authenticate(self) -> None:
+        tenant = SimpleNamespace(
+            tenant_id=uuid.uuid4(),
+            status="SUSPENDED",
+            tenant_code="NORTHSTAR",
+        )
         user = SimpleNamespace(
             password_hash="password-hash",
             status="Active",
@@ -198,12 +206,19 @@ class SuspendedTenantAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         result = SimpleNamespace(scalar_one_or_none=lambda: user)
         db = SimpleNamespace(execute=AsyncMock(return_value=result))
 
-        with patch(
-            "app.auth.login.service.verify_password_and_update",
-            return_value=(True, None),
+        with (
+            patch(
+                "app.auth.login.service.tenant_repository.get_tenant_by_code",
+                AsyncMock(return_value=tenant),
+            ),
+            patch(
+                "app.auth.login.service.verify_password_and_update",
+                return_value=(True, None),
+            ),
         ):
             authenticated = await _authenticate_tenant_user(
                 db,
+                tenant_code="northstar",
                 email="member@example.com",
                 password="correct-password",
                 ip_address="127.0.0.1",

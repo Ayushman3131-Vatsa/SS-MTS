@@ -34,8 +34,14 @@ class AdminLoginRequest(StrictAuthRequest):
 
 
 class TenantLoginRequest(StrictAuthRequest):
+    tenant_code: Annotated[str, Field(min_length=2, max_length=30)]
     email: Annotated[str, Field(min_length=1, max_length=254)]
     password: LoginPassword
+
+    @field_validator("tenant_code", mode="before")
+    @classmethod
+    def normalize_tenant_code(cls, value: object) -> object:
+        return value.strip().upper() if isinstance(value, str) else value
 
 
 class PlatformSessionLoginRequest(StrictAuthRequest):
@@ -44,8 +50,14 @@ class PlatformSessionLoginRequest(StrictAuthRequest):
 
 
 class TenantSessionLoginRequest(StrictAuthRequest):
+    tenant_code: Annotated[str, Field(min_length=2, max_length=30)]
     email: Annotated[str, Field(min_length=1, max_length=254)]
     password: LoginPassword
+
+    @field_validator("tenant_code", mode="before")
+    @classmethod
+    def normalize_session_tenant_code(cls, value: object) -> object:
+        return value.strip().upper() if isinstance(value, str) else value
 
 
 class PasswordChangeRequest(StrictAuthRequest):
@@ -84,7 +96,7 @@ class SessionPrincipalResponse(BaseModel):
     principal_type: Literal["platform_admin", "tenant_user"]
     principal_id: uuid.UUID
     name: str
-    email: str
+    email: str | None = None
     username: str | None = None
     role: str
     roles: list[str] = []

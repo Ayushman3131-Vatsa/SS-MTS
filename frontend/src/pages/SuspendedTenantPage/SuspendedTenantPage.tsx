@@ -1,8 +1,8 @@
 import { LockKeyhole, LogOut, ShieldAlert } from "lucide-react";
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 
-import { getPrincipalHome } from "../../entities/session/model/routing";
+import { getPrincipalHome, getTenantLoginPath } from "../../entities/session/model/routing";
 import { useSession } from "../../entities/session/model/session-context";
 import { getLoginErrorContent } from "../../features/auth/model/login-errors";
 import { BrandMark } from "../../shared/ui/BrandMark/BrandMark";
@@ -10,6 +10,7 @@ import { Button } from "../../shared/ui/Button/Button";
 import styles from "./SuspendedTenantPage.module.css";
 
 export const SuspendedTenantPage = () => {
+  const navigate = useNavigate();
   const { logout, principal } = useSession();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -26,7 +27,9 @@ export const SuspendedTenantPage = () => {
     setIsLoggingOut(true);
     setLogoutError(null);
     try {
+      const loginPath = getTenantLoginPath(principal);
       await logout();
+      navigate(loginPath, { replace: true });
     } catch (error) {
       setLogoutError(getLoginErrorContent(error).message);
       setIsLoggingOut(false);

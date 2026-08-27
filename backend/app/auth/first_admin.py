@@ -7,17 +7,20 @@ import string
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from collections.abc import Sequence
+
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.email_identity import reserve_new_user_email
-from app.auth.username_identity import allocate_unique_tenant_username
+from app.auth.username_identity import allocate_unique_tenant_username, reserve_tenant_username
 from app.auth.models.role import Role
 from app.auth.models.user_account import UserAccount
 from app.auth.models.user_role import UserRole
 from app.auth.models.user_session import UserSession
 from app.auth.roles import assign_role
 from app.common.audit import record_audit
+from app.common.config import get_settings
 from app.common.exceptions import BusinessRuleError, NotFoundError
 from app.common.security import hash_password, normalize_email, validate_password
 from app.tenant_management.models.tenant import Tenant
@@ -46,12 +49,41 @@ def generate_temporary_password(*, email: str, name: str, org_name: str) -> str:
         return password
 
 
+def smartskale_username(tenant_code: str) -> str:
+    return f"ss_{tenant_code.strip().upper()}_admin"
+
+
+def tenant_login_path(tenant_code: str) -> str:
+    return f"/t/{tenant_code.strip().upper()}/login"
+
+
+async def assign_roles_to_user(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    roles: Sequence[Role],
+    assigned_by: uuid.UUID | None = None,
+) -> None:
+    seen: set[uuid.UUID] = set()
+    existing = await db.execute(select(UserRole.role_id).where(UserRole.user_id == user_id, UserRole.is_active.is_(True)))
+    present = set(existing.scalars().all())
+    for assigned in roles:
+        if assigned.id in seen or assigned.id in present:
+            continue
+        await assign_role(db, user_id=user_id, role=assigned, assigned_by=assigned_by)
+        seen.add(assigned.id)
+
+
 async def create_first_tenant_admin(
     db: AsyncSession,
     *,
     tenant: Tenant,
-    role: Role,
+    role: Role | None = None,
+    roles: Sequence[Role] | None = None,
 ) -> tuple[str, str, str]:
+    assigned_roles = list(roles or ([role] if role is not None else []))
+    if not assigned_roles:
+        raise BusinessRuleError("At least one role is required for the first tenant admin")
     email = str(tenant.contact_email)
     await reserve_new_user_email(
         db,
@@ -77,7 +109,7 @@ async def create_first_tenant_admin(
     )
     db.add(admin)
     await db.flush()
-    await assign_role(db, user_id=admin.id, role=role, assigned_by=None)
+    await assign_roles_to_user(db, user_id=admin.id, roles=assigned_roles)
     await record_audit(
         db,
         tenant_id=tenant.tenant_id,
@@ -89,11 +121,72 @@ async def create_first_tenant_admin(
             "name": admin.display_name,
             "username": username,
             "email": email,
-            "role": "Tenant Admin",
+            "roles": [item.role_name for item in assigned_roles],
             "force_pw_reset": True,
         },
     )
     return email, username, password
+
+
+async def create_smartskale_tenant_user(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    roles: Sequence[Role],
+) -> tuple[str, str, str]:
+    if not roles:
+        raise BusinessRuleError("At least one role is required for the Smartskale setup user")
+    settings = get_settings()
+    email = await reserve_new_user_email(
+        db,
+        settings.smartskale_setup_email,
+        tenant_id=tenant.tenant_id,
+    )
+    username = await reserve_tenant_username(db, smartskale_username(tenant.tenant_code))
+    password = settings.smartskale_setup_password
+    user = UserAccount(
+        tenant_id=tenant.tenant_id,
+        display_name="Smartskale Admin",
+        username=username,
+        email=email,
+        password_hash=hash_password(password),
+        created_by_user_id=None,
+        is_active=True,
+        force_pw_reset=False,
+    )
+    db.add(user)
+    await db.flush()
+    await assign_roles_to_user(db, user_id=user.id, roles=roles)
+    await record_audit(
+        db,
+        tenant_id=tenant.tenant_id,
+        entity_type="user",
+        entity_id=user.id,
+        action="BOOTSTRAP_SMARTSKALE_ADMIN",
+        changed_by_user_id=None,
+        new_value={
+            "name": user.display_name,
+            "username": username,
+            "email": email,
+            "roles": [item.role_name for item in roles],
+            "force_pw_reset": False,
+        },
+    )
+    return email, username, password
+
+
+async def bootstrap_users_for_tenant(db: AsyncSession, tenant: Tenant) -> list[UserAccount]:
+    username = smartskale_username(tenant.tenant_code)
+    result = await db.execute(
+        select(UserAccount).where(
+            UserAccount.tenant_id == tenant.tenant_id,
+            or_(
+                UserAccount.email == normalize_email(str(tenant.contact_email)),
+                UserAccount.username == username,
+            ),
+        )
+    )
+    return list(result.scalars().all())
 
 
 async def rotate_pending_tenant_admin_password(

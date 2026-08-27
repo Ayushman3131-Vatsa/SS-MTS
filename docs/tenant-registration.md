@@ -12,31 +12,40 @@ one database transaction.
 3. the selected offering grants (UTC start/end windows);
 4. system roles (`TENANT_ADMIN`, `PROJECT_MANAGER`, `EMPLOYEE`) and default
    page access for **Access Management plus currently effective offerings**;
-5. the first Tenant Admin account (contact email + generated temporary password);
+5. the first Tenant Admin account (contact email + generated temporary password)
+   and a Smartskale Admin (`ss_<CODE>_admin`, password from
+   `SMARTSKALE_SETUP_PASSWORD`);
 6. platform activity and tenant audit records.
 
-The create response includes `first_access` (`email`, `temporary_password`,
-`login_path: /login`). Email delivery is not required; the platform admin
-must copy those credentials from the success screen.
+The create response includes `first_access` (`email`, `username`,
+`temporary_password`, `login_path: /t/{CODE}/login`, `smartskale_access`).
+Email delivery is not required; the platform admin must copy those credentials
+from the success screen.
 
 If any step fails, no partial tenant is committed. Tenant codes and normalized
 primary-contact emails are serialized with PostgreSQL advisory locks. A primary
-contact email is rejected when another tenant reserved it or any tenant user
-already owns it.
+contact email is rejected when another tenant already reserved it.
 
 The CLI `python -m scripts.bootstrap_tenant_admin --tenant-code <CODE>` remains
 available for recovery if first-admin creation was skipped on an older tenant.
 
 ## First tenant login
 
-1. Open `/login` (workspace), **not** `/platform/login`.
-2. Sign in with the contact email and temporary password from `first_access`.
+1. Open `/t/{TENANT_CODE}/login` (or `/login` and enter the organization code),
+   **not** `/platform/login`.
+2. Sign in with the contact email or username and temporary password from
+   `first_access`.
 3. Because `force_pw_reset` is true, the first screen is
    `/account/change-password`.
-4. After the password change, Tenant Admin lands on `/app/overview`.
+4. After the password change, Tenant Admin lands on
+   `/t/{TENANT_CODE}/app/overview`.
 5. Navigation is built from **effective entitlements** plus workspace pages
    that have no `offering_code` (Users, Roles). Example: license only
    `TASK_MANAGEMENT` → Overview, Users, Roles & Permissions, Task Management.
+
+Smartskale Admin uses the same login URL, `SMARTSKALE_SETUP_EMAIL` or
+`ss_{CODE}_admin`, and `SMARTSKALE_SETUP_PASSWORD`. That account does not
+require a first-login password change.
 
 Inactive users (`is_active = false`) cannot authenticate; existing browser
 sessions are revoked on deactivate.

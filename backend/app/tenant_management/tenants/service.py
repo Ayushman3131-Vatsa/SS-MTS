@@ -8,8 +8,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.access_control.tenant.defaults import ensure_system_role_page_defaults
 from app.auth.deps import Principal
 from app.auth.email_identity import reserve_new_tenant_contact
-from app.auth.first_admin import create_first_tenant_admin, rotate_pending_tenant_admin_password
+from app.auth.first_admin import (
+    assign_roles_to_user,
+    bootstrap_users_for_tenant,
+    create_first_tenant_admin,
+    create_smartskale_tenant_user,
+    rotate_pending_tenant_admin_password,
+)
 from app.auth.roles import seed_tenant_system_roles
+from app.modules.platform_default_roles.clone import (
+    clone_default_roles_for_tenant,
+    is_module_admin_role_code,
+    list_active_templates_for_offerings,
+    resolve_registration_admin_roles,
+)
 from app.common.audit import record_audit
 from app.common.config import get_settings
 from app.common.exceptions import (
@@ -55,6 +67,9 @@ class CreatedTenant:
     first_admin_email: str
     first_admin_username: str
     temporary_password: str
+    smartskale_email: str
+    smartskale_username: str
+    smartskale_password: str
 
 
 @dataclass(frozen=True)
@@ -194,12 +209,41 @@ async def create_tenant(
             )
         )
 
-    roles = await seed_tenant_system_roles(db, tenant.tenant_id)
-    await ensure_system_role_page_defaults(db, tenant.tenant_id)
+    seeded_roles = await seed_tenant_system_roles(db, tenant.tenant_id)
+    offering_id_set = {offering.offering_id for offering in offerings}
+    cloned = await clone_default_roles_for_tenant(
+        db,
+        tenant_id=tenant.tenant_id,
+        offering_ids=offering_id_set,
+    )
+    templates = await list_active_templates_for_offerings(db, offering_id_set)
+    if cloned:
+        if not any(role.role_code == "TENANT_ADMIN" for role in cloned.values()):
+            await ensure_system_role_page_defaults(db, tenant.tenant_id)
+        admin_roles = resolve_registration_admin_roles(
+            cloned=cloned,
+            templates=templates,
+            offerings=offerings,
+            seeded_tenant_admin=seeded_roles.get("TENANT_ADMIN"),
+        )
+    else:
+        await ensure_system_role_page_defaults(db, tenant.tenant_id)
+        if offerings:
+            raise NotFoundError(
+                "Default administrator roles are not configured for the selected modules",
+                code="MODULE_ADMIN_ROLE_MISSING",
+            )
+        admin_roles = [seeded_roles["TENANT_ADMIN"]]
+
     first_admin_email, first_admin_username, temporary_password = await create_first_tenant_admin(
         db,
         tenant=tenant,
-        role=roles["TENANT_ADMIN"],
+        roles=admin_roles,
+    )
+    smartskale_email, smartskale_username, smartskale_password = await create_smartskale_tenant_user(
+        db,
+        tenant=tenant,
+        roles=admin_roles,
     )
 
     db.add(
@@ -249,6 +293,9 @@ async def create_tenant(
         first_admin_email=first_admin_email,
         first_admin_username=first_admin_username,
         temporary_password=temporary_password,
+        smartskale_email=smartskale_email,
+        smartskale_username=smartskale_username,
+        smartskale_password=smartskale_password,
     )
 
 
@@ -468,7 +515,14 @@ async def grant_offering(
         idempotency_key=idempotency_key,
         occurred_at=now,
     )
-    await ensure_system_role_page_defaults(db, tenant_id)
+    cloned = await clone_default_roles_for_tenant(
+        db,
+        tenant_id=tenant_id,
+        offering_ids={payload.offering_id},
+    )
+    admin_roles = [role for role in cloned.values() if is_module_admin_role_code(role.role_code)]
+    for user in await bootstrap_users_for_tenant(db, tenant):
+        await assign_roles_to_user(db, user_id=user.id, roles=admin_roles)
     await db.commit()
     return await _entitlement_response(db, tenant_id, entitlement.entitlement_id)
 

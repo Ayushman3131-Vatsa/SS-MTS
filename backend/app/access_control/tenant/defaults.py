@@ -11,7 +11,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.access_control.shared.catalog import tenant_pages_for_entitlements
+from app.access_control.shared.catalog import CORE_TENANT_PAGE_CODES, tenant_pages_for_entitlements
 from app.access_control.shared.enums import AccessLevel
 from app.auth.models.page import Page
 from app.auth.models.role import Role
@@ -19,7 +19,7 @@ from app.auth.models.role_page_access import RolePageAccess
 
 
 def default_access_for_system_role(role_code: str, page: Page) -> AccessLevel:
-    if role_code == "TENANT_ADMIN":
+    if role_code == "TENANT_ADMIN" and page.page_code in CORE_TENANT_PAGE_CODES:
         return "modify"
     return "none"
 

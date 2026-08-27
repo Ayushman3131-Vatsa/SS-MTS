@@ -51,7 +51,7 @@ export interface TenantPrincipal {
   principal_type: "tenant_user";
   principal_id: string;
   name: string;
-  email: string;
+  email: string | null;
   role: TenantRole;
   roles?: string[];
   page_access?: SessionPageAccess[];
@@ -62,6 +62,7 @@ export interface TenantPrincipal {
 export type SessionPrincipal = PlatformPrincipal | TenantPrincipal;
 
 export interface TenantLoginCredentials {
+  tenant_code: string;
   email: string;
   password: string;
 }

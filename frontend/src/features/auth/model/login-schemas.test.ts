@@ -5,6 +5,7 @@ import { platformLoginSchema, tenantLoginSchema } from "./login-schemas";
 describe("tenantLoginSchema", () => {
   it("accepts a valid login without applying account-creation password rules", () => {
     const result = tenantLoginSchema.safeParse({
+      tenant_code: "acme",
       email: " employee@example.com ",
       password: "existing-password",
     });
@@ -12,11 +13,13 @@ describe("tenantLoginSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.email).toBe("employee@example.com");
+      expect(result.data.tenant_code).toBe("ACME");
     }
   });
 
   it("accepts a username in place of email", () => {
     const result = tenantLoginSchema.safeParse({
+      tenant_code: "ACME",
       email: "jane.doe",
       password: "existing-password",
     });
@@ -25,6 +28,7 @@ describe("tenantLoginSchema", () => {
 
   it("rejects passwords over the API maximum without requiring strength", () => {
     const result = tenantLoginSchema.safeParse({
+      tenant_code: "ACME",
       email: "employee@example.com",
       password: "x".repeat(129),
     });
