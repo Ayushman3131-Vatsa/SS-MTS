@@ -18,6 +18,7 @@ from app.modules.task_management.access import (
     get_project_or_404,
     project_access,
     require_tenant_principal,
+    tenant_wide_task_visibility,
 )
 from app.modules.task_management.activity.service import record_activity
 from app.modules.task_management.domain import errors
@@ -46,13 +47,14 @@ from app.modules.task_management.tasks.schemas import (
 
 def to_response(read_model: repository.TaskReadModel) -> TaskResponse:
     task = read_model.task
-    return TaskResponse.model_validate(
-        {
-            **{column.name: getattr(task, column.name) for column in task.__table__.columns},
-            "display_key": f"{read_model.project_key}-{task.task_number}",
-            "actual_hours": read_model.actual_hours,
-        }
-    )
+    payload = {
+        name: getattr(task, name)
+        for name in TaskResponse.model_fields
+        if hasattr(task, name)
+    }
+    payload["display_key"] = f"{read_model.project_key}-{task.task_number}"
+    payload["actual_hours"] = read_model.actual_hours if read_model.actual_hours is not None else Decimal("0")
+    return TaskResponse.model_validate(payload)
 
 
 async def get_task_or_404(
@@ -238,7 +240,7 @@ async def create_task(
     await db.commit()
     read_model = await repository.get_task_read_model(db, tenant_id, task.task_id)
     if read_model is None:
-        raise RuntimeError("Task could not be reloaded after creation")
+        raise NotFoundError("Task could not be reloaded after creation")
     return read_model
 
 
@@ -262,12 +264,13 @@ async def list_tasks(
     include_archived: bool = False,
     sort: str = "-updated_at",
 ) -> PageResponse[TaskResponse]:
-    tenant_id, actor_id, tenant_role = require_tenant_principal(principal)
+    tenant_id, actor_id, _ = require_tenant_principal(principal)
+    tenant_wide_access = await tenant_wide_task_visibility(db, principal)
     items, total = await repository.list_tasks(
         db,
         tenant_id=tenant_id,
         user_id=actor_id,
-        tenant_role=tenant_role,
+        tenant_wide_access=tenant_wide_access,
         page=page,
         page_size=page_size,
         project_id=project_id,
@@ -297,12 +300,13 @@ async def list_tasks_legacy(
     principal: Principal,
     project_id: uuid.UUID | None = None,
 ) -> list[repository.TaskReadModel]:
-    tenant_id, actor_id, tenant_role = require_tenant_principal(principal)
+    tenant_id, actor_id, _ = require_tenant_principal(principal)
+    tenant_wide_access = await tenant_wide_task_visibility(db, principal)
     items, _ = await repository.list_tasks(
         db,
         tenant_id=tenant_id,
         user_id=actor_id,
-        tenant_role=tenant_role,
+        tenant_wide_access=tenant_wide_access,
         page=1,
         page_size=1_000_000,
         project_id=project_id,
@@ -538,7 +542,7 @@ async def update_task(
     await db.commit()
     read_model = await repository.get_task_read_model(db, tenant_id, task_id)
     if read_model is None:
-        raise RuntimeError("Task could not be reloaded after update")
+        raise NotFoundError("Task could not be reloaded after update")
     return read_model
 
 
@@ -616,7 +620,7 @@ async def transition_task(
     await db.commit()
     read_model = await repository.get_task_read_model(db, tenant_id, task_id)
     if read_model is None:
-        raise RuntimeError("Task could not be reloaded after transition")
+        raise NotFoundError("Task could not be reloaded after transition")
     return read_model
 
 
@@ -666,7 +670,7 @@ async def set_task_archived(
     await db.commit()
     read_model = await repository.get_task_read_model(db, tenant_id, task_id)
     if read_model is None:
-        raise RuntimeError("Task could not be reloaded after archive operation")
+        raise NotFoundError("Task could not be reloaded after archive operation")
     return read_model
 
 

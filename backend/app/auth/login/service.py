@@ -21,6 +21,7 @@ from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import Principal
+from app.access_control.shared.resolver import resolve_platform_page_access, resolve_tenant_page_access
 from app.auth.roles import get_active_role_name
 from app.common.config import get_settings
 from app.common.audit import record_audit
@@ -38,6 +39,7 @@ from app.auth.models.platform_admin import PlatformAdmin
 from app.tenant_management.models.tenant import Tenant
 from app.auth.models.user_account import UserAccount
 from app.auth.models.user_session import UserSession
+from app.auth.username_identity import parse_username
 from app.tenant_management.tenants import repository as tenant_repository
 from app.auth.schemas.auth import (
     AdminLoginRequest,
@@ -73,8 +75,8 @@ def platform_account_throttle_key(email: str) -> str:
     return _throttle_key("account:platform", normalize_email(email))
 
 
-def tenant_account_throttle_key(email: str) -> str:
-    return _throttle_key("account:tenant", normalize_email(email))
+def tenant_account_throttle_key(tenant_code: str, email: str) -> str:
+    return _throttle_key("account:tenant", f"{tenant_code.strip().upper()}:{normalize_email(email)}")
 
 
 @dataclass(frozen=True)
@@ -147,11 +149,19 @@ async def _authenticate_platform_admin(
 ) -> PlatformAdmin:
     del ip_address  # reserved for future IP-level controls
     now = _utc_now()
-    normalized_email = normalize_email(email)
-
-    result = await db.execute(
-        select(PlatformAdmin).where(PlatformAdmin.email == normalized_email).limit(1)
-    )
+    identifier = email.strip()
+    if "@" in identifier:
+        result = await db.execute(
+            select(PlatformAdmin).where(PlatformAdmin.email == normalize_email(identifier)).limit(1)
+        )
+    else:
+        try:
+            username = parse_username(identifier)
+        except ValueError:
+            username = identifier
+        result = await db.execute(
+            select(PlatformAdmin).where(PlatformAdmin.username == username).limit(1)
+        )
     admin = result.scalar_one_or_none()
     if admin is None:
         verify_password_or_dummy(password, None)
@@ -160,7 +170,7 @@ async def _authenticate_platform_admin(
     _ensure_not_locked(admin.locked_until, now=now)
 
     verified, replacement_hash = verify_password_and_update(password, admin.password_hash)
-    if not verified:
+    if not verified or not admin.is_active:
         next_count, locked_until = await _register_account_failure(
             db, failed_login_count=admin.failed_login_count, now=now
         )
@@ -182,19 +192,38 @@ async def _authenticate_platform_admin(
 async def _authenticate_tenant_user(
     db: AsyncSession,
     *,
+    tenant_code: str,
     email: str,
     password: str,
     ip_address: str,
 ) -> UserAccount:
     del ip_address
     now = _utc_now()
-    normalized_email = normalize_email(email)
+    normalized_code = tenant_code.strip().upper()
+    tenant = await tenant_repository.get_tenant_by_code(db, normalized_code)
+    if tenant is None:
+        verify_password_or_dummy(password, None)
+        await _authentication_failed_anonymous()
 
-    result = await db.execute(
-        select(UserAccount)
-        .where(UserAccount.email == normalized_email)
-        .limit(1)
-    )
+    identifier = email.strip()
+    if "@" in identifier:
+        result = await db.execute(
+            select(UserAccount).where(
+                UserAccount.tenant_id == tenant.tenant_id,
+                UserAccount.email == normalize_email(identifier),
+            ).limit(1)
+        )
+    else:
+        try:
+            username = parse_username(identifier)
+        except ValueError:
+            username = identifier
+        result = await db.execute(
+            select(UserAccount).where(
+                UserAccount.tenant_id == tenant.tenant_id,
+                UserAccount.username == username,
+            ).limit(1)
+        )
     user: UserAccount | None = result.scalar_one_or_none()
 
     if user is None:
@@ -226,14 +255,24 @@ async def _authenticate_tenant_user(
     return user
 
 
-def _platform_principal(admin: PlatformAdmin) -> SessionPrincipalResponse:
+async def _platform_principal(db: AsyncSession, admin: PlatformAdmin) -> SessionPrincipalResponse:
+    role_names, page_access = await resolve_platform_page_access(db, admin.admin_id)
+    if not role_names:
+        raise UnauthorizedError(
+            "This account has no assigned role. Contact an administrator.",
+            code="ROLE_REQUIRED",
+        )
     return SessionPrincipalResponse(
         principal_type="platform_admin",
         principal_id=admin.admin_id,
         name=admin.name,
         email=str(admin.email),
-        role="Platform Admin",
+        username=str(admin.username),
+        role=role_names[0],
+        roles=role_names,
+        page_access=page_access,
         tenant=None,
+        password_change_required=admin.force_pw_reset,
     )
 
 
@@ -244,12 +283,20 @@ async def _tenant_principal(
     role_name: str,
 ) -> SessionPrincipalResponse:
     offerings = await tenant_repository.list_tenant_offerings(db, tenant.tenant_id)
+    role_names, page_access = await resolve_tenant_page_access(
+        db,
+        tenant_id=tenant.tenant_id,
+        user_id=user.id,
+    )
     return SessionPrincipalResponse(
         principal_type="tenant_user",
         principal_id=user.id,
         name=user.display_name,
-        email=str(user.email),
+        email=str(user.email) if user.email else None,
+        username=str(user.username),
         role=role_name,
+        roles=role_names or [role_name],
+        page_access=page_access,
         tenant=SessionTenantResponse(
             tenant_id=tenant.tenant_id,
             org_name=tenant.org_name,
@@ -321,13 +368,17 @@ async def login_tenant_user(
 ) -> TokenResponse:
     user = await _authenticate_tenant_user(
         db,
+        tenant_code=payload.tenant_code,
         email=str(payload.email),
         password=payload.password,
         ip_address=ip_address,
     )
     role_name = await get_active_role_name(db, user.id)
     if role_name is None:
-        raise UnauthorizedError(GENERIC_CREDENTIALS_MESSAGE)
+        raise UnauthorizedError(
+            "This account has no assigned role. Contact an administrator.",
+            code="ROLE_REQUIRED",
+        )
     await db.commit()
     token = create_access_token(
         {
@@ -353,7 +404,7 @@ async def login_platform_browser(
         password=payload.password,
         ip_address=ip_address,
     )
-    return await _create_browser_session(db, _platform_principal(admin))
+    return await _create_browser_session(db, await _platform_principal(db, admin))
 
 
 async def login_tenant_browser(
@@ -364,6 +415,7 @@ async def login_tenant_browser(
 ) -> BrowserAuthenticationResult:
     user = await _authenticate_tenant_user(
         db,
+        tenant_code=payload.tenant_code,
         email=str(payload.email),
         password=payload.password,
         ip_address=ip_address,
@@ -373,8 +425,92 @@ async def login_tenant_browser(
         raise UnauthorizedError(GENERIC_CREDENTIALS_MESSAGE)
     role_name = await get_active_role_name(db, user.id)
     if role_name is None:
-        raise UnauthorizedError(GENERIC_CREDENTIALS_MESSAGE)
+        raise UnauthorizedError(
+            "This account has no assigned role. Contact an administrator.",
+            code="ROLE_REQUIRED",
+        )
     return await _create_browser_session(db, await _tenant_principal(db, user, tenant, role_name))
+
+
+async def change_password(
+    db: AsyncSession,
+    principal: Principal,
+    payload: PasswordChangeRequest,
+    *,
+    auth_method: str,
+) -> PasswordChangeResult:
+    if principal.type == "admin":
+        return await change_platform_password(
+            db, principal, payload, auth_method=auth_method
+        )
+    return await change_tenant_password(db, principal, payload, auth_method=auth_method)
+
+
+async def change_platform_password(
+    db: AsyncSession,
+    principal: Principal,
+    payload: PasswordChangeRequest,
+    *,
+    auth_method: str,
+) -> PasswordChangeResult:
+    if principal.type != "admin":
+        raise ForbiddenError("Platform administrator access required")
+    admin = await db.get(PlatformAdmin, principal.id)
+    if admin is None or not admin.is_active:
+        raise UnauthorizedError("Authentication required")
+    if not verify_password(payload.current_password, admin.password_hash):
+        raise UnauthorizedError("Current password is incorrect")
+    if verify_password(payload.new_password, admin.password_hash):
+        raise BusinessRuleError("New password must be different from the current password")
+    try:
+        validate_password(payload.new_password, email=str(admin.email), name=admin.name)
+    except ValueError as exc:
+        raise BusinessRuleError(str(exc)) from exc
+
+    now = _utc_now()
+    admin.password_hash = hash_password(payload.new_password)
+    admin.force_pw_reset = False
+    admin.failed_login_count = 0
+    admin.locked_until = None
+    await db.execute(
+        update(UserSession)
+        .where(
+            UserSession.principal_type == "platform_admin",
+            UserSession.principal_id == admin.admin_id,
+            UserSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=now, revoked_by="password_change")
+    )
+    await db.flush()
+    response_principal = await _platform_principal(db, admin)
+    session_token: str | None = None
+    csrf_token: str | None = None
+    if auth_method == "browser_session":
+        settings = get_settings()
+        session_token = secrets.token_urlsafe(32)
+        csrf_token = secrets.token_urlsafe(32)
+        db.add(
+            UserSession(
+                token_hash=digest_secret(session_token),
+                csrf_token_hash=digest_secret(csrf_token),
+                principal_type="platform_admin",
+                principal_id=admin.admin_id,
+                tenant_id=None,
+                user_id=None,
+                created_at=now,
+                expires_at=now + timedelta(minutes=settings.browser_session_expire_minutes),
+                last_seen_at=now,
+            )
+        )
+    elif auth_method != "bearer":
+        raise UnauthorizedError("Authentication required")
+    await db.commit()
+    return PasswordChangeResult(
+        principal=response_principal,
+        session_token=session_token,
+        csrf_token=csrf_token,
+        replacement_access_token=None,
+    )
 
 
 async def change_tenant_password(
@@ -398,7 +534,7 @@ async def change_tenant_password(
     try:
         validate_password(
             payload.new_password,
-            email=str(user.email),
+            email=str(user.email) if user.email else None,
             name=user.display_name,
             org_name=tenant.org_name,
         )
@@ -565,9 +701,9 @@ async def session_response_for_principal(
 ) -> SessionPrincipalResponse:
     if principal.type == "admin":
         admin = await db.get(PlatformAdmin, principal.id)
-        if admin is None:
+        if admin is None or not admin.is_active:
             raise UnauthorizedError("Authentication required")
-        return _platform_principal(admin)
+        return await _platform_principal(db, admin)
 
     if principal.tenant_id is None:
         raise UnauthorizedError("Authentication required")

@@ -3,7 +3,7 @@ import type { PropsWithChildren } from "react";
 
 import styles from "./Alert.module.css";
 
-type AlertTone = "error" | "info" | "success";
+type AlertTone = "error" | "info" | "success" | "warning";
 
 interface AlertProps extends PropsWithChildren {
   tone?: AlertTone;
@@ -14,6 +14,7 @@ const icons = {
   error: AlertCircle,
   info: Info,
   success: CheckCircle2,
+  warning: AlertCircle,
 };
 
 export const Alert = ({

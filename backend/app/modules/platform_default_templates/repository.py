@@ -132,6 +132,19 @@ def _read_statement():
     )
 
 
+def _to_read_model(row) -> DefaultTemplateReadModel:
+    data = dict(row)
+    placeholders = data.get("placeholders") or []
+    if not isinstance(placeholders, list):
+        placeholders = []
+    data["placeholders"] = placeholders
+    inheriting = data.get("inheriting_tenant_count")
+    customized = data.get("customized_tenant_count")
+    data["inheriting_tenant_count"] = int(inheriting or 0)
+    data["customized_tenant_count"] = int(customized or 0)
+    return DefaultTemplateReadModel(**data)
+
+
 async def list_for_offering(
     db: AsyncSession,
     offering_id: uuid.UUID,
@@ -147,7 +160,7 @@ async def list_for_offering(
             )
         )
     ).mappings().all()
-    return [DefaultTemplateReadModel(**row) for row in rows]
+    return [_to_read_model(row) for row in rows]
 
 
 async def get_detail(
@@ -159,7 +172,7 @@ async def get_detail(
             _read_statement().where(ConfigTemplate.template_id == template_id)
         )
     ).mappings().one_or_none()
-    return DefaultTemplateReadModel(**row) if row is not None else None
+    return _to_read_model(row) if row is not None else None
 
 
 async def get_offering(

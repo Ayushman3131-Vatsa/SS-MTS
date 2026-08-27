@@ -72,6 +72,7 @@ async def _seed_retired_entitlement(
         admin_id=admin_id,
         name="Retention Test Admin",
         email=f"retention-admin-{unique}@example.test",
+        username=f"retadmin{unique[:12]}",
         password_hash="test-only",
     )
     tenant = Tenant(
@@ -199,6 +200,7 @@ async def test_effective_offering_uses_window_and_ignores_catalog_inactivity(
         admin_id=admin_id,
         name="Entitlement Test Admin",
         email="entitlement-admin@example.test",
+        username="entitlementadmin",
         password_hash="test-only",
     )
     tenant = Tenant(

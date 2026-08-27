@@ -132,6 +132,7 @@ export const userSummarySchema = z.object({
   tenant_id: id,
   user_id: id,
   name: z.string(),
+  username: z.string().optional(),
   email: z.string(),
   role: z.string(),
   status: z.string(),

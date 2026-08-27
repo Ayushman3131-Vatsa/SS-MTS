@@ -535,6 +535,7 @@ async def test_counts_and_updates_propagate_only_to_inheriting_tenants(
         id=uuid.uuid4(),
         display_name="Inheriting Admin",
         email=f"inheriting-{suffix}@example.test",
+        username=f"inheriting{suffix[:12]}",
         password_hash="test-only",
         is_active=True,
     )

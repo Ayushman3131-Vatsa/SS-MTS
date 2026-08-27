@@ -22,7 +22,8 @@ from app.common.config import get_settings
 
 # Only the HTTP dependency in this module can elevate an ordinary session to
 # platform-wide RLS scope, and it does so from middleware-verified claims.
-_VERIFIED_PLATFORM_SCOPE = object()
+VERIFIED_PLATFORM_SCOPE = object()
+_VERIFIED_PLATFORM_SCOPE = VERIFIED_PLATFORM_SCOPE
 
 
 @event.listens_for(Session, "after_begin")

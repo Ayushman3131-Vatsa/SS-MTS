@@ -14,6 +14,9 @@ from app.common.middleware.security_middleware import (
 from app.auth.router import router as auth_router
 from app.modules.configurations.router import router as configurations_router
 from app.modules.offerings.router import router as offerings_router
+from app.modules.platform_default_roles.router import (
+    router as platform_default_roles_router,
+)
 from app.modules.platform_default_templates.router import (
     router as platform_default_templates_router,
 )
@@ -34,8 +37,11 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 def _is_default_template_request(request: Request) -> bool:
     path = request.url.path
-    return path == "/platform/default-templates" or path.startswith(
-        "/platform/default-templates/"
+    return (
+        path == "/platform/default-templates"
+        or path.startswith("/platform/default-templates/")
+        or path == "/platform/default-roles"
+        or path.startswith("/platform/default-roles/")
     )
 
 
@@ -94,6 +100,7 @@ app.include_router(task_management_legacy_router)
 app.include_router(task_management_router)
 app.include_router(configurations_router)
 app.include_router(platform_default_templates_router)
+app.include_router(platform_default_roles_router)
 
 
 def custom_openapi() -> dict:

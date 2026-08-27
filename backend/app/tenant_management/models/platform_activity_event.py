@@ -26,7 +26,8 @@ class PlatformActivityEvent(Base):
             "'OFFERING_CATALOG_CREATED', 'OFFERING_CATALOG_UPDATED', "
             "'OFFERING_CATALOG_ACTIVATED', 'OFFERING_CATALOG_DEACTIVATED', "
             "'OFFERING_CATALOG_DELETED', 'DEFAULT_TEMPLATE_CREATED', "
-            "'DEFAULT_TEMPLATE_UPDATED')",
+            "'DEFAULT_TEMPLATE_UPDATED', 'DEFAULT_ROLE_CREATED', "
+            "'DEFAULT_ROLE_UPDATED', 'DEFAULT_ROLE_DELETED')",
             name="check_platform_activity_events_type",
         ),
         CheckConstraint(

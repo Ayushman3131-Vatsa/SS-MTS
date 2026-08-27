@@ -18,9 +18,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("tenants", sa.Column("alternate_contact_name", sa.String(length=255), nullable=True))
-    op.add_column("tenants", sa.Column("alternate_contact_email", postgresql.CITEXT(), nullable=True))
-    op.add_column("tenants", sa.Column("alternate_contact_phone", sa.String(length=40), nullable=True))
+    op.execute(
+        """
+        ALTER TABLE tenants
+            ADD COLUMN IF NOT EXISTS alternate_contact_name VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS alternate_contact_email CITEXT,
+            ADD COLUMN IF NOT EXISTS alternate_contact_phone VARCHAR(40)
+        """
+    )
 
 
 def downgrade() -> None:

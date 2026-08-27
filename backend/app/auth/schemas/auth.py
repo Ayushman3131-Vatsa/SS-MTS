@@ -1,8 +1,9 @@
 import uuid
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
+from app.access_control.shared.schemas import SessionPageAccess
 from app.common.security import normalize_email
 from app.common.schemas.base import StrictRequestModel
 
@@ -19,27 +20,44 @@ class StrictAuthRequest(StrictRequestModel):
     @field_validator("email", mode="before", check_fields=False)
     @classmethod
     def canonicalize_email(cls, value: object) -> object:
-        return normalize_email(value) if isinstance(value, str) else value
+        if not isinstance(value, str):
+            return value
+        stripped = value.strip()
+        if "@" in stripped:
+            return normalize_email(stripped)
+        return stripped
 
 
 class AdminLoginRequest(StrictAuthRequest):
-    email: Annotated[EmailStr, Field(max_length=254)]
+    email: Annotated[str, Field(min_length=1, max_length=254)]
     password: LoginPassword
 
 
 class TenantLoginRequest(StrictAuthRequest):
-    email: Annotated[EmailStr, Field(max_length=254)]
+    tenant_code: Annotated[str, Field(min_length=2, max_length=30)]
+    email: Annotated[str, Field(min_length=1, max_length=254)]
     password: LoginPassword
+
+    @field_validator("tenant_code", mode="before")
+    @classmethod
+    def normalize_tenant_code(cls, value: object) -> object:
+        return value.strip().upper() if isinstance(value, str) else value
 
 
 class PlatformSessionLoginRequest(StrictAuthRequest):
-    email: Annotated[EmailStr, Field(max_length=254)]
+    email: Annotated[str, Field(min_length=1, max_length=254)]
     password: LoginPassword
 
 
 class TenantSessionLoginRequest(StrictAuthRequest):
-    email: Annotated[EmailStr, Field(max_length=254)]
+    tenant_code: Annotated[str, Field(min_length=2, max_length=30)]
+    email: Annotated[str, Field(min_length=1, max_length=254)]
     password: LoginPassword
+
+    @field_validator("tenant_code", mode="before")
+    @classmethod
+    def normalize_session_tenant_code(cls, value: object) -> object:
+        return value.strip().upper() if isinstance(value, str) else value
 
 
 class PasswordChangeRequest(StrictAuthRequest):
@@ -78,8 +96,11 @@ class SessionPrincipalResponse(BaseModel):
     principal_type: Literal["platform_admin", "tenant_user"]
     principal_id: uuid.UUID
     name: str
-    email: str
-    role: Literal["Platform Admin", "Tenant Admin", "Project Manager", "Employee"]
+    email: str | None = None
+    username: str | None = None
+    role: str
+    roles: list[str] = []
+    page_access: list[SessionPageAccess] = []
     tenant: SessionTenantResponse | None
     password_change_required: bool = False
 

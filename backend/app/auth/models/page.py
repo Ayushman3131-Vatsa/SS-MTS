@@ -18,7 +18,8 @@ class Page(Base):
     module: Mapped[str] = mapped_column(String(100), nullable=False)
     page_name: Mapped[str] = mapped_column(String(255), nullable=False)
     route: Mapped[str] = mapped_column(String(512), nullable=False)
-    app_scope: Mapped[str] = mapped_column(String(10), nullable=False, default="hr")
+    app_scope: Mapped[str] = mapped_column(String(10), nullable=False, default="tenant")
+    offering_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     

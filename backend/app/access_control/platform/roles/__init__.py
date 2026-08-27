@@ -1,0 +1,1 @@
+"""Platform role catalog."""

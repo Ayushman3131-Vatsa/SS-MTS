@@ -19,8 +19,9 @@ authorization.
 | Project Manager | Created by a Tenant Admin | Organization-member login |
 | Employee | Created by a Tenant Admin | Organization-member login |
 
-Tenant users never select a tenant or role during sign-in. They provide email
-and password; the globally unique account supplies the tenant and active role.
+Tenant users sign in with an organization code plus work email or username.
+The same work email may exist in more than one tenant. Contact emails on
+`tenants` remain globally unique. Customers open `/t/{TENANT_CODE}/login`.
 
 ## Browser-session flow
 
@@ -31,7 +32,7 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     Browser->>API: POST /auth/session/tenant
-    API->>DB: Resolve globally unique account email
+    API->>DB: Resolve tenant by tenant_code, then email or username
     API->>DB: Verify throttle + Argon2id/bcrypt password
     API->>DB: Store SHA-256(session token) + CSRF hash
     API-->>Browser: Principal JSON + mt_session + mt_csrf cookies
@@ -56,7 +57,7 @@ requests.
 | Method | Path | Body or result |
 |---|---|---|
 | `POST` | `/auth/session/platform` | `{email, password}` |
-| `POST` | `/auth/session/tenant` | `{email, password}` |
+| `POST` | `/auth/session/tenant` | `{tenant_code, email, password}` |
 | `POST` | `/auth/password/change` | `{current_password, new_password}`; rotates the current credential |
 | `GET` | `/auth/session` | Current principal and tenant context |
 | `DELETE` | `/auth/session` | Revokes the session and clears cookies |
@@ -80,9 +81,9 @@ out valid legacy accounts. Passwords are never trimmed, normalized, echoed in
 validation responses, or logged.
 
 Emails are trimmed, lowercased, validated, and stored with PostgreSQL `CITEXT`
-semantics. Tenant-user emails are globally unique. Tenant sessions expose the
-organization name and stable `tenant_code`; no workspace identifier is needed
-for login.
+semantics. Tenant-user emails are unique per tenant and may be omitted.
+Tenant sessions require `tenant_code` and expose the organization name and
+stable `tenant_code`.
 
 ## First Tenant Admin and forced password change
 

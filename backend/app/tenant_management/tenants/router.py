@@ -18,6 +18,8 @@ from app.tenant_management.schemas.tenant import (
     TenantStatusActionRequest,
     TenantRegistrationOptionsResponse,
     TenantResponse,
+    TenantFirstAccessResponse,
+    TenantCredentialResponse,
     OfferingCatalogResponse,
 )
 
@@ -38,8 +40,26 @@ async def create_tenant(
     principal: Principal = Depends(require_platform_admin),
     db: AsyncSession = Depends(get_db),
 ) -> TenantResponse:
-    tenant = await service.create_tenant(db, principal, payload)
-    return TenantResponse.model_validate(tenant)
+    created = await service.create_tenant(db, principal, payload)
+    login_path = f"/t/{created.tenant.tenant_code}/login"
+    return TenantResponse.model_validate(created.tenant).model_copy(
+        update={
+            "first_access": TenantFirstAccessResponse(
+                email=created.first_admin_email,
+                username=created.first_admin_username,
+                temporary_password=created.temporary_password,
+                login_path=login_path,
+                password_change_required=True,
+                smartskale_access=TenantCredentialResponse(
+                    email=created.smartskale_email,
+                    username=created.smartskale_username,
+                    temporary_password=created.smartskale_password,
+                    login_path=login_path,
+                    password_change_required=False,
+                ),
+            )
+        }
+    )
 
 
 @router.get("", response_model=TenantListResponse)
@@ -81,6 +101,20 @@ async def get_tenant(
 ) -> TenantResponse:
     tenant = await service.get_tenant_or_404(db, tenant_id)
     return TenantResponse.model_validate(tenant)
+
+
+@router.post("/{tenant_id}/first-access/rotate", response_model=TenantFirstAccessResponse)
+async def rotate_first_admin_access(
+    tenant_id: uuid.UUID,
+    principal: Principal = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_db),
+) -> TenantFirstAccessResponse:
+    rotated = await service.rotate_first_admin_access(db, principal, tenant_id)
+    return TenantFirstAccessResponse(
+        email=rotated.email,
+        username=rotated.username,
+        temporary_password=rotated.temporary_password,
+    )
 
 
 @router.post("/{tenant_id}/suspend", response_model=TenantResponse)

@@ -38,9 +38,13 @@
 }
 
 .primary {
-  color: var(--color-white);
+  color: #ffffff;
   background: var(--color-blue-600);
   box-shadow: 0 1px 2px rgb(16 24 40 / 0.12);
+}
+
+.primary :is(span, svg) {
+  color: #ffffff;
 }
 
 .primary:hover:not(:disabled) {

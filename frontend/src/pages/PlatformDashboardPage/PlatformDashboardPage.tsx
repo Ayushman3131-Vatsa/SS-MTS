@@ -57,11 +57,8 @@ export const PlatformDashboardPage = () => {
     <div className={styles.page} aria-busy={isLoading}>
       <header className={styles.pageHeader}>
         <div>
-          <p>Platform overview</p>
           <h1>Dashboard</h1>
-          <span>
-            Monitor tenant adoption, infrastructure, and subscriptions.
-          </span>
+          <p>Tenant adoption, infrastructure, and subscriptions.</p>
         </div>
         <div className={styles.actions}>
           <div className={styles.filters}>

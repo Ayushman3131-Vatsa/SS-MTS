@@ -2,6 +2,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.access_control.shared.checks import tenant_has_task_management_modify
 from app.auth.roles import get_active_role_name
 from app.common.audit import record_audit
 from app.common.deps import Principal
@@ -42,14 +43,14 @@ async def validate_member_user(
             "Only an active tenant user can be added to a project",
             code=errors.INVALID_PROJECT_MEMBER,
         )
-    if role == ProjectMemberRole.MANAGER and user_role not in {
-        "Tenant Admin",
-        "Project Manager",
-    }:
-        raise BusinessRuleError(
-            "Only a Tenant Admin or Project Manager can be a project manager",
-            code=errors.INVALID_PROJECT_MEMBER,
-        )
+    if role == ProjectMemberRole.MANAGER:
+        if user_role != "Tenant Admin" and not await tenant_has_task_management_modify(
+            db, tenant_id=tenant_id, user_id=user_id
+        ):
+            raise BusinessRuleError(
+                "Only users with Task Management modify access can be a project manager",
+                code=errors.INVALID_PROJECT_MEMBER,
+            )
     return user
 
 

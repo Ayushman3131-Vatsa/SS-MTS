@@ -78,12 +78,12 @@ sessionStorage.
 | Principal | Destination |
 | --- | --- |
 | Platform Admin | `/platform` |
-| Tenant Admin | `/app/overview` |
-| Project Manager | `/app/overview` |
-| Employee | `/app/my-work` |
+| Tenant Admin | `/t/{CODE}/app/overview` |
+| Project Manager | `/t/{CODE}/app/overview` |
+| Employee | `/t/{CODE}/app/overview` |
 
 Entering another role’s area redirects to `/forbidden`; entering a protected
-route without a session redirects to `/login`.
+tenant route without a session redirects to `/t/{CODE}/login` or `/login`.
 
 ## Platform Admin dashboard
 

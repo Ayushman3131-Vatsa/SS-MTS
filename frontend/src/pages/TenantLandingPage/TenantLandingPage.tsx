@@ -2,6 +2,7 @@ import { ArrowRight, CheckCircle2, LayoutDashboard, PackageCheck, UserRound } fr
 import { Link } from "react-router-dom";
 
 import { useSession } from "../../entities/session/model/session-context";
+import { useTenantAppPath } from "../../entities/session/model/routing";
 import styles from "./TenantLandingPage.module.css";
 
 interface TenantLandingPageProps {
@@ -10,6 +11,7 @@ interface TenantLandingPageProps {
 
 export const TenantLandingPage = ({ variant }: TenantLandingPageProps) => {
   const { principal } = useSession();
+  const appPath = useTenantAppPath();
   if (!principal || principal.principal_type !== "tenant_user") {
     return null;
   }
@@ -29,11 +31,11 @@ export const TenantLandingPage = ({ variant }: TenantLandingPageProps) => {
         </div>
       </section>
       <section className={styles.cards}>
-        <article><UserRound /><span><small>Signed in as</small><strong>{principal.email}</strong></span></article>
+        <article><UserRound /><span><small>Signed in as</small><strong>{principal.email ?? principal.name}</strong></span></article>
         <article><PackageCheck /><span><small>Licensed offerings</small><strong>{principal.tenant.offerings.length}</strong></span></article>
       </section>
       {firstOffering && (
-        <Link to={`/app/modules/${firstOffering.route_slug}`}>
+        <Link to={appPath(`/app/modules/${firstOffering.route_slug}`)}>
           <span><small>Explore your modules</small><strong>{firstOffering.display_name}</strong></span>
           <ArrowRight />
         </Link>

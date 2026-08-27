@@ -54,7 +54,7 @@ describe("ForcedPasswordChangePage", () => {
         >
           <Routes>
             <Route path="/account/change-password" element={<ForcedPasswordChangePage />} />
-            <Route path="/app/overview" element={<h1>Tenant home</h1>} />
+            <Route path="/t/:tenantCode/app/overview" element={<h1>Tenant home</h1>} />
           </Routes>
         </MemoryRouter>
       </SessionContext.Provider>,
@@ -70,5 +70,41 @@ describe("ForcedPasswordChangePage", () => {
       new_password: "Permanent!Password84",
     });
     expect(await screen.findByRole("heading", { name: "Tenant home" })).toBeVisible();
+  });
+
+  it("signs out to the platform login page", async () => {
+    const user = userEvent.setup();
+    const logout = vi.fn().mockResolvedValue(undefined);
+    const context: SessionContextValue = {
+      status: "authenticated",
+      principal: pendingPrincipal,
+      notice: null,
+      clearNotice: vi.fn(),
+      loginTenant: vi.fn(),
+      loginPlatform: vi.fn(),
+      changePassword: vi.fn(),
+      logout,
+      retryBootstrap: vi.fn(),
+    };
+
+    render(
+      <SessionContext.Provider value={context}>
+        <MemoryRouter
+          initialEntries={["/account/change-password"]}
+          future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+        >
+          <Routes>
+            <Route path="/account/change-password" element={<ForcedPasswordChangePage />} />
+            <Route path="/t/:tenantCode/app/overview" element={<h1>Tenant home</h1>} />
+            <Route path="/platform/login" element={<h1>Platform login</h1>} />
+          </Routes>
+        </MemoryRouter>
+      </SessionContext.Provider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Platform administrator sign in" }));
+
+    expect(logout).toHaveBeenCalledOnce();
+    expect(await screen.findByRole("heading", { name: "Platform login" })).toBeVisible();
   });
 });

@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, update
 
 from app.auth.email_identity import lock_email_identity, reserve_new_user_email
+from app.auth.username_identity import allocate_unique_tenant_username
 from app.auth.models.role import Role
 from app.auth.models.user_account import UserAccount
 from app.auth.models.user_role import UserRole
@@ -129,9 +130,11 @@ async def _bootstrap(tenant_code: str, *, rotate_pending: bool) -> tuple[str, st
                 tenant_id=tenant.tenant_id,
                 allow_tenant_primary_contact=True,
             )
+            username = await allocate_unique_tenant_username(session, contact_email)
             admin = UserAccount(
                 tenant_id=tenant.tenant_id,
                 display_name=tenant.contact_name,
+                username=username,
                 email=contact_email,
                 password_hash=hash_password(password),
                 created_by_user_id=None,

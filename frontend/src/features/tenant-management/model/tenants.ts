@@ -94,6 +94,16 @@ export interface TenantRecord {
   created_at: string;
   updated_at: string;
   version: number;
+  first_access?: TenantFirstAccess | null;
+}
+
+export interface TenantFirstAccess {
+  email: string | null;
+  username?: string | null;
+  temporary_password: string;
+  login_path: string;
+  password_change_required: boolean;
+  smartskale_access?: TenantFirstAccess | null;
 }
 
 export interface TenantListResponse {
@@ -138,6 +148,7 @@ export interface TenantRegistrationPayload {
     expected_tenant_version?: number;
     reason?: string | null;
   }>;
+  bootstrap_role_ids?: string[];
 }
 
 export interface TenantOfferingActionPayload {

@@ -39,12 +39,19 @@ from app.core_hr.models.exit_interview import ExitInterview
 from app.tenant_management.models.offering import Offering
 from app.auth.models.page import Page
 from app.auth.models.password_reset_token import PasswordResetToken
+from app.auth.models.platform_permission import PlatformPermission
 from app.core_hr.models.pay_calendar import PayCalendar
 from app.core_hr.models.payroll_record import PayrollRecord
 from app.core_hr.models.payroll_record_component import PayrollRecordComponent
 from app.core_hr.models.payroll_run import PayrollRun
 from app.tenant_management.models.platform_activity_event import PlatformActivityEvent
 from app.auth.models.platform_admin import PlatformAdmin
+from app.auth.models.platform_default_role import PlatformDefaultRole
+from app.auth.models.platform_default_role_page_access import PlatformDefaultRolePageAccess
+from app.auth.models.platform_role import PlatformRole
+from app.auth.models.platform_role_page_access import PlatformRolePageAccess
+from app.auth.models.platform_role_permission import PlatformRolePermission
+from app.auth.models.platform_user_role import PlatformUserRole
 from app.task_management.models.project import Project
 from app.auth.models.role import Role
 from app.auth.models.role_page_access import RolePageAccess
@@ -58,6 +65,8 @@ from app.tenant_management.models.tenant import Tenant
 from app.tenant_management.models.tenant_database_allocation import TenantDatabaseAllocation
 from app.tenant_management.models.tenant_module import TenantModule
 from app.tenant_management.models.tenant_offering import TenantOffering
+from app.auth.models.tenant_permission import TenantPermission
+from app.auth.models.tenant_role_permission import TenantRolePermission
 from app.tenant_management.models.tenant_subscription import TenantSubscription
 from app.auth.models.user_account import UserAccount
 from app.auth.models.user_role import UserRole
@@ -111,6 +120,13 @@ __all__ = [
     "PlatformActivityType",
     "PlatformActorType",
     "PlatformAdmin",
+    "PlatformDefaultRole",
+    "PlatformDefaultRolePageAccess",
+    "PlatformPermission",
+    "PlatformRole",
+    "PlatformRolePageAccess",
+    "PlatformRolePermission",
+    "PlatformUserRole",
     "Project",
     "ROLE_CODE_BY_NAME",
     "ROLE_NAME_BY_CODE",
@@ -128,6 +144,8 @@ __all__ = [
     "TenantDatabaseAllocation",
     "TenantModule",
     "TenantOffering",
+    "TenantPermission",
+    "TenantRolePermission",
     "TenantStatus",
     "TenantSubscription",
     "TenantSubscriptionStatus",

@@ -1,54 +1,30 @@
-import {
-  Building2,
-  FileStack,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  Package,
-  PlusCircle,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import { Building2, ChevronDown, FileStack, KeyRound, LayoutDashboard, LogOut, Menu, Package, PlusCircle, ShieldCheck, UsersRound, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useSession } from "../../entities/session/model/session-context";
+import { canAccessPage } from "../../entities/session/model/page-access";
 import { getLoginErrorContent } from "../../features/auth/model/login-errors";
 import { BrandMark } from "../../shared/ui/BrandMark/BrandMark";
 import { Button } from "../../shared/ui/Button/Button";
+import { UserAvatar } from "../../shared/ui/UserAvatar/UserAvatar";
+import { formatRoleLabel } from "../../shared/utils/user-display";
 import styles from "./PlatformShell.module.css";
 
-const navigation = [
-  {
-    end: true,
-    icon: LayoutDashboard,
-    label: "Dashboard",
-    to: "/platform",
-  },
-  {
-    end: true,
-    icon: Building2,
-    label: "All Tenants",
-    to: "/platform/tenants",
-  },
-  {
-    end: true,
-    icon: PlusCircle,
-    label: "Register Tenant",
-    to: "/platform/tenants/register",
-  },
-  {
-    end: true,
-    icon: Package,
-    label: "Offerings",
-    to: "/platform/offerings",
-  },
-  {
-    end: false,
-    icon: FileStack,
-    label: "Default Templates",
-    to: "/platform/default-templates",
-  },
+const primaryNavigation = [
+  { end: true, icon: LayoutDashboard, label: "Dashboard", to: "/platform" },
+  { end: true, icon: Building2, label: "All Tenants", to: "/platform/tenants" },
+  { end: true, icon: PlusCircle, label: "Register Tenant", to: "/platform/tenants/register" },
+] as const;
+
+const catalogNavigation = [
+  { end: true, icon: Package, label: "Offerings", to: "/platform/offerings" },
+  { end: false, icon: FileStack, label: "Default Templates", to: "/platform/default-templates" },
+] as const;
+
+const accessNavigation = [
+  { icon: UsersRound, label: "Users", to: "/platform/users" },
+  { icon: KeyRound, label: "Roles & permissions", to: "/platform/roles" },
 ] as const;
 
 const FOCUSABLE_SELECTOR = [
@@ -63,6 +39,8 @@ export const PlatformShell = () => {
   const { logout, principal } = useSession();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const accessRouteActive = location.pathname.startsWith("/platform/users") || location.pathname.startsWith("/platform/roles");
+  const [accessExpanded, setAccessExpanded] = useState(accessRouteActive);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const drawerRef = useRef<HTMLElement>(null);
@@ -71,6 +49,12 @@ export const PlatformShell = () => {
   useEffect(() => {
     setDrawerOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (accessRouteActive) {
+      setAccessExpanded(true);
+    }
+  }, [accessRouteActive]);
 
   useEffect(() => {
     if (!drawerOpen) {
@@ -165,14 +149,15 @@ export const PlatformShell = () => {
         </div>
 
         <div className={styles.identity}>
-          <div className={styles.identityText}>
-            <strong>Platform operations</strong>
-            <span>{principal.role}</span>
+          <div className={styles.userCard}>
+            <UserAvatar name={principal.name} size="md" />
+            <div className={styles.identityText}>
+              <strong>{principal.name}</strong>
+              <span className={styles.roleLine}>{formatRoleLabel(principal.role)}</span>
+            </div>
           </div>
-          <span className={styles.avatar} aria-hidden="true">
-            {principal.name.slice(0, 1).toUpperCase()}
-          </span>
           <Button
+            className={styles.signOutButton}
             variant="ghost"
             onClick={handleLogout}
             loading={isLoggingOut}
@@ -180,7 +165,7 @@ export const PlatformShell = () => {
             aria-label="Sign out"
           >
             {!isLoggingOut && <LogOut size={17} aria-hidden="true" />}
-            {!isLoggingOut && "Sign out"}
+            {!isLoggingOut && <span className={styles.signOutLabel}>Sign out</span>}
           </Button>
         </div>
       </header>
@@ -226,27 +211,73 @@ export const PlatformShell = () => {
 
         <nav aria-label="Platform navigation">
           <span className={styles.navLabel}>Workspace</span>
-          {navigation.map(({ end, icon: Icon, label, to }) => (
-            <NavLink
-              className={({ isActive }) =>
-                `${styles.navItem} ${isActive ? styles.active : ""}`
-              }
-              end={end}
-              key={to}
-              to={to}
-              title={label}
-            >
-              <Icon size={18} aria-hidden="true" />
-              <span>{label}</span>
-            </NavLink>
-          ))}
+          {primaryNavigation
+            .filter((item) => canAccessPage(principal, item.to))
+            .map(({ end, icon: Icon, label, to }) => (
+              <NavLink
+                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ""}`}
+                end={end}
+                key={to}
+                to={to}
+                title={label}
+              >
+                <Icon size={18} aria-hidden="true" />
+                <span>{label}</span>
+              </NavLink>
+            ))}
+          {canAccessPage(principal, "/platform/users") || canAccessPage(principal, "/platform/roles") ? (
+            <div className={styles.navGroup}>
+              <button
+                type="button"
+                className={`${styles.groupToggle} ${accessRouteActive ? styles.groupActive : ""}`}
+                aria-expanded={accessExpanded}
+                aria-controls="user-access-management-navigation"
+                onClick={() => setAccessExpanded((expanded) => !expanded)}
+              >
+                <ShieldCheck size={18} aria-hidden="true" />
+                <span>User Access Management</span>
+                <ChevronDown className={accessExpanded ? styles.chevronOpen : ""} size={15} aria-hidden="true" />
+              </button>
+              {accessExpanded && (
+                <div id="user-access-management-navigation" className={styles.subnav}>
+                  {accessNavigation
+                    .filter((item) => canAccessPage(principal, item.to))
+                    .map(({ icon: Icon, label, to }) => (
+                      <NavLink
+                        className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ""}`}
+                        key={to}
+                        to={to}
+                        title={label}
+                      >
+                        <Icon size={17} aria-hidden="true" />
+                        <span>{label}</span>
+                      </NavLink>
+                    ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+          {catalogNavigation
+            .filter((item) => canAccessPage(principal, item.to))
+            .map(({ end, icon: Icon, label, to }) => (
+              <NavLink
+                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ""}`}
+                end={end}
+                key={to}
+                to={to}
+                title={label}
+              >
+                <Icon size={18} aria-hidden="true" />
+                <span>{label}</span>
+              </NavLink>
+            ))}
         </nav>
 
         <div className={styles.sidebarFooter}>
           <ShieldCheck size={16} aria-hidden="true" />
           <div>
             <strong>Secure console</strong>
-            <span>Platform Admin access</span>
+            <span>{formatRoleLabel(principal.role)} · Platform access</span>
           </div>
         </div>
       </aside>

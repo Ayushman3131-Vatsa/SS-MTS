@@ -5,26 +5,86 @@ one database transaction.
 
 ## Write model
 
-`POST /tenants` creates:
+`POST /tenants` creates, in one transaction:
 
 1. the tenant identity, company profile, address, and required primary contact;
-2. the current subscription;
-3. the database allocation;
-4. the selected tenant-offering grants, including their UTC validity windows;
-5. platform activity and tenant audit records.
+2. the current subscription and database allocation;
+3. the selected offering grants (UTC start/end windows);
+4. system roles (`TENANT_ADMIN`, `PROJECT_MANAGER`, `EMPLOYEE`) and default
+   page access for **Access Management plus currently effective offerings**;
+5. the first Tenant Admin account (contact email + generated temporary password)
+   and a Smartskale Admin (`ss_<CODE>_admin`, password from
+   `SMARTSKALE_SETUP_PASSWORD`);
+6. platform activity and tenant audit records.
+
+The create response includes `first_access` (`email`, `username`,
+`temporary_password`, `login_path: /t/{CODE}/login`, `smartskale_access`).
+Email delivery is not required; the platform admin must copy those credentials
+from the success screen.
 
 If any step fails, no partial tenant is committed. Tenant codes and normalized
-primary-contact emails are serialized with PostgreSQL advisory locks before
-their unique constraints are reached, which makes concurrent registrations
-deterministic. A primary-contact email is rejected when another tenant has
-reserved it or any tenant user already owns it.
+primary-contact emails are serialized with PostgreSQL advisory locks. A primary
+contact email is rejected when another tenant already reserved it.
 
-Registration does not seed roles or create the first user. Once UAM has created
-an active tenant-scoped `TENANT_ADMIN` role, run
-`python -m scripts.bootstrap_tenant_admin --tenant-code <CODE>`. The command
-copies the primary contact name/email into a new account, assigns that existing
-role atomically, and prints a generated temporary password after commit. Future
-contact edits do not rename the account.
+The CLI `python -m scripts.bootstrap_tenant_admin --tenant-code <CODE>` remains
+available for recovery if first-admin creation was skipped on an older tenant.
+
+## First tenant login
+
+1. Open `/t/{TENANT_CODE}/login` (or `/login` and enter the organization code),
+   **not** `/platform/login`.
+2. Sign in with the contact email or username and temporary password from
+   `first_access`.
+3. Because `force_pw_reset` is true, the first screen is
+   `/account/change-password`.
+4. After the password change, Tenant Admin lands on
+   `/t/{TENANT_CODE}/app/overview`.
+5. Navigation is built from **effective entitlements** plus workspace pages
+   that have no `offering_code` (Users, Roles). Example: license only
+   `TASK_MANAGEMENT` → Overview, Users, Roles & Permissions, Task Management.
+
+Smartskale Admin uses the same login URL, `SMARTSKALE_SETUP_EMAIL` or
+`ss_{CODE}_admin`, and `SMARTSKALE_SETUP_PASSWORD`. That account does not
+require a first-login password change.
+
+Inactive users (`is_active = false`) cannot authenticate; existing browser
+sessions are revoked on deactivate.
+
+## Adding a future offering (Core HR, Leave, Payroll)
+
+Each product is a **catalog row** plus **backend module** plus **frontend
+routes**. Creating the catalog entry does not create the product.
+
+| Layer | Where | What to add |
+|---|---|---|
+| Catalog | `offerings` table / Platform Offerings UI | `code` (stable, e.g. `CORE_HR`), display name, route slug, `ACTIVE` |
+| Pages | `pages` + Alembic seed | Rows with `app_scope=tenant` and `offering_code='CORE_HR'` |
+| Defaults | `app/access_control/tenant/defaults.py` | Grants for Tenant Admin / HR roles on those pages |
+| API | `backend/app/modules/<product>/` | Router with `Depends(require_offering("CORE_HR"))` |
+| UI | `frontend/src/pages/...` + `router.tsx` | `<OfferingRoute code="CORE_HR" />` wrapping the module |
+| Nav | `TenantShell.tsx` | Same pattern as Task Management, or generic `/app/modules/:slug` |
+
+Worked scenario: tenant buys **Leave + Payroll**, not Task Management.
+
+1. Platform admin registers the tenant and selects Leave and Payroll windows.
+2. `create_tenant` stores two `tenant_offerings` rows.
+3. Session `offerings` lists only those two effective codes.
+4. `tenant_pages_for_entitlements` includes Users/Roles (no offering_code) plus
+   pages whose `offering_code` is `LEAVE_MANAGEMENT` or `PAYROLL`.
+5. Task Management APIs return 403 (`require_offering("TASK_MANAGEMENT")`).
+6. Later, platform grants Task Management on the tenant detail page; after
+   refresh the tenant session shows the new module without a code change.
+
+File map for Task Management (copy this shape):
+
+```
+backend/app/modules/task_management/   # offering-owned API
+backend/app/task_management/            # compatibility routers
+backend/alembic/versions/0014_*     # tables
+backend/alembic/versions/0019_*     # page offering_code
+frontend/src/pages/Task*Page/
+frontend/src/app/router/router.tsx   # OfferingRoute code="TASK_MANAGEMENT"
+```
 
 ## Catalogs and entitlements
 

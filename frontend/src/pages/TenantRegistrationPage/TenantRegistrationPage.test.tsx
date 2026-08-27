@@ -148,33 +148,81 @@ describe("TenantRegistrationPage offering access workflow", () => {
     expect(submitted).not.toHaveProperty("tenant_admin_password");
   });
 
-  it("separates offering selection from clearly labelled access windows", async () => {
+  it("submits selected offerings without manual access windows", async () => {
+    vi.mocked(tenantsApi.getRegistrationOptions).mockResolvedValue({
+      ...options,
+      offerings: [options.offerings[0]],
+    });
+    vi.mocked(tenantsApi.create).mockResolvedValue({
+      org_name: "Solo Corp",
+      tenant_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      first_access: {
+        email: "avery@example.com",
+        username: "avery.morgan",
+        temporary_password: "TempPass1!",
+        login_path: "/t/SOLO/login",
+        password_change_required: true,
+        smartskale_access: {
+          email: "hrms.support@smartskale.com",
+          username: "ss_SOLO_admin",
+          temporary_password: "Smartskale123!",
+          login_path: "/t/SOLO/login",
+          password_change_required: false,
+        },
+      },
+    } as never);
+    renderPage();
+    await screen.findByLabelText("Tenant name *");
+
+    const fill = (label: string, value: string) => {
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    };
+    fill("Tenant name *", "Solo Corp");
+    fill("Tenant code *", "solo");
+    fill("Legal company name *", "Solo Corp Private Limited");
+    fill("Industry *", "Technology");
+    fill("Company size *", "10");
+    fill("PAN number *", "ABCDE1234F");
+    fill("Address line 1 *", "1 Market Street");
+    fill("City *", "Bengaluru");
+    fill("State / province *", "Karnataka");
+    fill("Country *", "India");
+    fill("Postal / ZIP code *", "560001");
+    fill("Contact person *", "Avery Morgan");
+    fill("Designation *", "Operations Director");
+    fill("Contact email *", "avery@example.com");
+    fill("Phone number *", "+91 99999 99999");
+    fireEvent.click(screen.getByLabelText("Select Core HR"));
+    fireEvent.click(screen.getAllByRole("button", { name: "Register tenant" })[0]);
+
+    await waitFor(() => expect(tenantsApi.create).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Solo Corp is ready")).toBeVisible();
+    expect(screen.getByText("avery@example.com")).toBeVisible();
+    expect(screen.getByText("avery.morgan")).toBeVisible();
+    expect(screen.getByText(/Sign-in URL: \/t\/SOLO\/login/)).toBeVisible();
+    expect(screen.getByText("ss_SOLO_admin")).toBeVisible();
+    const submitted = vi.mocked(tenantsApi.create).mock.calls[0]?.[0];
+    expect(submitted?.offering_ids).toEqual([options.offerings[0].offering_id]);
+    expect(submitted?.offering_grants ?? []).toEqual([]);
+  });
+
+  it("does not show the access window configuration panel", async () => {
     renderPage();
 
     fireEvent.click(await screen.findByLabelText("Select Core HR"));
 
-    const startsInput = screen.getByLabelText("Core HR access starts");
-    const expiresInput = screen.getByLabelText("Core HR access expires");
-    expect(screen.getByText("Configure access windows")).toBeVisible();
-    expect(startsInput).toBeVisible();
-    expect(expiresInput).toBeVisible();
-    expect(expiresInput).toBeRequired();
-    expect(expiresInput).toHaveAttribute("min", startsInput.getAttribute("value"));
+    expect(screen.queryByText("Configure access windows")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Core HR access starts")).not.toBeInTheDocument();
     expect(screen.getByText("1 selected")).toBeVisible();
   });
 
-  it("removes a configured offering and restores defaults when reset", async () => {
+  it("restores defaults when reset", async () => {
     renderPage();
 
     fireEvent.click(await screen.findByLabelText("Select Core HR"));
-    fireEvent.click(screen.getByRole("button", { name: "Remove Core HR" }));
-    expect(screen.queryByLabelText("Core HR access starts")).not.toBeInTheDocument();
-    expect(screen.getByText("No offerings selected")).toBeVisible();
-
     fireEvent.click(screen.getByLabelText("Select Help Desk"));
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
 
     await waitFor(() => expect(screen.getByLabelText("Select Help Desk")).not.toBeChecked());
-    expect(screen.queryByLabelText("Help Desk access starts")).not.toBeInTheDocument();
   });
 });

@@ -17,11 +17,9 @@
 .catalogHeader p,
 .panelHeading span {
   margin: 0 0 0.3rem;
-  color: var(--color-blue-700);
-  font-size: 0.68rem;
-  font-weight: 750;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
+  color: var(--color-slate-600);
+  font-size: 0.92rem;
+  font-weight: 450;
 }
 
 .pageHeader h1,
