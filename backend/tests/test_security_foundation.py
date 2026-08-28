@@ -2,9 +2,10 @@ import asyncio
 import json
 import unittest
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.exceptions import RequestValidationError
 from passlib.hash import bcrypt
@@ -21,6 +22,10 @@ from app.tenant_management.models.enums import SubscriptionPlanCode
 from app.task_management.schemas.comment import CommentCreateRequest
 from app.tenant_management.schemas.tenant import TenantCreateRequest
 from app.auth.schemas.user import UserCreateRequest
+from app.auth.models.platform_admin import PlatformAdmin
+from app.auth.models.platform_role import PlatformRole
+from app.auth.models.platform_user_role import PlatformUserRole
+import scripts.seed_platform_admin as seed_platform_admin
 from scripts.seed_platform_admin import _prompt_for_password
 
 
@@ -323,6 +328,197 @@ class SeedScriptTests(unittest.TestCase):
     def test_seed_password_confirmation_must_match(self, _prompt) -> None:
         with self.assertRaisesRegex(ValueError, "do not match"):
             _prompt_for_password()
+
+
+class SeedScriptDatabaseTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _session_manager(session):
+        @asynccontextmanager
+        async def managed_session():
+            yield session
+
+        return managed_session()
+
+    async def test_seed_creates_admin_and_platform_role_assignment_atomically(self) -> None:
+        role_id = uuid.uuid4()
+        role = PlatformRole(
+            id=role_id,
+            role_code="PLATFORM_ADMIN",
+            role_name="Platform Admin",
+            is_active=True,
+        )
+        session = MagicMock()
+        session.scalar = AsyncMock(side_effect=[role, None])
+        session.commit = AsyncMock()
+
+        with (
+            patch.object(
+                seed_platform_admin.db_manager,
+                "session_for",
+                return_value=self._session_manager(session),
+            ),
+            patch.object(seed_platform_admin, "hash_password", return_value="test-hash"),
+            patch("builtins.print"),
+        ):
+            await seed_platform_admin._seed(
+                "Initial Administrator",
+                "admin@example.com",
+                "Orbit!Sparrow42",
+            )
+
+        session.add_all.assert_called_once()
+        admin, assignment = session.add_all.call_args.args[0]
+        self.assertIsInstance(admin, PlatformAdmin)
+        self.assertIsInstance(assignment, PlatformUserRole)
+        self.assertEqual(assignment.admin_id, admin.admin_id)
+        self.assertEqual(assignment.role_id, role_id)
+        self.assertTrue(assignment.is_active)
+        session.commit.assert_awaited_once()
+
+    async def test_seed_repairs_existing_admin_without_changing_password(self) -> None:
+        role = PlatformRole(
+            id=uuid.uuid4(),
+            role_code="PLATFORM_ADMIN",
+            role_name="Platform Admin",
+            is_active=True,
+        )
+        existing = PlatformAdmin(
+            admin_id=uuid.uuid4(),
+            name="Initial Administrator",
+            email="admin@example.com",
+            username="admin",
+            password_hash="existing-hash",
+        )
+        session = MagicMock()
+        session.scalar = AsyncMock(side_effect=[role, existing, None])
+        session.commit = AsyncMock()
+
+        with (
+            patch.object(
+                seed_platform_admin.db_manager,
+                "session_for",
+                return_value=self._session_manager(session),
+            ),
+            patch.object(seed_platform_admin, "hash_password") as hash_password_mock,
+            patch.object(seed_platform_admin, "validate_password") as validate_password_mock,
+            patch("builtins.print"),
+        ):
+            await seed_platform_admin._seed(
+                existing.name,
+                existing.email,
+            )
+
+        assignment = session.add.call_args.args[0]
+        self.assertIsInstance(assignment, PlatformUserRole)
+        self.assertEqual(assignment.admin_id, existing.admin_id)
+        self.assertEqual(assignment.role_id, role.id)
+        self.assertEqual(existing.password_hash, "existing-hash")
+        hash_password_mock.assert_not_called()
+        validate_password_mock.assert_not_called()
+        session.commit.assert_awaited_once()
+
+    async def test_seed_is_noop_when_existing_admin_already_has_role(self) -> None:
+        role = PlatformRole(
+            id=uuid.uuid4(),
+            role_code="PLATFORM_ADMIN",
+            role_name="Platform Admin",
+            is_active=True,
+        )
+        existing = PlatformAdmin(
+            admin_id=uuid.uuid4(),
+            name="Initial Administrator",
+            email="admin@example.com",
+            username="admin",
+            password_hash="existing-hash",
+        )
+        assignment = PlatformUserRole(
+            id=uuid.uuid4(),
+            admin_id=existing.admin_id,
+            role_id=role.id,
+            is_active=True,
+        )
+        session = MagicMock()
+        session.scalar = AsyncMock(side_effect=[role, existing, assignment])
+        session.commit = AsyncMock()
+
+        with (
+            patch.object(
+                seed_platform_admin.db_manager,
+                "session_for",
+                return_value=self._session_manager(session),
+            ),
+            patch("builtins.print"),
+        ):
+            await seed_platform_admin._seed(
+                existing.name,
+                existing.email,
+            )
+
+        session.add.assert_not_called()
+        session.add_all.assert_not_called()
+        session.commit.assert_not_awaited()
+
+    async def test_seed_reactivates_revoked_platform_admin_role(self) -> None:
+        role = PlatformRole(
+            id=uuid.uuid4(),
+            role_code="PLATFORM_ADMIN",
+            role_name="Platform Admin",
+            is_active=True,
+        )
+        existing = PlatformAdmin(
+            admin_id=uuid.uuid4(),
+            name="Initial Administrator",
+            email="admin@example.com",
+            username="admin",
+            password_hash="existing-hash",
+        )
+        assignment = PlatformUserRole(
+            id=uuid.uuid4(),
+            admin_id=existing.admin_id,
+            role_id=role.id,
+            is_active=False,
+            revoked_at=datetime.now(timezone.utc),
+            revoked_by=uuid.uuid4(),
+        )
+        session = MagicMock()
+        session.scalar = AsyncMock(side_effect=[role, existing, assignment])
+        session.commit = AsyncMock()
+
+        with (
+            patch.object(
+                seed_platform_admin.db_manager,
+                "session_for",
+                return_value=self._session_manager(session),
+            ),
+            patch("builtins.print"),
+        ):
+            await seed_platform_admin._seed(existing.name, existing.email)
+
+        self.assertTrue(assignment.is_active)
+        self.assertIsNone(assignment.revoked_at)
+        self.assertIsNone(assignment.revoked_by)
+        session.commit.assert_awaited_once()
+
+    async def test_seed_requires_migrated_platform_admin_role(self) -> None:
+        session = MagicMock()
+        session.scalar = AsyncMock(return_value=None)
+        session.commit = AsyncMock()
+
+        with patch.object(
+            seed_platform_admin.db_manager,
+            "session_for",
+            return_value=self._session_manager(session),
+        ):
+            with self.assertRaisesRegex(ValueError, "alembic upgrade head"):
+                await seed_platform_admin._seed(
+                    "Initial Administrator",
+                    "admin@example.com",
+                    "Orbit!Sparrow42",
+                )
+
+        session.add.assert_not_called()
+        session.add_all.assert_not_called()
+        session.commit.assert_not_awaited()
 
 
 if __name__ == "__main__":

@@ -400,8 +400,10 @@ def upgrade() -> None:
         "platform_activity_events",
     }
 
-    # Prefer a stable dependency-friendly order; anything else follows alphabetically.
-    preferred = [
+    # Keep this historical migration pinned to the tables that existed when
+    # it was authored. Iterating over every table in today's metadata causes
+    # later revisions' tables to be created too early on a clean install.
+    historical_tables = [
         "pages",
         "tenant_modules",
         "departments",
@@ -441,9 +443,11 @@ def upgrade() -> None:
         "email_log",
     ]
 
-    pending = [name for name in Base.metadata.tables if name not in already]
-    ordered = [name for name in preferred if name in pending]
-    ordered.extend(sorted(name for name in pending if name not in ordered))
+    ordered = [
+        name
+        for name in historical_tables
+        if name in Base.metadata.tables and name not in already
+    ]
 
     created = []
     for name in ordered:
