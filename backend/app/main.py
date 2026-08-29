@@ -11,6 +11,7 @@ from app.common.middleware.security_middleware import (
     RequestSizeLimitMiddleware,
     SecurityHeadersMiddleware,
 )
+from app.common.middleware.cors_middleware import configure_cors
 from app.auth.router import router as auth_router
 from app.modules.configurations.router import router as configurations_router
 from app.modules.offerings.router import router as offerings_router
@@ -24,15 +25,16 @@ from app.modules.task_management.router import router as task_management_legacy_
 from app.task_management.router import router as task_management_router
 from app.tenant_management.router import router as tenant_management_router
 
+settings = get_settings()
 app = FastAPI(title="Multi-Tenant Task Management POC", version="0.1.0")
 
-# Middleware registration is intentionally ordered from application concern to
-# transport concern. Starlette makes the last registered middleware outermost:
-# security headers therefore decorate every response, request-size checks run
-# before authentication, and authentication runs before route handlers.
+# Starlette makes the last registered middleware outermost. Credentialed CORS,
+# when configured, is therefore able to decorate authentication and other
+# middleware-generated error responses as well as normal route responses.
 app.add_middleware(AuthenticationMiddleware)
 app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+configure_cors(app, settings)
 
 
 def _is_default_template_request(request: Request) -> bool:
@@ -132,7 +134,7 @@ def custom_openapi() -> dict:
     security_schemes["BrowserSession"] = {
         "type": "apiKey",
         "in": "cookie",
-        "name": get_settings().session_cookie_name,
+        "name": settings.session_cookie_name,
         "description": (
             "HttpOnly browser cookie issued by a /auth/session/* login. "
             "Unsafe cookie-authenticated requests also require X-CSRF-Token."

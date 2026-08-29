@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
@@ -21,6 +23,7 @@ from app.common.middleware.security_middleware import (
     RequestSizeLimitMiddleware,
     SecurityHeadersMiddleware,
 )
+from app.common.middleware.cors_middleware import configure_cors
 from app.auth.login import router as auth_router
 from app.auth.login.service import (
     BrowserAuthenticationResult,
@@ -102,6 +105,46 @@ class AuthSchemaTests(unittest.TestCase):
 
 
 class SessionSecurityTests(unittest.TestCase):
+    def test_cors_origins_are_normalized_and_deduplicated(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            cors_allowed_origins=(
+                " https://app.example.com/,http://127.0.0.1:5173,"
+                "https://app.example.com "
+            ),
+        )
+
+        self.assertEqual(
+            settings.cors_origins,
+            ["https://app.example.com", "http://127.0.0.1:5173"],
+        )
+
+    def test_cors_origins_reject_wildcards_and_non_origins(self) -> None:
+        for value in ("*", "https://app.example.com/path", "app.example.com"):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                Settings(_env_file=None, cors_allowed_origins=value)
+
+    def test_cors_registers_an_explicit_credentialed_allowlist(self) -> None:
+        test_app = FastAPI()
+        configure_cors(
+            test_app,
+            Settings(
+                _env_file=None,
+                cors_allowed_origins="https://app.example.com",
+            ),
+        )
+
+        self.assertEqual(len(test_app.user_middleware), 1)
+        middleware = test_app.user_middleware[0]
+        self.assertIs(middleware.cls, CORSMiddleware)
+        self.assertEqual(
+            middleware.kwargs["allow_origins"],
+            ["https://app.example.com"],
+        )
+        self.assertTrue(middleware.kwargs["allow_credentials"])
+        self.assertNotIn("*", middleware.kwargs["allow_methods"])
+        self.assertNotIn("*", middleware.kwargs["allow_headers"])
+
     def test_client_ip_uses_server_canonical_peer_not_untrusted_header(self) -> None:
         request = Request(
             {

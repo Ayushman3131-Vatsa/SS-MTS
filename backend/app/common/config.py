@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 import tempfile
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,6 +25,10 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 60
 
     environment: str = "development"
+
+    # Comma-separated browser origins allowed to call the API directly.
+    # Leave empty when a same-origin proxy exposes the API under /api.
+    cors_allowed_origins: str = ""
 
     browser_session_expire_minutes: int = Field(default=60, ge=1, le=1440)
     session_cookie_name: str = Field(
@@ -72,6 +77,41 @@ class Settings(BaseSettings):
     @property
     def secure_cookies(self) -> bool:
         return not self.is_development
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [
+            origin
+            for origin in self.cors_allowed_origins.split(",")
+            if origin
+        ]
+
+    @field_validator("cors_allowed_origins")
+    @classmethod
+    def validate_cors_allowed_origins(cls, value: str) -> str:
+        normalized: list[str] = []
+        for candidate in value.split(","):
+            origin = candidate.strip().rstrip("/")
+            if not origin:
+                continue
+            parsed = urlsplit(origin)
+            if (
+                origin == "*"
+                or parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError(
+                    "CORS_ALLOWED_ORIGINS must contain comma-separated HTTP(S) "
+                    "origins without paths, credentials, queries, fragments, or wildcards"
+                )
+            if origin not in normalized:
+                normalized.append(origin)
+        return ",".join(normalized)
 
     @field_validator("smartskale_setup_email")
     @classmethod
