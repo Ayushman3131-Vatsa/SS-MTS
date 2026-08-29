@@ -32,11 +32,11 @@ export const TaskListPage = ({ mode }: { mode: "all" | "mine" }) => {
   const filters: ApiTaskFilters = { ...filterValues as ApiTaskFilters, page, page_size: DEFAULT_PAGE_SIZE, archived: filterValues.archived === "true" ? true : undefined, assignee_id: mode === "mine" ? tenantPrincipal?.principal_id : filterValues.assignee_id, sort: filterValues.sort ?? "-updated_at" };
   const tasks = useTasks(filters);
   const member = membersQuery.data?.items.find((item) => item.user_id === tenantPrincipal?.principal_id);
-  const access = buildTaskManagementAccess(tenantPrincipal, member?.role);
   const selectedProject = projectsQuery.data?.items.find((project) => project.project_id === selectedProjectId);
-  const mayCreate = Boolean(selectedProject && !selectedProject.archived_at && canCreateTask(access));
   const archiveMutation = useTaskMutation(({ task, next }: { task: Task; next: boolean }) => taskManagementApi.setTaskArchived(task, next));
   if (!tenantPrincipal) return null;
+  const access = buildTaskManagementAccess(tenantPrincipal, member?.role);
+  const mayCreate = Boolean(selectedProject && !selectedProject.archived_at && canCreateTask(access));
   const updateFilters = (next: TaskFilterValues) => { const output = new URLSearchParams(params); ["query", "project_id", "status", "priority", "task_type", "assignee_id", "reporter_id", "member_id", "due_from", "due_to", "archived", "sort"].forEach((key) => { const value = next[key as keyof TaskFilterValues]; if (value) output.set(key, value); else output.delete(key); }); output.set("page", "1"); setParams(output, { replace: true }); };
   const setPage = (next: number) => { const output = new URLSearchParams(params); output.set("page", String(next)); setParams(output, { replace: true }); };
   const openTask = (task: Task) => { const output = new URLSearchParams(params); output.set("task", task.task_id); setParams(output); };

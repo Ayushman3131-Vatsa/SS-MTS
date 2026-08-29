@@ -37,9 +37,6 @@ export const TaskProjectPage = ({ view }: { view: ProjectView }) => {
   const usersQuery = useUsers();
   const tenantPrincipal = principal?.principal_type === "tenant_user" ? principal : null;
   const membership = membersQuery.data?.items.find((item) => item.user_id === tenantPrincipal?.principal_id);
-  const access = buildTaskManagementAccess(tenantPrincipal, membership?.role);
-  const mayManage = canManageProject(access);
-  const mayCreate = canCreateTask(access) && !projectQuery.data?.archived_at;
   const filterValues: TaskFilterValues = Object.fromEntries(["query", "status", "priority", "task_type", "assignee_id", "reporter_id", "member_id", "due_from", "due_to", "archived", "sort"].map((key) => [key, params.get(key) ?? undefined]));
   const page = Math.max(1, Number(params.get("page")) || 1);
   const apiFilters: ApiTaskFilters = { ...filterValues as ApiTaskFilters, project_id: projectId, page, page_size: DEFAULT_PAGE_SIZE, archived: filterValues.archived === "true" ? true : undefined, sort: filterValues.sort ?? "-updated_at" };
@@ -48,6 +45,9 @@ export const TaskProjectPage = ({ view }: { view: ProjectView }) => {
   const completedCount = useTasks({ project_id: projectId, status: "Completed", page_size: 1 });
   const taskArchiveMutation = useTaskMutation(({ task, next }: { task: Task; next: boolean }) => taskManagementApi.setTaskArchived(task, next));
   if (!tenantPrincipal) return null;
+  const access = buildTaskManagementAccess(tenantPrincipal, membership?.role);
+  const mayManage = canManageProject(access);
+  const mayCreate = canCreateTask(access) && !projectQuery.data?.archived_at;
   const project = projectQuery.data;
   const updateFilters = (next: TaskFilterValues) => { const output = new URLSearchParams(params); ["query", "status", "priority", "task_type", "assignee_id", "reporter_id", "member_id", "due_from", "due_to", "archived", "sort"].forEach((key) => { const value = next[key as keyof TaskFilterValues]; if (value) output.set(key, value); else output.delete(key); }); output.set("page", "1"); setParams(output, { replace: true }); };
   const openTask = (task: Task) => { const output = new URLSearchParams(params); output.set("task", task.task_id); setParams(output); };

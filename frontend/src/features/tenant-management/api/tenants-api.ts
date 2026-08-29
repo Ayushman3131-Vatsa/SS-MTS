@@ -60,11 +60,22 @@ const decimalSchema = z
   .nullable();
 
 const credentialSchema = z.object({
-  email: z.union([z.string().email(), z.literal("")]).nullable().optional(),
+  email: z
+    .union([z.string().email(), z.literal("")])
+    .nullable()
+    .optional()
+    .transform((value): string | null => value ?? null),
   username: z.string().min(1).nullable().optional(),
   temporary_password: z.string().min(1),
-  login_path: z.string().min(1).optional().default("/login"),
-  password_change_required: z.boolean().optional().default(true),
+  login_path: z
+    .string()
+    .min(1)
+    .optional()
+    .transform((value): string => value ?? "/login"),
+  password_change_required: z
+    .boolean()
+    .optional()
+    .transform((value): boolean => value ?? true),
 });
 
 const firstAccessSchema = credentialSchema.extend({
@@ -142,7 +153,10 @@ const optionsSchema = z.object({
   }),
 });
 
-const parse = <T>(schema: z.ZodType<T>, payload: unknown): T => {
+const parse = <Schema extends z.ZodTypeAny>(
+  schema: Schema,
+  payload: unknown,
+): z.output<Schema> => {
   const result = schema.safeParse(payload);
   if (!result.success) {
     throw new InvalidApiResponseError();
