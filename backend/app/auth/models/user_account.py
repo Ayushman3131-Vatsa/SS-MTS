@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -15,7 +15,14 @@ class UserAccount(Base):
 
     __tablename__ = "user_accounts"
     __table_args__ = (
-        UniqueConstraint("email", name="uq_user_accounts_email"),
+        Index(
+            "uq_user_accounts_tenant_email",
+            "tenant_id",
+            "email",
+            unique=True,
+            postgresql_where=text("email IS NOT NULL"),
+        ),
+        UniqueConstraint("username", name="uq_user_accounts_username"),
         # Required so projects/tasks can FK (tenant_id, user_id) → user_accounts.
         UniqueConstraint("tenant_id", "id", name="uq_user_accounts_tenant_id"),
     )
@@ -29,9 +36,11 @@ class UserAccount(Base):
         nullable=False,
         index=True,
     )
-    email: Mapped[str] = mapped_column(CITEXT(), nullable=False)
+    email: Mapped[str | None] = mapped_column(CITEXT(), nullable=True)
+    username: Mapped[str] = mapped_column(CITEXT(), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    employee_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),

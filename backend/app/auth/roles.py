@@ -14,7 +14,7 @@ from app.auth.models.user_role import UserRole
 
 
 async def seed_tenant_system_roles(db: AsyncSession, tenant_id: uuid.UUID) -> dict[str, Role]:
-    """Create the three built-in roles for a new tenant. Returns role_code → Role."""
+    """Create the built-in Tenant Admin role for a new tenant. Returns role_code → Role."""
     roles: dict[str, Role] = {}
     for role_code, role_name in SYSTEM_ROLES:
         role = Role(
@@ -49,7 +49,7 @@ async def assign_role(
     return link
 
 
-async def get_active_role_name(db: AsyncSession, user_id: uuid.UUID) -> str | None:
+async def get_active_role_names(db: AsyncSession, user_id: uuid.UUID) -> list[str]:
     result = await db.execute(
         select(Role.role_name)
         .join(UserRole, UserRole.role_id == Role.id)
@@ -59,9 +59,15 @@ async def get_active_role_name(db: AsyncSession, user_id: uuid.UUID) -> str | No
             Role.is_active.is_(True),
         )
         .order_by(Role.role_code)
-        .limit(1)
     )
-    return result.scalar_one_or_none()
+    return list(result.scalars().all())
+
+
+async def get_active_role_name(db: AsyncSession, user_id: uuid.UUID) -> str | None:
+    names = await get_active_role_names(db, user_id)
+    if "Tenant Admin" in names:
+        return "Tenant Admin"
+    return names[0] if names else None
 
 
 async def get_role_for_tenant_by_name(
@@ -102,6 +108,7 @@ __all__ = [
     "SYSTEM_ROLES",
     "assign_role",
     "get_active_role_name",
+    "get_active_role_names",
     "get_role_for_tenant_by_name",
     "load_user_with_role",
     "seed_tenant_system_roles",

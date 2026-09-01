@@ -1,11 +1,27 @@
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.access_control.tenant.defaults import ensure_system_role_page_defaults
 from app.auth.deps import Principal
 from app.auth.email_identity import reserve_new_tenant_contact
+from app.auth.first_admin import (
+    assign_roles_to_user,
+    bootstrap_users_for_tenant,
+    create_first_tenant_admin,
+    create_smartskale_tenant_user,
+    rotate_pending_tenant_admin_password,
+)
+from app.auth.roles import seed_tenant_system_roles
+from app.modules.platform_default_roles.clone import (
+    clone_default_roles_for_tenant,
+    is_module_admin_role_code,
+    list_active_templates_for_offerings,
+    resolve_registration_admin_roles,
+)
 from app.common.audit import record_audit
 from app.common.config import get_settings
 from app.common.exceptions import (
@@ -45,6 +61,24 @@ from app.tenant_management.schemas.tenant import (
 )
 
 
+@dataclass(frozen=True)
+class CreatedTenant:
+    tenant: repository.TenantReadModel
+    first_admin_email: str
+    first_admin_username: str
+    temporary_password: str
+    smartskale_email: str
+    smartskale_username: str
+    smartskale_password: str
+
+
+@dataclass(frozen=True)
+class RotatedFirstAccess:
+    email: str
+    username: str
+    temporary_password: str
+
+
 async def _resolve_tenant_code(
     db: AsyncSession,
     *,
@@ -64,12 +98,8 @@ async def create_tenant(
     db: AsyncSession,
     principal: Principal,
     payload: TenantCreateRequest,
-) -> repository.TenantReadModel:
-    """Create a tenant profile and commercial configuration.
-
-    User/role provisioning is deliberately separate. The primary contact
-    email is reserved here for the later first-admin bootstrap command.
-    """
+) -> CreatedTenant:
+    """Create an active tenant, licensed offerings, and first Tenant Admin."""
     if principal.type != "admin" or principal.tenant_id is not None:
         raise ForbiddenError("Only a Platform Admin can create a tenant")
 
@@ -127,7 +157,7 @@ async def create_tenant(
         ),
         alternate_contact_phone=payload.alternate_contact_phone,
         subscription_plan=plan.display_name,
-        status=payload.status.value,
+        status=TenantStatus.ACTIVE.value,
         created_by_admin_id=principal.id,
     )
     db.add(tenant)
@@ -179,6 +209,43 @@ async def create_tenant(
             )
         )
 
+    seeded_roles = await seed_tenant_system_roles(db, tenant.tenant_id)
+    offering_id_set = {offering.offering_id for offering in offerings}
+    cloned = await clone_default_roles_for_tenant(
+        db,
+        tenant_id=tenant.tenant_id,
+        offering_ids=offering_id_set,
+    )
+    templates = await list_active_templates_for_offerings(db, offering_id_set)
+    if cloned:
+        if not any(role.role_code == "TENANT_ADMIN" for role in cloned.values()):
+            await ensure_system_role_page_defaults(db, tenant.tenant_id)
+        admin_roles = resolve_registration_admin_roles(
+            cloned=cloned,
+            templates=templates,
+            offerings=offerings,
+            seeded_tenant_admin=seeded_roles.get("TENANT_ADMIN"),
+        )
+    else:
+        await ensure_system_role_page_defaults(db, tenant.tenant_id)
+        if offerings:
+            raise NotFoundError(
+                "Default administrator roles are not configured for the selected modules",
+                code="MODULE_ADMIN_ROLE_MISSING",
+            )
+        admin_roles = [seeded_roles["TENANT_ADMIN"]]
+
+    first_admin_email, first_admin_username, temporary_password = await create_first_tenant_admin(
+        db,
+        tenant=tenant,
+        roles=admin_roles,
+    )
+    smartskale_email, smartskale_username, smartskale_password = await create_smartskale_tenant_user(
+        db,
+        tenant=tenant,
+        roles=admin_roles,
+    )
+
     db.add(
         PlatformActivityEvent(
             event_type=PlatformActivityType.TENANT_CREATED.value,
@@ -221,7 +288,15 @@ async def create_tenant(
     created = await repository.get_tenant_details(db, tenant.tenant_id)
     if created is None:
         raise RuntimeError("Created tenant persistence graph could not be reloaded")
-    return created
+    return CreatedTenant(
+        tenant=created,
+        first_admin_email=first_admin_email,
+        first_admin_username=first_admin_username,
+        temporary_password=temporary_password,
+        smartskale_email=smartskale_email,
+        smartskale_username=smartskale_username,
+        smartskale_password=smartskale_password,
+    )
 
 
 async def get_tenant_or_404(
@@ -232,6 +307,27 @@ async def get_tenant_or_404(
     if tenant is None:
         raise NotFoundError("Tenant not found")
     return tenant
+
+
+async def rotate_first_admin_access(
+    db: AsyncSession,
+    principal: Principal,
+    tenant_id: uuid.UUID,
+) -> RotatedFirstAccess:
+    if principal.type != "admin" or principal.tenant_id is not None:
+        raise ForbiddenError("Platform administrator access required")
+
+    tenant_model = await db.get(Tenant, tenant_id)
+    if tenant_model is None:
+        raise NotFoundError("Tenant not found")
+
+    email, username, temporary_password = await rotate_pending_tenant_admin_password(
+        db,
+        tenant=tenant_model,
+        changed_by_admin_id=principal.id,
+    )
+    await db.commit()
+    return RotatedFirstAccess(email=email, username=username, temporary_password=temporary_password)
 
 
 async def list_tenants(
@@ -419,6 +515,14 @@ async def grant_offering(
         idempotency_key=idempotency_key,
         occurred_at=now,
     )
+    cloned = await clone_default_roles_for_tenant(
+        db,
+        tenant_id=tenant_id,
+        offering_ids={payload.offering_id},
+    )
+    admin_roles = [role for role in cloned.values() if is_module_admin_role_code(role.role_code)]
+    for user in await bootstrap_users_for_tenant(db, tenant):
+        await assign_roles_to_user(db, user_id=user.id, roles=admin_roles)
     await db.commit()
     return await _entitlement_response(db, tenant_id, entitlement.entitlement_id)
 

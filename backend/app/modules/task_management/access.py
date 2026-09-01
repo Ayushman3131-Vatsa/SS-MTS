@@ -2,6 +2,11 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.access_control.shared.checks import (
+    tenant_has_task_management_view,
+    tenant_task_management_access_level,
+)
+from app.access_control.shared.enums import AccessLevel
 from app.common.deps import Principal
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
 from app.modules.task_management.domain.policies import (
@@ -16,6 +21,8 @@ from app.modules.task_management.memberships import repository as membership_rep
 from app.modules.task_management.projects import repository as project_repository
 from app.modules.task_management.projects.model import Project
 from app.modules.task_management.tasks.model import Task
+
+_ACCESS_RANK: dict[AccessLevel, int] = {"none": 0, "view": 1, "modify": 2}
 
 
 def require_tenant_principal(principal: Principal) -> tuple[uuid.UUID, uuid.UUID, str]:
@@ -36,6 +43,13 @@ async def get_project_or_404(
     return project
 
 
+async def tenant_wide_task_visibility(db: AsyncSession, principal: Principal) -> bool:
+    tenant_id, user_id, tenant_role = require_tenant_principal(principal)
+    if tenant_role == "Tenant Admin":
+        return True
+    return await tenant_has_task_management_view(db, tenant_id=tenant_id, user_id=user_id)
+
+
 async def project_access(
     db: AsyncSession,
     principal: Principal,
@@ -45,10 +59,15 @@ async def project_access(
 ) -> ProjectAccess:
     tenant_id, user_id, tenant_role = require_tenant_principal(principal)
     member = await membership_repository.get_member(db, tenant_id, project_id, user_id)
+    access_level = await tenant_task_management_access_level(
+        db, tenant_id=tenant_id, user_id=user_id
+    )
     return ProjectAccess(
         tenant_role=tenant_role,
         member_role=member.role if member is not None else None,
         is_assignee=is_assignee,
+        has_tenant_task_view=_ACCESS_RANK[access_level] >= _ACCESS_RANK["view"],
+        has_tenant_task_modify=_ACCESS_RANK[access_level] >= _ACCESS_RANK["modify"],
     )
 
 

@@ -6,6 +6,7 @@ from decimal import Decimal
 from sqlalchemy import Select, String, cast, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundError
 from app.modules.task_management.memberships.model import ProjectMember
 from app.modules.task_management.projects.model import Project
 from app.modules.task_management.tasks.model import Task, TaskLink
@@ -41,7 +42,11 @@ def _read_statement() -> Select:
 
 def _to_read_models(rows) -> list[TaskReadModel]:
     return [
-        TaskReadModel(task=row[0], project_key=row[1], actual_hours=Decimal(row[2]))
+        TaskReadModel(
+            task=row[0],
+            project_key=row[1],
+            actual_hours=Decimal(row[2] if row[2] is not None else 0),
+        )
         for row in rows
     ]
 
@@ -77,7 +82,7 @@ async def allocate_task_number(
     )
     number = result.scalar_one_or_none()
     if number is None:
-        raise RuntimeError("Project disappeared while allocating a task number")
+        raise NotFoundError("Project disappeared while allocating a task number")
     return int(number)
 
 
@@ -86,7 +91,7 @@ async def list_tasks(
     *,
     tenant_id: uuid.UUID,
     user_id: uuid.UUID,
-    tenant_role: str,
+    tenant_wide_access: bool,
     page: int,
     page_size: int,
     project_id: uuid.UUID | None = None,
@@ -105,7 +110,7 @@ async def list_tasks(
 ) -> tuple[list[TaskReadModel], int]:
     statement = _read_statement()
     filters = [Task.tenant_id == tenant_id]
-    if tenant_role != "Tenant Admin":
+    if not tenant_wide_access:
         statement = statement.join(
             ProjectMember,
             (ProjectMember.tenant_id == Task.tenant_id)

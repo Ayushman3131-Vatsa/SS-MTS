@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { useSession } from "../../entities/session/model/session-context";
 import { taskManagementApi } from "../../features/task-management/api/task-management-api";
-import { canCreateTask, canManageProject } from "../../features/task-management/model/permissions";
+import { buildTaskManagementAccess, canCreateTask, canManageProject } from "../../features/task-management/model/permissions";
 import { DEFAULT_PAGE_SIZE } from "../../features/task-management/model/constants";
 import type { Task, TaskFilters as ApiTaskFilters } from "../../features/task-management/model/types";
 import { useMembers, useProjects, useTaskMutation, useTasks, useUsers } from "../../features/task-management/model/use-task-management";
@@ -32,7 +32,7 @@ export const TaskListPage = ({ mode }: { mode: "all" | "mine" }) => {
   const filters: ApiTaskFilters = { ...filterValues as ApiTaskFilters, page, page_size: DEFAULT_PAGE_SIZE, archived: filterValues.archived === "true" ? true : undefined, assignee_id: mode === "mine" ? tenantPrincipal?.principal_id : filterValues.assignee_id, sort: filterValues.sort ?? "-updated_at" };
   const tasks = useTasks(filters);
   const member = membersQuery.data?.items.find((item) => item.user_id === tenantPrincipal?.principal_id);
-  const access = { tenantRole: tenantPrincipal?.role ?? "Employee", memberRole: member?.role, principalId: tenantPrincipal?.principal_id ?? "" };
+  const access = buildTaskManagementAccess(tenantPrincipal, member?.role);
   const selectedProject = projectsQuery.data?.items.find((project) => project.project_id === selectedProjectId);
   const mayCreate = Boolean(selectedProject && !selectedProject.archived_at && canCreateTask(access));
   const archiveMutation = useTaskMutation(({ task, next }: { task: Task; next: boolean }) => taskManagementApi.setTaskArchived(task, next));

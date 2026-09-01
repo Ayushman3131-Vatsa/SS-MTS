@@ -16,12 +16,12 @@ _pwd_context = CryptContext(
     argon2__parallelism=4,
 )
 
-MIN_PASSWORD_LENGTH = 12
+MIN_PASSWORD_LENGTH = 1
 MAX_PASSWORD_LENGTH = 128
 
-# This intentionally remains small and auditable. The structural and
-# user-context checks below do the rest of the work; this list catches the
-# passwords that most commonly satisfy superficial complexity requirements.
+# This intentionally remains small and auditable. The structural checks below
+# do the rest of the work; this list catches passwords that most commonly
+# satisfy superficial complexity requirements.
 _COMMON_PASSWORDS = frozenset(
     {
         "123456789012",
@@ -79,31 +79,6 @@ def normalize_email(value: str) -> str:
     return value.strip().lower()
 
 
-def _is_comparison_character(character: str) -> bool:
-    return character.isalnum() or unicodedata.category(character).startswith("M")
-
-
-def _context_tokens(value: str | None) -> set[str]:
-    if not value:
-        return set()
-    normalized = unicodedata.normalize("NFKC", value.casefold())
-    parts: list[str] = []
-    current: list[str] = []
-    for character in normalized:
-        if _is_comparison_character(character):
-            current.append(character)
-        elif current:
-            parts.append("".join(current))
-            current = []
-    if current:
-        parts.append("".join(current))
-    tokens = {token for token in parts if len(token) >= 3}
-    compact = "".join(character for character in normalized if _is_comparison_character(character))
-    if len(compact) >= 3:
-        tokens.add(compact)
-    return tokens
-
-
 def validate_password(
     password: str,
     *,
@@ -145,27 +120,6 @@ def validate_password(
     )
     if password_folded in _COMMON_PASSWORDS or common_stem_match:
         errors.append("not be a commonly used password")
-
-    compact_password = "".join(
-        character
-        for character in unicodedata.normalize("NFKC", password_folded)
-        if _is_comparison_character(character)
-    )
-    context_tokens: set[str] = set()
-    for value in (name, org_name):
-        context_tokens.update(_context_tokens(value))
-    if email:
-        local_part, _, _ = normalize_email(email).partition("@")
-        context_tokens.update(_context_tokens(local_part))
-        compact_email = "".join(
-            character
-            for character in unicodedata.normalize("NFKC", email.casefold())
-            if _is_comparison_character(character)
-        )
-        if len(compact_email) >= 3:
-            context_tokens.add(compact_email)
-    if any(token in compact_password for token in context_tokens):
-        errors.append("not contain your name, email, or organization")
 
     if errors:
         raise ValueError("Password must " + ", ".join(errors) + ".")

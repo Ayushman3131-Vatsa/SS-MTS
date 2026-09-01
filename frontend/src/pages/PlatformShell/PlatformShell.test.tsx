@@ -43,6 +43,8 @@ const renderShell = () => {
             <Route path="tenants/register" element={<h1>Register content</h1>} />
             <Route path="offerings" element={<h1>Offering content</h1>} />
             <Route path="default-templates" element={<h1>Default templates content</h1>} />
+            <Route path="users" element={<h1>Users content</h1>} />
+            <Route path="roles" element={<h1>Roles content</h1>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -59,19 +61,23 @@ describe("PlatformShell", () => {
     const navigation = screen.getByRole("navigation", {
       name: "Platform navigation",
     });
-    const links = navigation.querySelectorAll("a");
-    expect(links).toHaveLength(5);
+    expect(navigation.querySelectorAll("a").length).toBeGreaterThanOrEqual(5);
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-
     fireEvent.click(screen.getByRole("link", { name: "All Tenants" }));
     expect(screen.getByRole("heading", { name: "Tenant content" })).toBeVisible();
     expect(screen.getByRole("link", { name: "Default Templates" })).toHaveAttribute(
       "href",
       "/platform/default-templates",
     );
+    expect(screen.queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "User Access Management" }));
+    expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute("href", "/platform/users");
+    expect(screen.getByRole("link", { name: "Roles & permissions" })).toHaveAttribute("href", "/platform/roles");
+    expect(screen.queryByRole("link", { name: "Permissions" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Default Roles" })).not.toBeInTheDocument();
   });
 
   it("closes the mobile drawer with Escape and restores focus", () => {

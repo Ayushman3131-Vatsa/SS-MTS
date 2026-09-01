@@ -78,9 +78,9 @@ export const PlatformLoginForm = ({
 
       <InputField
         id="platform-email"
-        type="email"
-        label="Administrator email"
-        placeholder="admin@platform.example"
+        type="text"
+        label="Administrator email or username"
+        placeholder="admin@platform.example or platform.admin"
         autoComplete="username"
         autoCapitalize="none"
         spellCheck={false}

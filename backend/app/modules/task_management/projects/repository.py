@@ -51,7 +51,7 @@ async def list_projects(
     *,
     tenant_id: uuid.UUID,
     user_id: uuid.UUID,
-    tenant_role: str,
+    tenant_wide_access: bool,
     page: int,
     page_size: int,
     query: str | None = None,
@@ -63,7 +63,7 @@ async def list_projects(
     statement = select(Project)
     filters = [Project.tenant_id == tenant_id]
 
-    if tenant_role != "Tenant Admin":
+    if not tenant_wide_access:
         statement = statement.join(
             ProjectMember,
             (ProjectMember.tenant_id == Project.tenant_id)

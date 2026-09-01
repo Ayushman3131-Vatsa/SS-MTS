@@ -1,9 +1,14 @@
 import asyncio
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import pool, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
+# `alembic.exe` does not put the backend package on sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.common.config import get_settings
 from app.common.db.base import Base

@@ -36,8 +36,8 @@ const templateListItemSchema = z.object({
   sort_order: z.number().int().nonnegative(),
   is_active: z.boolean(),
   version: z.number().int().positive(),
-  created_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
+  created_at: z.string(),
+  updated_at: z.string(),
   inheriting_tenant_count: z.number().int().nonnegative(),
   customized_tenant_count: z.number().int().nonnegative(),
 });

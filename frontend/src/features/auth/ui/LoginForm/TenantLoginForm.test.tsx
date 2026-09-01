@@ -21,7 +21,7 @@ describe("TenantLoginForm", () => {
     renderForm();
 
     expect(screen.queryByLabelText("Workspace")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Work email")).toBeInTheDocument();
+    expect(screen.getByLabelText("Work email or username")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(screen.queryByText(/create account/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/forgot password/i)).not.toBeInTheDocument();
@@ -36,7 +36,7 @@ describe("TenantLoginForm", () => {
       screen.getByRole("button", { name: "Sign in" }),
     );
 
-    expect(screen.getByText(/enter your work email/i)).toBeVisible();
+    expect(screen.getByText(/enter your work email or username/i)).toBeVisible();
     expect(screen.getByText(/enter your password/i)).toBeVisible();
     expect(onSubmit).not.toHaveBeenCalled();
   });
@@ -58,7 +58,7 @@ describe("TenantLoginForm", () => {
     const user = userEvent.setup();
     const onSubmit = renderForm();
 
-    await user.type(screen.getByLabelText("Work email"), "Avery@Example.COM");
+    await user.type(screen.getByLabelText("Work email or username"), "Avery@Example.COM");
     await user.type(screen.getByLabelText("Password"), " keep spaces ");
     await user.click(
       screen.getByRole("button", { name: "Sign in" }),

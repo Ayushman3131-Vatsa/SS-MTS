@@ -1,14 +1,15 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, KeyRound, LockKeyhole } from "lucide-react";
+import { Eye, EyeOff, KeyRound, LockKeyhole, LogOut, Shield } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Navigate, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
-import { getPrincipalHome } from "../../entities/session/model/routing";
+import { getPrincipalHome, getTenantLoginPath } from "../../entities/session/model/routing";
 import { useSession } from "../../entities/session/model/session-context";
 import { getLoginErrorContent } from "../../features/auth/model/login-errors";
 import { AuthShell } from "../../features/auth/ui/AuthShell/AuthShell";
+import loginFormStyles from "../../features/auth/ui/LoginForm/LoginForm.module.css";
 import { Alert } from "../../shared/ui/Alert/Alert";
 import { Button } from "../../shared/ui/Button/Button";
 import { InputField } from "../../shared/ui/InputField/InputField";
@@ -19,7 +20,7 @@ const schema = z
     currentPassword: z.string().min(1, "Enter the temporary password.").max(128),
     newPassword: z
       .string()
-      .min(12, "Use at least 12 characters.")
+      .min(1, "Enter a new password.")
       .max(128, "Password must be 128 characters or fewer.")
       .regex(/[a-z]/, "Include a lowercase letter.")
       .regex(/[A-Z]/, "Include an uppercase letter.")
@@ -48,10 +49,12 @@ type Values = z.infer<typeof schema>;
 
 export const ForcedPasswordChangePage = () => {
   const navigate = useNavigate();
-  const { changePassword, principal } = useSession();
+  const { changePassword, logout, principal } = useSession();
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -62,10 +65,15 @@ export const ForcedPasswordChangePage = () => {
     mode: "onTouched",
   });
 
-  if (!principal || principal.principal_type !== "tenant_user") return null;
+  if (!principal) return null;
   if (!principal.password_change_required) {
     return <Navigate to={getPrincipalHome(principal)} replace />;
   }
+
+  const orgLabel =
+    principal.principal_type === "tenant_user"
+      ? principal.tenant.org_name
+      : "the platform console";
 
   const submit = async (values: Values) => {
     setServerError(null);
@@ -80,11 +88,23 @@ export const ForcedPasswordChangePage = () => {
     }
   };
 
+  const handleSignOut = async (destination: string) => {
+    setIsSigningOut(true);
+    setSignOutError(null);
+    try {
+      await logout();
+      navigate(destination, { replace: true });
+    } catch (error) {
+      setSignOutError(getLoginErrorContent(error).message);
+      setIsSigningOut(false);
+    }
+  };
+
   return (
     <AuthShell
       eyebrow="Account security"
       title="Create your password"
-      description={`Replace the temporary password for ${principal.tenant.org_name} before continuing.`}
+      description={`Replace the temporary password for ${orgLabel} before continuing.`}
     >
       <form className={styles.form} onSubmit={handleSubmit(submit)} noValidate>
         {serverError && <Alert tone="error" title="Password could not be changed">{serverError}</Alert>}
@@ -111,7 +131,7 @@ export const ForcedPasswordChangePage = () => {
           disabled={isSubmitting}
           leadingIcon={<LockKeyhole size={18} />}
           error={errors.newPassword?.message}
-          hint="At least 12 characters with upper, lower, number, and symbol."
+          hint="Use upper, lower, number, and symbol."
           trailingControl={(
             <button type="button" onClick={() => setShowNew((value) => !value)} aria-label={showNew ? "Hide new password" : "Show new password"}>
               {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -132,6 +152,49 @@ export const ForcedPasswordChangePage = () => {
         <Button type="submit" fullWidth loading={isSubmitting} loadingLabel="Updating password…">
           Save password and continue
         </Button>
+
+        <p className={loginFormStyles.help}>
+          Forgot the temporary password?{" "}
+          <strong>Sign out and use a different account.</strong>
+        </p>
+
+        <div className={loginFormStyles.divider}>Other sign-in options</div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          fullWidth
+          loading={isSigningOut}
+          loadingLabel="Signing out…"
+          onClick={() =>
+            handleSignOut(
+              principal.principal_type === "platform_admin"
+                ? "/platform/login"
+                : getTenantLoginPath(principal),
+            )
+          }
+        >
+          <LogOut size={16} aria-hidden="true" />
+          Sign out
+        </Button>
+
+        {principal.principal_type === "tenant_user" && (
+        <button
+          type="button"
+          className={loginFormStyles.modeLink}
+          disabled={isSigningOut || isSubmitting}
+          onClick={() => handleSignOut("/platform/login")}
+        >
+          <Shield size={17} aria-hidden="true" />
+          Platform administrator sign in
+        </button>
+        )}
+
+        {signOutError && (
+          <Alert tone="error" title="Could not sign out">
+            {signOutError}
+          </Alert>
+        )}
       </form>
     </AuthShell>
   );

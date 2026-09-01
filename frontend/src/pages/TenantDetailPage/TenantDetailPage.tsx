@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { tenantsApi } from "../../features/tenant-management/api/tenants-api";
-import type { InitialTenantAdminCredentials, OfferingCatalogEntry, TenantOfferingEntitlement, TenantRecord } from "../../features/tenant-management/model/tenants";
+import type { InitialTenantAdminCredentials, OfferingCatalogEntry, TenantFirstAccess, TenantOfferingEntitlement, TenantRecord } from "../../features/tenant-management/model/tenants";
+import { TenantAdminCredentialsPanel } from "../../features/tenant-management/ui/TenantAdminCredentialsPanel/TenantAdminCredentialsPanel";
 import { ApiError } from "../../shared/api/errors";
 import { Alert } from "../../shared/ui/Alert/Alert";
 import { Button } from "../../shared/ui/Button/Button";
@@ -68,6 +69,7 @@ export const TenantDetailPage = () => {
   const [entitlementTab, setEntitlementTab] = useState<EntitlementTab>("active");
   const [credentials, setCredentials] = useState<InitialTenantAdminCredentials | null>(null);
   const [copiedCredential, setCopiedCredential] = useState<string | null>(null);
+  const [rotatedAccess, setRotatedAccess] = useState<TenantFirstAccess | null>(null);
 
   const load = useCallback(async () => {
     if (!tenantId) {
@@ -271,6 +273,17 @@ export const TenantDetailPage = () => {
     }
   };
 
+  const handleRotateFirstAccess = async () => {
+    if (!tenantId) return;
+    const succeeded = await reloadAfter("rotate-first-access", async () => {
+      const access = await tenantsApi.rotateFirstAccess(tenantId);
+      setRotatedAccess(access);
+    });
+    if (!succeeded) {
+      setRotatedAccess(null);
+    }
+  };
+
   if (error && !tenant) {
     return <div className={styles.page}><Alert tone="error" title="Tenant unavailable">{error}</Alert></div>;
   }
@@ -307,6 +320,30 @@ export const TenantDetailPage = () => {
         </div>
       </header>
       {error && <Alert tone="error" title="Operation unavailable">{error}</Alert>}
+      <section className={styles.accessPanel}>
+        <div className={styles.accessHeader}>
+          <div>
+            <h2>Admin access</h2>
+            <p>Issue a new temporary password if the tenant admin has not completed first sign-in.</p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            loading={busy === "rotate-first-access"}
+            loadingLabel="Resetting…"
+            onClick={() => void handleRotateFirstAccess()}
+          >
+            <KeyRound size={15} aria-hidden="true" />
+            Reset password
+          </Button>
+        </div>
+        {rotatedAccess && (
+          <div className={styles.accessCredentials}>
+            <p className={styles.accessCredentialsLabel}>New credentials</p>
+            <TenantAdminCredentialsPanel access={rotatedAccess} />
+          </div>
+        )}
+      </section>
       <div className={styles.summary}>
         <article><Building2 /><span><small>Plan</small><strong>{tenant.subscription_plan}</strong></span></article>
         <article><Database /><span><small>Database</small><strong>{tenant.database_mode} · {tenant.database_provisioning_state}</strong></span></article>

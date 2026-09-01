@@ -15,12 +15,14 @@ import styles from "./LoginForm.module.css";
 
 interface TenantLoginFormProps {
   notice?: string | null;
+  lockedTenantCode?: string | null;
   onSubmit: (values: TenantLoginValues) => Promise<void>;
   serverError?: { title: string; message: string } | null;
 }
 
 export const TenantLoginForm = ({
   notice,
+  lockedTenantCode,
   onSubmit,
   serverError,
 }: TenantLoginFormProps) => {
@@ -30,14 +32,22 @@ export const TenantLoginForm = ({
     formState: { errors, isSubmitting },
     handleSubmit,
     register,
+    setValue,
   } = useForm<TenantLoginValues>({
     resolver: zodResolver(tenantLoginSchema),
     defaultValues: {
+      tenant_code: lockedTenantCode ?? "",
       email: "",
       password: "",
     },
     mode: "onTouched",
   });
+
+  useEffect(() => {
+    if (lockedTenantCode) {
+      setValue("tenant_code", lockedTenantCode);
+    }
+  }, [lockedTenantCode, setValue]);
 
   useEffect(() => {
     if (serverError) {
@@ -64,11 +74,28 @@ export const TenantLoginForm = ({
         </div>
       )}
 
+      {lockedTenantCode ? (
+        <input type="hidden" {...register("tenant_code")} />
+      ) : (
+        <InputField
+          id="tenant-code"
+          type="text"
+          label="Organization code"
+          placeholder="ACME"
+          autoComplete="organization"
+          autoCapitalize="characters"
+          spellCheck={false}
+          disabled={isSubmitting}
+          error={errors.tenant_code?.message}
+          {...register("tenant_code")}
+        />
+      )}
+
       <InputField
         id="tenant-email"
-        type="email"
-        label="Work email"
-        placeholder="you@company.com"
+        type="text"
+        label="Work email or username"
+        placeholder="you@company.com or jane.doe"
         autoComplete="username"
         autoCapitalize="none"
         spellCheck={false}

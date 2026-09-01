@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 
 import { tenantsApi } from "../../features/tenant-management/api/tenants-api";
 import type { TenantListResponse } from "../../features/tenant-management/model/tenants";
+import { ApiError, InvalidApiResponseError, NetworkError } from "../../shared/api/errors";
 import { Alert } from "../../shared/ui/Alert/Alert";
 import { Button } from "../../shared/ui/Button/Button";
 import styles from "./AllTenantsPage.module.css";
@@ -40,6 +41,7 @@ export const AllTenantsPage = () => {
   const notice = (location.state as LocationState | null)?.notice;
   const [result, setResult] = useState<TenantListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -48,14 +50,31 @@ export const AllTenantsPage = () => {
   useEffect(() => {
     const controller = new AbortController();
     setError(null);
+    setLoading(true);
     void tenantsApi
       .list({ page, pageSize: 25, query, status: statusFilter }, controller.signal)
-      .then(setResult)
+      .then((payload) => {
+        setResult(payload);
+        setError(null);
+      })
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") {
           return;
         }
-        setError("Tenant data could not be loaded.");
+        if (requestError instanceof NetworkError) {
+          setError("The tenant service could not be reached. Check that the API is running.");
+        } else if (requestError instanceof ApiError) {
+          setError(requestError.message);
+        } else if (requestError instanceof InvalidApiResponseError) {
+          setError("Tenant data was returned in an unexpected format.");
+        } else {
+          setError("Tenant data could not be loaded.");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       });
     return () => controller.abort();
   }, [page, query, reloadKey, statusFilter]);
@@ -64,9 +83,8 @@ export const AllTenantsPage = () => {
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
-          <p>Tenant administration</p>
           <h1>All Tenants</h1>
-          <span>Review organizations, access plans, databases, and user totals.</span>
+          <p>Review organizations and access plans.</p>
         </div>
         <Link className={styles.primaryLink} to="/platform/tenants/register">
           <Plus size={16} aria-hidden="true" />
@@ -103,9 +121,9 @@ export const AllTenantsPage = () => {
           </select>
           <div>
             <span>
-              {result === null
+              {loading
                 ? "Loading tenants…"
-                : `${result.total.toLocaleString()} tenants`}
+                : `${(result?.total ?? 0).toLocaleString()} tenants`}
             </span>
             <Button
               type="button"
@@ -118,9 +136,14 @@ export const AllTenantsPage = () => {
           </div>
         </div>
 
-        {result === null ? (
+        {loading ? (
           <div className={styles.loading} role="status">Loading tenant registry…</div>
-        ) : result.items.length === 0 ? (
+        ) : error ? (
+          <div className={styles.empty}>
+            <h2>Could not load tenants</h2>
+            <p>Use Refresh after the API is available, or register a tenant if this is a new environment.</p>
+          </div>
+        ) : result === null || result.items.length === 0 ? (
           <div className={styles.empty}>
             <span><Building2 size={23} aria-hidden="true" /></span>
             <h2>No tenants yet</h2>

@@ -69,21 +69,21 @@ test.describe("Task Management workspace", () => {
   test("hides navigation and guards direct URLs without entitlement", async ({ page }) => {
     await installSessionApiMock(page, { initialPrincipal: tenantPrincipal("Tenant Admin") });
     await page.goto("/app/task-management");
-    await expect(page).toHaveURL("/app/overview");
+    await expect(page).toHaveURL("/t/NORTHSTAR/app/overview");
     await expect(page.getByRole("button", { name: "Task Management" })).toHaveCount(0);
   });
 
   test("creates a project and task, manages membership, and collaborates", async ({ page }) => {
     await installSessionApiMock(page, { initialPrincipal: effectivePrincipal() });
     const api = await installTaskApi(page);
-    await page.goto("/app/task-management");
+    await page.goto("/t/NORTHSTAR/app/task-management");
     await expect(page.getByRole("heading", { name: "Work overview" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("button", { name: "Task Management" })).toHaveAttribute("aria-expanded", "true");
     await page.getByRole("link", { name: "Projects", exact: true }).click();
     await page.getByRole("button", { name: "New project" }).click();
     await page.getByRole("textbox", { name: "Project name" }).fill("Payments Platform");
     await page.getByRole("dialog", { name: "Create project" }).getByRole("button", { name: "Create project", exact: true }).click();
-    await expect(page).toHaveURL(`/app/task-management/projects/${PROJECT_ID}/board`);
+    await expect(page).toHaveURL(`/t/NORTHSTAR/app/task-management/projects/${PROJECT_ID}/board`);
     await expect(page.getByRole("heading", { name: "Payments Platform" })).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole("link", { name: /Members/ }).click();

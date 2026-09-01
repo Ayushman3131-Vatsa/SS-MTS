@@ -11,7 +11,9 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.access_control.tenant.defaults import ensure_system_role_page_defaults
 from app.auth.email_identity import lock_email_identity, reserve_new_user_email
+from app.auth.username_identity import allocate_unique_tenant_username
 from app.auth.models.role import Role
 from app.auth.models.system_roles import SYSTEM_ROLES
 from app.auth.models.user_account import UserAccount
@@ -151,6 +153,7 @@ async def enable_initial_tenant_admin(
         )
 
     roles = await _ensure_system_roles(db, tenant.tenant_id)
+    await ensure_system_role_page_defaults(db, tenant.tenant_id)
     password = generate_temporary_password(
         email=contact_email,
         name=tenant.contact_name,
@@ -162,9 +165,11 @@ async def enable_initial_tenant_admin(
         tenant_id=tenant.tenant_id,
         allow_tenant_primary_contact=True,
     )
+    username = await allocate_unique_tenant_username(db, contact_email)
     admin = UserAccount(
         tenant_id=tenant.tenant_id,
         display_name=tenant.contact_name,
+        username=username,
         email=contact_email,
         password_hash=hash_password(password),
         created_by_user_id=None,
@@ -188,6 +193,7 @@ async def enable_initial_tenant_admin(
         changed_by_admin_id=platform_admin_id,
         new_value={
             "name": admin.display_name,
+            "username": username,
             "email": contact_email,
             "role": "Tenant Admin",
             "force_pw_reset": True,

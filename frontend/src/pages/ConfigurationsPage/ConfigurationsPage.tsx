@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { SlidersHorizontal, Loader2, AlertCircle, Sparkles } from "lucide-react";
 
+import { useTenantAppPath } from "../../entities/session/model/routing";
+
 import {
   fetchConfigCategories,
   fetchCategoryTemplates,
@@ -17,6 +19,7 @@ import styles from "./ConfigurationsPage.module.css";
 
 export const ConfigurationsPage: React.FC = () => {
   const navigate = useNavigate();
+  const appPath = useTenantAppPath();
   const focusRefreshKey = useWindowFocusRefresh();
   const [categories, setCategories] = useState<ConfigCategoryResponse[]>([]);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
@@ -156,7 +159,7 @@ export const ConfigurationsPage: React.FC = () => {
                   <TemplateCard
                     key={template.template_id}
                     template={template}
-                    onSelect={(id) => navigate(`/app/configurations/templates/${id}`)}
+                    onSelect={(id) => navigate(appPath(`/app/configurations/templates/${id}`))}
                   />
                 ))}
               </div>

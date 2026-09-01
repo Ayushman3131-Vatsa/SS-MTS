@@ -1,5 +1,6 @@
 import { BadgeDollarSign, BookOpen, Boxes, BriefcaseBusiness, Building2, CalendarDays, ChartNoAxesCombined, ChartPie, ChartSpline, ClipboardCheck, Clock, Cloud, Database, GraduationCap, Headphones, HeartPulse, KanbanSquare, Landmark, Laptop, Library, MapPin, MessagesSquare, Monitor, Package, Pencil, PhoneCall, Plus, Power, ReceiptText, RefreshCw, School, Search, ShieldCheck, ShoppingCart, Smartphone, Stethoscope, TicketCheck, Trash2, Truck, UserCog, UserRound, UserSearch, Users, WalletCards, Workflow, Wrench, X } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { offeringsApi } from "../../features/offering-management/api/offerings-api";
 import type { OfferingCatalogItem, OfferingCreatePayload } from "../../features/offering-management/model/offerings";
@@ -212,9 +213,8 @@ export const OfferingsPage = () => {
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
-          <p>Product catalog</p>
           <h1>Offerings</h1>
-          <span>Control which products Platform Admins can license to new tenants.</span>
+          <p>Products that can be licensed to tenants.</p>
         </div>
         <Button type="button" onClick={resetEditor} variant="secondary"><Plus size={16} aria-hidden="true" /> New offering</Button>
       </header>
@@ -265,6 +265,9 @@ export const OfferingsPage = () => {
                   <td><strong>{offering.tenant_entitlement_count} entitlements</strong><span>{offering.configuration_category_count} config categories</span></td>
                   <td>{offering.sort_order}</td>
                   <td><div className={styles.actions}>
+                    <Link className={styles.textAction} to={`/platform/roles?type=tenant&offering_id=${offering.offering_id}`}>
+                      <ShieldCheck size={15} aria-hidden="true" /> Default roles
+                    </Link>
                     <Button type="button" variant="ghost" onClick={() => { setEditingId(offering.offering_id); setEditor(valuesFor(offering)); }}><Pencil size={15} aria-hidden="true" /> Edit</Button>
                     <Button type="button" variant="ghost" onClick={() => setPendingAction(offering)}><Power size={15} aria-hidden="true" /> {offering.status === "ACTIVE" ? "Disable" : "Enable"}</Button>
                     <Button type="button" variant="ghost" disabled={isInUse} title={isInUse ? "Offerings with tenant entitlements or configuration categories cannot be deleted." : "Delete offering"} onClick={() => setPendingDelete(offering)}><Trash2 size={15} aria-hidden="true" /> Delete</Button>

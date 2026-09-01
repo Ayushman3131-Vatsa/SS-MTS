@@ -99,6 +99,15 @@ class TaskManagementDomainTests(unittest.TestCase):
         self.assertFalse(can_create_task(viewer))
         self.assertTrue(can_execute_task(assignee))
         self.assertFalse(can_execute_task(member))
+        task_manager = ProjectAccess(
+            "Task Manager",
+            None,
+            has_tenant_task_view=True,
+            has_tenant_task_modify=True,
+        )
+        self.assertTrue(can_view_project(task_manager))
+        self.assertTrue(can_manage_project(task_manager))
+        self.assertTrue(can_create_task(task_manager))
 
     def test_canonical_schemas_reject_invalid_estimate_and_date_order(self) -> None:
         with self.assertRaises(ValidationError):

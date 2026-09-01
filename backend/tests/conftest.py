@@ -57,6 +57,7 @@ async def test_user(db_session: AsyncSession) -> UserAccount:
         admin_id=admin_id,
         name="Test Platform Admin",
         email=f"admin-{admin_id.hex}@example.test",
+        username=f"admin{admin_id.hex[:12]}",
         password_hash="test-only",
     )
     tenant = Tenant(
@@ -74,6 +75,7 @@ async def test_user(db_session: AsyncSession) -> UserAccount:
         id=uuid.uuid4(),
         display_name="Configuration Test User",
         email=f"user-{tenant_id.hex}@example.test",
+        username=f"user{tenant_id.hex[:12]}",
         password_hash="test-only",
         is_active=True,
     )

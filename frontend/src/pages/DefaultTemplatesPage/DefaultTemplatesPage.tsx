@@ -141,9 +141,8 @@ export const DefaultTemplatesPage = () => {
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
-          <p>Platform configuration</p>
           <h1>Default templates</h1>
-          <span>Manage the source templates inherited by tenant workspaces.</span>
+          <p>Source templates inherited by tenant workspaces.</p>
         </div>
         <Link className={styles.createLink} to={`/platform/default-templates/new${createSearch}`}>
           <Plus size={17} aria-hidden="true" />
