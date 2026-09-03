@@ -34,3 +34,6 @@ coverage/
 # Editors
 .vscode/
 .idea/
+
+# Local versioned virtual environments
+.venv*/

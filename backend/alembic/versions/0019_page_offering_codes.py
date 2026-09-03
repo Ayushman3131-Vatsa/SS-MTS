@@ -24,10 +24,16 @@ MODULE_PAGES = (
 
 
 def upgrade() -> None:
-    op.add_column("pages", sa.Column("offering_code", sa.String(length=50), nullable=True))
-    op.create_index("ix_pages_offering_code", "pages", ["offering_code"])
-
     connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    columns = {column["name"] for column in inspector.get_columns("pages")}
+    if "offering_code" not in columns:
+        op.add_column("pages", sa.Column("offering_code", sa.String(length=50), nullable=True))
+
+    indexes = {index["name"] for index in inspector.get_indexes("pages")}
+    if "ix_pages_offering_code" not in indexes:
+        op.create_index("ix_pages_offering_code", "pages", ["offering_code"])
+
     connection.execute(
         sa.text(
             """
