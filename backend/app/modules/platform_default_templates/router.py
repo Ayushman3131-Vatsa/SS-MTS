@@ -3,7 +3,11 @@ import uuid
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.deps import Principal, require_platform_admin
+from app.common.deps import (
+    Principal,
+    require_platform_admin,
+    require_platform_page_access,
+)
 from app.db.session import get_db
 from app.modules.platform_default_templates import service
 from app.schemas.platform_default_template import (
@@ -39,7 +43,7 @@ async def preview_default_template(
 @router.get("", response_model=list[DefaultTemplateListItem])
 async def list_default_templates(
     response: Response,
-    offering_id: uuid.UUID = Query(...),
+    offering_id: uuid.UUID | None = Query(default=None),
     principal: Principal = Depends(require_platform_admin),
     db: AsyncSession = Depends(get_db),
 ) -> list[DefaultTemplateListItem]:
@@ -66,7 +70,7 @@ async def get_default_template(
 async def create_default_template(
     payload: DefaultTemplateCreateRequest,
     response: Response,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_DEFAULT_TEMPLATES", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> DefaultTemplateDetailResponse:
     _set_private_no_store(response)
@@ -78,7 +82,7 @@ async def update_default_template(
     template_id: uuid.UUID,
     payload: DefaultTemplateUpdateRequest,
     response: Response,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_DEFAULT_TEMPLATES", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> DefaultTemplateDetailResponse:
     _set_private_no_store(response)

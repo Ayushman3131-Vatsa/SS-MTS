@@ -1,5 +1,5 @@
 import { AlertTriangle, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "../Button/Button";
 import styles from "./ConfirmDialog.module.css";
@@ -7,7 +7,7 @@ import styles from "./ConfirmDialog.module.css";
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  description: string;
+  description: ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
   destructive?: boolean;

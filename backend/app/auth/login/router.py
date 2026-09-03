@@ -15,9 +15,11 @@ from app.auth.schemas.auth import (
     PlatformSessionLoginRequest,
     SessionPrincipalResponse,
     TenantLoginRequest,
+    TenantLookupResponse,
     TenantSessionLoginRequest,
     TokenResponse,
 )
+from app.tenant_management.tenants import repository as tenant_repository
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -224,3 +226,19 @@ async def logout_session(
         getattr(request.state, "browser_session_id", None),
     )
     _clear_browser_session_cookies(response)
+
+
+@router.get("/tenant/{tenant_code}/lookup", response_model=TenantLookupResponse)
+async def lookup_tenant(
+    tenant_code: str,
+    db: AsyncSession = Depends(get_db),
+) -> TenantLookupResponse:
+    normalized = tenant_code.strip().upper()
+    tenant = await tenant_repository.get_tenant_by_code(db, normalized)
+    if tenant is None:
+        return TenantLookupResponse(exists=False, tenant_code=normalized, org_name=None)
+    return TenantLookupResponse(
+        exists=True,
+        tenant_code=tenant.tenant_code,
+        org_name=tenant.org_name,
+    )

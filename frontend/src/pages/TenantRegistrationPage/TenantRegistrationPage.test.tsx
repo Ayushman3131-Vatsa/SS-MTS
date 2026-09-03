@@ -160,13 +160,13 @@ describe("TenantRegistrationPage offering access workflow", () => {
         email: "avery@example.com",
         username: "avery.morgan",
         temporary_password: "TempPass1!",
-        login_path: "/t/SOLO/login",
+        login_path: "/SOLO/login",
         password_change_required: true,
         smartskale_access: {
           email: "hrms.support@smartskale.com",
           username: "ss_SOLO_admin",
           temporary_password: "Smartskale123!",
-          login_path: "/t/SOLO/login",
+          login_path: "/SOLO/login",
           password_change_required: false,
         },
       },
@@ -199,7 +199,7 @@ describe("TenantRegistrationPage offering access workflow", () => {
     expect(await screen.findByText("Solo Corp is ready")).toBeVisible();
     expect(screen.getByText("avery@example.com")).toBeVisible();
     expect(screen.getByText("avery.morgan")).toBeVisible();
-    expect(screen.getByText(/Sign-in URL: \/t\/SOLO\/login/)).toBeVisible();
+    expect(screen.getByText(/Sign-in URL: \/SOLO\/login/)).toBeVisible();
     expect(screen.getByText("ss_SOLO_admin")).toBeVisible();
     const submitted = vi.mocked(tenantsApi.create).mock.calls[0]?.[0];
     expect(submitted?.offering_ids).toEqual([options.offerings[0].offering_id]);

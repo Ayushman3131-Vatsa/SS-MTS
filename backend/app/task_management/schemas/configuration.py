@@ -45,6 +45,16 @@ class ConfigTemplateListItem(BaseModel):
     is_customized: bool = False
 
 
+class ConfigTemplateCatalogItem(ConfigTemplateListItem):
+    """Tenant-visible template summary with category and offering context."""
+
+    offering_id: uuid.UUID
+    offering_code: str
+    offering_name: str
+    category_name: str
+    created_at: datetime
+
+
 class ConfigTemplateDetailResponse(BaseModel):
     """Full template detail — includes the effective subject, body, and metadata."""
 

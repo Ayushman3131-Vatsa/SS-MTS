@@ -11,15 +11,24 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.access_control.shared.catalog import CORE_TENANT_PAGE_CODES, tenant_pages_for_entitlements
+from app.access_control.shared.catalog import (
+    entitled_offering_codes,
+    page_is_entitled,
+    pages_for_realm,
+)
 from app.access_control.shared.enums import AccessLevel
 from app.auth.models.page import Page
 from app.auth.models.role import Role
 from app.auth.models.role_page_access import RolePageAccess
 
 
-def default_access_for_system_role(role_code: str, page: Page) -> AccessLevel:
-    if role_code == "TENANT_ADMIN" and page.page_code in CORE_TENANT_PAGE_CODES:
+def default_access_for_system_role(
+    role_code: str,
+    page: Page,
+    *,
+    entitled_codes: set[str],
+) -> AccessLevel:
+    if role_code == "TENANT_ADMIN" and page_is_entitled(page, entitled_codes):
         return "modify"
     return "none"
 
@@ -36,21 +45,31 @@ async def ensure_system_role_page_defaults(db: AsyncSession, tenant_id: uuid.UUI
     if not roles:
         return
 
-    pages = await tenant_pages_for_entitlements(db, tenant_id)
+    pages = await pages_for_realm(db, "tenant")
+    entitled_codes = await entitled_offering_codes(db, tenant_id)
     existing = await db.execute(
         select(RolePageAccess).where(RolePageAccess.role_id.in_([role.id for role in roles]))
     )
-    existing_keys = {(row.role_id, row.page_id) for row in existing.scalars().all()}
+    existing_by_key = {
+        (row.role_id, row.page_id): row for row in existing.scalars().all()
+    }
 
     for role in roles:
         for page in pages:
-            if (role.id, page.id) in existing_keys:
-                continue
-            db.add(
-                RolePageAccess(
-                    role_id=role.id,
-                    page_id=page.id,
-                    access_level=default_access_for_system_role(role.role_code, page),
-                )
+            desired = default_access_for_system_role(
+                role.role_code,
+                page,
+                entitled_codes=entitled_codes,
             )
+            row = existing_by_key.get((role.id, page.id))
+            if row is None:
+                db.add(
+                    RolePageAccess(
+                        role_id=role.id,
+                        page_id=page.id,
+                        access_level=desired,
+                    )
+                )
+            elif row.access_level != desired:
+                row.access_level = desired
     await db.flush()

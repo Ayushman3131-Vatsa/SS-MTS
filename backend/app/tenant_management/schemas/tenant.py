@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
@@ -333,6 +333,15 @@ class TenantStatusActionRequest(StrictRequestModel):
         return value or None
 
 
+class TenantAdminProvisioningRequest(StrictRequestModel):
+    expected_version: int = Field(ge=1)
+
+
+class InitialTenantAdminCredentialsResponse(BaseModel):
+    email: str
+    temporary_password: str
+
+
 class SubscriptionPlanOptionResponse(BaseModel):
     code: SubscriptionPlanCode
     display_name: str
@@ -402,6 +411,9 @@ class TenantResponse(BaseModel):
     database_mode: DatabaseIsolationMode
     database_provisioning_state: DatabaseProvisioningState
     user_count: int
+    tenant_admin_provisioning_status: Literal[
+        "NOT_ENABLED", "PENDING_PASSWORD_CHANGE", "ENABLED"
+    ]
     offerings: list[TenantOfferingResponse]
     created_by_admin_id: uuid.UUID
     created_at: datetime

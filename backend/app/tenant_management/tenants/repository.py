@@ -14,6 +14,8 @@ from app.tenant_management.models.tenant_database_allocation import TenantDataba
 from app.tenant_management.models.tenant_subscription import TenantSubscription
 from app.tenant_management.models.tenant_offering import TenantOffering, TenantOfferingEvent
 from app.auth.models.user_account import UserAccount
+from app.auth.models.user_role import UserRole
+from app.auth.models.role import Role
 
 
 @dataclass(frozen=True)
@@ -69,6 +71,7 @@ class TenantReadModel:
     database_mode: str
     database_provisioning_state: str
     user_count: int
+    tenant_admin_provisioning_status: str
     offerings: tuple[OfferingReadModel, ...]
     created_by_admin_id: uuid.UUID
     created_at: datetime
@@ -91,6 +94,26 @@ def _tenant_details_statement():
         .correlate(Tenant)
         .scalar_subquery()
     )
+    first_admin_requires_password_change = (
+        select(UserAccount.force_pw_reset)
+        .join(UserRole, UserRole.user_id == UserAccount.id)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(
+            UserAccount.tenant_id == Tenant.tenant_id,
+            Role.role_code == "TENANT_ADMIN",
+            Role.is_active.is_(True),
+            UserRole.is_active.is_(True),
+        )
+        .order_by(UserAccount.created_at, UserAccount.id)
+        .limit(1)
+        .correlate(Tenant)
+        .scalar_subquery()
+    )
+    tenant_admin_provisioning_status = case(
+        (first_admin_requires_password_change.is_(None), "NOT_ENABLED"),
+        (first_admin_requires_password_change.is_(True), "PENDING_PASSWORD_CHANGE"),
+        else_="ENABLED",
+    ).label("tenant_admin_provisioning_status")
     return (
         select(
             Tenant.tenant_id,
@@ -123,6 +146,7 @@ def _tenant_details_statement():
             TenantDatabaseAllocation.mode.label("database_mode"),
             TenantDatabaseAllocation.provisioning_state.label("database_provisioning_state"),
             user_count.label("user_count"),
+            tenant_admin_provisioning_status,
             Tenant.created_by_admin_id,
             Tenant.created_at,
             Tenant.updated_at,
@@ -170,13 +194,22 @@ async def list_active_subscription_plans(db: AsyncSession) -> list[SubscriptionP
 
 async def list_active_offerings(db: AsyncSession) -> list[Offering]:
     result = await db.execute(
-        select(Offering).where(Offering.status == "ACTIVE").order_by(Offering.sort_order, Offering.display_name)
+        select(Offering)
+        .where(
+            Offering.status == "ACTIVE",
+            Offering.role_type.in_(("TENANT", "BOTH")),
+        )
+        .order_by(Offering.sort_order, Offering.display_name)
     )
     return list(result.scalars().all())
 
 
 async def list_all_offerings(db: AsyncSession) -> list[Offering]:
-    result = await db.execute(select(Offering).order_by(Offering.status.desc(), Offering.sort_order, Offering.display_name))
+    result = await db.execute(
+        select(Offering)
+        .where(Offering.role_type.in_(("TENANT", "BOTH")))
+        .order_by(Offering.status.desc(), Offering.sort_order, Offering.display_name)
+    )
     return list(result.scalars().all())
 
 
@@ -184,7 +217,11 @@ async def get_active_offerings_by_ids(db: AsyncSession, offering_ids: set[uuid.U
     if not offering_ids:
         return []
     result = await db.execute(
-        select(Offering).where(Offering.offering_id.in_(offering_ids), Offering.status == "ACTIVE")
+        select(Offering).where(
+            Offering.offering_id.in_(offering_ids),
+            Offering.status == "ACTIVE",
+            Offering.role_type.in_(("TENANT", "BOTH")),
+        )
     )
     return list(result.scalars().all())
 

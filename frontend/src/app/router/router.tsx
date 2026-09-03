@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { Navigate, createBrowserRouter } from "react-router-dom";
+import { Navigate, createBrowserRouter, type RouteObject } from "react-router-dom";
 
 import { ForbiddenPage } from "../../pages/ForbiddenPage/ForbiddenPage";
 import { AllTenantsPage } from "../../pages/AllTenantsPage/AllTenantsPage";
@@ -94,6 +94,94 @@ const taskRoute = (element: ReactNode) => (
   <Suspense fallback={<RouteLoader label="Loading Task Management…" />}>{element}</Suspense>
 );
 
+const tenantAppChildren: RouteObject[] = [
+  {
+    path: "overview",
+    element: <TenantLandingPage variant="overview" />,
+  },
+  {
+    element: <PageAccessRoute route="/app/users" />,
+    children: [
+      {
+        path: "access",
+        element: <TenantPathNavigate to="/app/users" />,
+      },
+      {
+        path: "users",
+        element: <UsersManagementPage realm="tenant" />,
+      },
+    ],
+  },
+  {
+    element: <PageAccessRoute route="/app/roles" />,
+    children: [
+      {
+        path: "roles",
+        element: <RolesPermissionsPage realm="tenant" />,
+      },
+    ],
+  },
+  {
+    element: <PageAccessRoute route="/app/configurations" />,
+    children: [
+      {
+        path: "configurations",
+        element: (
+          <Suspense fallback={<RouteLoader label="Loading configurations…" />}>
+            <ConfigurationsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "configurations/templates/:templateId",
+        element: (
+          <Suspense fallback={<RouteLoader label="Loading template editor…" />}>
+            <ConfigTemplateEditorPage />
+          </Suspense>
+        ),
+      },
+    ],
+  },
+  {
+    element: <PageAccessRoute route="/app/my-work" />,
+    children: [
+      {
+        path: "my-work",
+        element: <TenantLandingPage variant="my-work" />,
+      },
+    ],
+  },
+  {
+    element: <OfferingRoute code="TASK_MANAGEMENT" />,
+    children: [
+      { path: "modules/task-management", element: <TenantPathNavigate to="/app/task-management" /> },
+      {
+        element: <PageAccessRoute route="/app/task-management" />,
+        children: [
+          {
+            path: "task-management",
+            element: taskRoute(<TaskManagementLayout />),
+            children: [
+              { index: true, element: taskRoute(<TaskManagementOverviewPage />) },
+              { path: "projects", element: taskRoute(<TaskProjectsPage />) },
+              { path: "projects/:projectId/board", element: taskRoute(<TaskProjectPage view="board" />) },
+              { path: "projects/:projectId/list", element: taskRoute(<TaskProjectPage view="list" />) },
+              { path: "projects/:projectId/members", element: taskRoute(<TaskProjectPage view="members" />) },
+              { path: "projects/:projectId/settings", element: taskRoute(<TaskProjectPage view="settings" />) },
+              { path: "my-work", element: taskRoute(<TaskListPage mode="mine" />) },
+              { path: "tasks", element: taskRoute(<TaskListPage mode="all" />) },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    path: "modules/:moduleSlug",
+    element: <TenantModuleComingSoonPage />,
+  },
+];
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -103,6 +191,7 @@ export const router = createBrowserRouter([
     element: <PublicOnlyRoute />,
     children: [
       { path: "/login", element: <LoginPage /> },
+      { path: "/:tenantCode/login", element: <LoginPage /> },
       { path: "/t/:tenantCode/login", element: <LoginPage /> },
       { path: "/login/platform", element: <PlatformLoginPage /> },
       { path: "/platform/login", element: <PlatformLoginPage /> },
@@ -221,6 +310,10 @@ export const router = createBrowserRouter([
         element: <TenantWorkspaceGuard />,
         children: [
           {
+            path: "/:tenantCode/app/suspended",
+            element: <SuspendedTenantPage />,
+          },
+          {
             path: "/t/:tenantCode/app/suspended",
             element: <SuspendedTenantPage />,
           },
@@ -234,102 +327,16 @@ export const router = createBrowserRouter([
       {
         element: <TenantWorkspaceGuard />,
         children: [
-      {
-        path: "/t/:tenantCode/app",
-        element: <TenantShell />,
-        children: [
           {
-            element: <PageAccessRoute route="/app/overview" />,
-            children: [
-              {
-                path: "overview",
-                element: <TenantLandingPage variant="overview" />,
-              },
-            ],
+            path: "/:tenantCode/app",
+            element: <TenantShell />,
+            children: tenantAppChildren,
           },
           {
-            element: <PageAccessRoute route="/app/users" />,
-            children: [
-              {
-                path: "access",
-                element: <TenantPathNavigate to="/app/users" />,
-              },
-              {
-                path: "users",
-                element: <UsersManagementPage realm="tenant" />,
-              },
-            ],
+            path: "/t/:tenantCode/app",
+            element: <TenantShell />,
+            children: tenantAppChildren,
           },
-          {
-            element: <PageAccessRoute route="/app/roles" />,
-            children: [
-              {
-                path: "roles",
-                element: <RolesPermissionsPage realm="tenant" />,
-              },
-            ],
-          },
-          {
-            element: <PageAccessRoute route="/app/configurations" />,
-            children: [
-              {
-                path: "configurations",
-                element: (
-                  <Suspense fallback={<RouteLoader label="Loading configurations…" />}>
-                    <ConfigurationsPage />
-                  </Suspense>
-                ),
-              },
-              {
-                path: "configurations/templates/:templateId",
-                element: (
-                  <Suspense fallback={<RouteLoader label="Loading template editor…" />}>
-                    <ConfigTemplateEditorPage />
-                  </Suspense>
-                ),
-              },
-            ],
-          },
-          {
-            element: <PageAccessRoute route="/app/my-work" />,
-            children: [
-              {
-                path: "my-work",
-                element: <TenantLandingPage variant="my-work" />,
-              },
-            ],
-          },
-          {
-            element: <OfferingRoute code="TASK_MANAGEMENT" />,
-            children: [
-              { path: "modules/task-management", element: <TenantPathNavigate to="/app/task-management" /> },
-              {
-                element: <PageAccessRoute route="/app/task-management" />,
-                children: [
-                  {
-                    path: "task-management",
-                    element: taskRoute(<TaskManagementLayout />),
-                    children: [
-                      { index: true, element: taskRoute(<TaskManagementOverviewPage />) },
-                      { path: "projects", element: taskRoute(<TaskProjectsPage />) },
-                      { path: "projects/:projectId/board", element: taskRoute(<TaskProjectPage view="board" />) },
-                      { path: "projects/:projectId/list", element: taskRoute(<TaskProjectPage view="list" />) },
-                      { path: "projects/:projectId/members", element: taskRoute(<TaskProjectPage view="members" />) },
-                      { path: "projects/:projectId/settings", element: taskRoute(<TaskProjectPage view="settings" />) },
-                      { path: "my-work", element: taskRoute(<TaskListPage mode="mine" />) },
-                      { path: "tasks", element: taskRoute(<TaskListPage mode="all" />) },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            path: "modules/:moduleSlug",
-            element: <TenantModuleComingSoonPage />,
-          },
-        ],
-      },
         ],
       },
     ],

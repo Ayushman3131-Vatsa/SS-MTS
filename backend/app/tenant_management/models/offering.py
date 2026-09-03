@@ -14,6 +14,10 @@ class Offering(Base):
         UniqueConstraint("code", name="uq_offerings_code"),
         UniqueConstraint("route_slug", name="uq_offerings_route_slug"),
         CheckConstraint("status IN ('ACTIVE', 'INACTIVE')", name="check_offerings_status"),
+        CheckConstraint(
+            "role_type IN ('PLATFORM', 'TENANT', 'BOTH')",
+            name="check_offerings_role_type",
+        ),
         CheckConstraint("sort_order >= 0", name="check_offerings_sort_order"),
     )
 
@@ -34,6 +38,7 @@ class Offering(Base):
         default="ACTIVE",
         server_default="ACTIVE",
     )
+    role_type: Mapped[str] = mapped_column(String(20), nullable=False, default="TENANT")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

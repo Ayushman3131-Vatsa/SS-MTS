@@ -3,6 +3,7 @@ import uuid
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.common.schemas.base import StrictRequestModel
+from app.models.enums import OfferingRoleType
 
 
 _CODE_PATTERN = r"^[A-Z][A-Z0-9_]{1,49}$"
@@ -21,6 +22,7 @@ class OfferingCatalogResponse(BaseModel):
     route_slug: str
     sort_order: int
     status: str
+    role_type: OfferingRoleType
     tenant_entitlement_count: int
     configuration_category_count: int
 
@@ -44,6 +46,7 @@ class _OfferingFields(StrictRequestModel):
 class OfferingCreateRequest(_OfferingFields):
     code: str = Field(pattern=_CODE_PATTERN)
     status: str = Field(default="INACTIVE", pattern=r"^(ACTIVE|INACTIVE)$")
+    role_type: OfferingRoleType
 
     @field_validator("code", "icon_key", "route_slug", mode="before")
     @classmethod
@@ -57,6 +60,7 @@ class OfferingUpdateRequest(StrictRequestModel):
     icon_key: str | None = Field(default=None, pattern=_ICON_PATTERN)
     route_slug: str | None = Field(default=None, pattern=_SLUG_PATTERN, max_length=63)
     sort_order: int | None = Field(default=None, ge=0)
+    role_type: OfferingRoleType | None = None
 
     @field_validator("display_name", "description")
     @classmethod

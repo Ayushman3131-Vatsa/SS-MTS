@@ -108,13 +108,22 @@ const renderPlatform = (entry = "/platform/roles") =>
 const renderTenant = () =>
   render(
     <SessionContext.Provider value={sessionValue(tenantPrincipal)}>
-      <MemoryRouter initialEntries={["/t/INFY/app/roles"]}>
+      <MemoryRouter initialEntries={["/INFY/app/roles"]}>
         <Routes>
-          <Route path="/t/:tenantCode/app/roles" element={<RolesPermissionsPage realm="tenant" />} />
+          <Route path="/:tenantCode/app/roles" element={<RolesPermissionsPage realm="tenant" />} />
         </Routes>
       </MemoryRouter>
     </SessionContext.Provider>,
   );
+
+// Helper: the roles table lists role names as plain text (not headings), each row has
+// its own "View" button. Click the row's View button to open the permission studio.
+const openRoleFromTable = async (roleName: string) => {
+  const nameCell = await screen.findByText(roleName);
+  const row = nameCell.closest("tr");
+  if (!row) throw new Error(`Could not find table row for role "${roleName}"`);
+  await userEvent.click(within(row).getByRole("button", { name: "View / Edit" }));
+};
 
 describe("RolesPermissionsPage platform", () => {
   beforeEach(() => {
@@ -176,13 +185,22 @@ describe("RolesPermissionsPage platform", () => {
     });
   });
 
-  it("switches from platform roles to tenant defaults with the catalog control", async () => {
+  it("switches from platform roles to tenant defaults with the catalog control, and View opens the permission studio", async () => {
     renderPlatform();
+
+    // Roles table is the landing screen.
+    expect(await screen.findByRole("heading", { name: "Roles" })).toBeVisible();
+    await openRoleFromTable("IT Administrator");
     expect(await screen.findByRole("heading", { name: "IT Administrator" })).toBeVisible();
-    await userEvent.click(screen.getByRole("radio", { name: "Tenant" }));
-    expect(await screen.findByRole("heading", { name: "Tenant Admin" })).toBeVisible();
+
+    // Back to the table, then switch to tenant defaults.
+    await userEvent.click(screen.getByRole("button", { name: "Back to roles" }));
+    await userEvent.selectOptions(screen.getByLabelText("Role type"), "tenant");
     expect(screen.getByLabelText("Offering")).toBeVisible();
     expect(defaultRolesApi.list).toHaveBeenCalled();
+
+    await openRoleFromTable("Tenant Admin");
+    expect(await screen.findByRole("heading", { name: "Tenant Admin" })).toBeVisible();
   });
 });
 
@@ -248,24 +266,37 @@ describe("RolesPermissionsPage tenant", () => {
     ]);
   });
 
-  it("hides platform catalog controls and lists Task Management when creating a role", async () => {
+  it("hides platform catalog controls, filters by offering in the table, and lets you view/edit permissions", async () => {
     renderTenant();
-    expect(await screen.findByRole("heading", { name: "Tenant Admin" })).toBeVisible();
+
+    // Roles table is the landing screen, displaying All Offerings by default.
+    expect(await screen.findByText("Tenant Admin")).toBeVisible();
     expect(screen.getByLabelText("Offering")).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "Task Administrator" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Platform" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Tenant defaults" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("radio", { name: "Platform" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Task Administrator")).toBeVisible();
+    expect(screen.queryByLabelText("Role type")).not.toBeInTheDocument();
 
-    await userEvent.selectOptions(screen.getByLabelText("Offering"), "33333333-3333-4333-8333-333333333333");
+    // Switch the table to the Task Management offering.
+    await userEvent.selectOptions(screen.getByLabelText("Offering"), "Task Management");
+    expect(await screen.findByText("Task Administrator")).toBeVisible();
+    expect(screen.queryByText("Tenant Admin")).not.toBeInTheDocument();
+
+    // Open the role and confirm its permission grid is editable (View button navigated
+    // into the studio; "Save changes" is enabled only once an access level changes).
+    await openRoleFromTable("Task Administrator");
     expect(await screen.findByRole("heading", { name: "Task Administrator" })).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "Tenant Admin" })).not.toBeInTheDocument();
+    expect(screen.getByText("All Tasks")).toBeVisible();
+    const saveButton = screen.getByRole("button", { name: "Save changes" });
+    expect(saveButton).toBeDisabled();
+    const accessGroup = screen.getByRole("group", { name: "All Tasks access" });
+    await userEvent.click(within(accessGroup).getByRole("button", { name: "None" }));
+    expect(saveButton).toBeEnabled();
 
-    await userEvent.click(screen.getByRole("button", { name: "New role" }));
+    // Creating a new role still hides the Platform choice and scopes modules to what's licensed.
+    await userEvent.click(screen.getByRole("button", { name: "Back to roles" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create Role" }));
     const dialog = screen.getByRole("dialog", { name: "New role" });
     expect(screen.queryByRole("radio", { name: "Platform" })).not.toBeInTheDocument();
-    expect(within(dialog).getByLabelText("Module")).toBeVisible();
+    expect(within(dialog).getByLabelText("Offering")).toBeVisible();
     expect(within(dialog).getByRole("option", { name: "Task Management" })).toBeInTheDocument();
-    expect(within(dialog).queryByText(/· \d+ pages/)).not.toBeInTheDocument();
   });
 });

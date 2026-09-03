@@ -88,17 +88,28 @@ async def _pages_for_scope(
     db: AsyncSession,
     *,
     offering: Offering | None,
+    module_scope: str | None = None,
 ) -> list[Page]:
     pages = await pages_for_realm(db, "tenant")
     if offering is None:
+        if module_scope == "user_access_management":
+            return [page for page in pages if page.module == "user_access_management"]
+        if module_scope == "tenant_administration":
+            return [page for page in pages if page.module == "tenant_administration"]
         return [page for page in pages if page.page_code in CORE_TENANT_PAGE_CODES]
     return [page for page in pages if page.offering_code == offering.code]
 
 
 async def _resolve_scope(
-    db: AsyncSession, offering_id: uuid.UUID | None
+    db: AsyncSession,
+    offering_id: uuid.UUID | None,
+    module_scope: str | None = None,
 ) -> tuple[Offering | None, str]:
     if offering_id is None:
+        if module_scope:
+            matched = await repository.get_offering_by_code_or_slug(db, module_scope)
+            if matched:
+                return matched, matched.code
         return None, CORE_MODULE_SCOPE
     offering = await repository.get_offering(db, offering_id)
     if offering is None:
@@ -110,7 +121,7 @@ async def _build_detail(
     db: AsyncSession, role: repository.DefaultRoleReadModel
 ) -> DefaultRoleDetailResponse:
     offering = await repository.get_offering(db, role.offering_id) if role.offering_id else None
-    pages = await _pages_for_scope(db, offering=offering)
+    pages = await _pages_for_scope(db, offering=offering, module_scope=role.module_scope)
     access_rows = await repository.list_access_by_role(db, role.role_id)
     by_page_id = {row.page_id: row.access_level for row in access_rows}
     page_access = [page_access_response(page, by_page_id.get(page.id, "none")) for page in pages]
@@ -143,7 +154,7 @@ async def list_scope_pages(
     db: AsyncSession, *, offering_id: uuid.UUID | None
 ) -> DefaultRolePagesResponse:
     offering, module_scope = await _resolve_scope(db, offering_id)
-    pages = await _pages_for_scope(db, offering=offering)
+    pages = await _pages_for_scope(db, offering=offering, module_scope=module_scope)
     return DefaultRolePagesResponse(
         module_scope=module_scope,
         offering_id=offering.offering_id if offering else None,
@@ -214,11 +225,15 @@ async def create_role(
     principal: Principal,
     payload: DefaultRoleCreateRequest,
 ) -> DefaultRoleDetailResponse:
-    offering, module_scope = await _resolve_scope(db, payload.offering_id)
-    pages = await _pages_for_scope(db, offering=offering)
+    offering, default_scope = await _resolve_scope(
+        db, payload.offering_id, payload.module_scope
+    )
+    module_scope = payload.module_scope or default_scope
+    offering_id = payload.offering_id or (offering.offering_id if offering else None)
+    pages = await _pages_for_scope(db, offering=offering, module_scope=module_scope)
     code = payload.role_code or role_code(payload.role_name)
     role = PlatformDefaultRole(
-        offering_id=payload.offering_id,
+        offering_id=offering_id,
         role_code=code,
         role_name=payload.role_name,
         description=payload.description,

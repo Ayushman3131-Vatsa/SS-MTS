@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 from sqlalchemy import delete, func, select, update
@@ -16,6 +17,7 @@ from app.auth.models.platform_user_role import PlatformUserRole
 from app.auth.models.user_session import UserSession
 from app.auth.first_admin import generate_temporary_password
 from app.auth.username_identity import reserve_platform_username
+from app.common.email import send_platform_templated_email
 from app.common.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.common.security import hash_password, normalize_email, validate_password
 
@@ -129,6 +131,22 @@ async def create_platform_user(
         await db.rollback()
         raise _identity_conflict(exc) from exc
     await db.refresh(user)
+
+    role_names = [role.role_name for role in roles]
+    assigned_roles_str = ", ".join(role_names) if role_names else "Unassigned"
+    await send_platform_templated_email(
+        db,
+        template_code="platform_admin_welcome" if roles else "platform_admin_welcome_unassigned",
+        context={
+            "name": user.name,
+            "username": str(user.username),
+            "temporary_password": temporary_password,
+            "assigned_roles": assigned_roles_str,
+            "login_url": "/platform/login",
+        },
+        to_email=str(user.email),
+    )
+
     return platform_user_response(user, roles, temporary_password=temporary_password)
 
 
@@ -193,6 +211,20 @@ async def assign_platform_user_roles(
         db.add(PlatformUserRole(admin_id=admin_id, role_id=role.id, assigned_by=actor_id))
     await db.commit()
     await db.refresh(user)
+
+    role_names = [role.role_name for role in roles]
+    assigned_roles_str = ", ".join(role_names) if role_names else "Unassigned"
+    await send_platform_templated_email(
+        db,
+        template_code="platform_admin_role_updated",
+        context={
+            "name": user.name,
+            "assigned_roles": assigned_roles_str,
+            "login_url": "/platform/login",
+        },
+        to_email=str(user.email),
+    )
+
     return platform_user_response(user, roles)
 
 

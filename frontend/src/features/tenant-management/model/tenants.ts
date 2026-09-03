@@ -58,6 +58,16 @@ export interface TenantRegistrationOptions {
   };
 }
 
+export type TenantAdminProvisioningStatus =
+  | "NOT_ENABLED"
+  | "PENDING_PASSWORD_CHANGE"
+  | "ENABLED";
+
+export interface InitialTenantAdminCredentials {
+  email: string;
+  temporary_password: string;
+}
+
 export interface TenantRecord {
   tenant_id: string;
   org_name: string;
@@ -89,6 +99,7 @@ export interface TenantRecord {
   database_mode: string;
   database_provisioning_state: string;
   user_count: number;
+  tenant_admin_provisioning_status: TenantAdminProvisioningStatus;
   offerings: TenantOfferingEntitlement[];
   created_by_admin_id: string;
   created_at: string;
@@ -170,3 +181,4 @@ export interface TenantOfferingGrantPayload {
 }
 
 export type TenantStatusActionPayload = TenantOfferingActionPayload;
+export type TenantAdminProvisioningPayload = Pick<TenantStatusActionPayload, "expected_version">;

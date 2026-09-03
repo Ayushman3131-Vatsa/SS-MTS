@@ -239,15 +239,25 @@ export const sessionApi = {
   logout: async (): Promise<void> => {
 
     await apiRequest<void>("/auth/session", {
-
       method: "DELETE",
-
       notifyOnUnauthorized: false,
-
     });
-
   },
 
+  lookupTenant: async (tenantCode: string): Promise<{ exists: boolean; tenant_code: string; org_name?: string | null }> => {
+    const value = await apiRequest<unknown>(`/auth/tenant/${encodeURIComponent(tenantCode)}/lookup`, {
+      method: "GET",
+      notifyOnUnauthorized: false,
+    });
+    const schema = z.object({
+      exists: z.boolean(),
+      tenant_code: z.string(),
+      org_name: z.string().nullable().optional(),
+    });
+    const result = schema.safeParse(value);
+    if (!result.success) throw new InvalidApiResponseError();
+    return result.data;
+  },
 };
 
 

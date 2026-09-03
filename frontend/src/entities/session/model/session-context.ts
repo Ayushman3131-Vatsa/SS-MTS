@@ -28,6 +28,10 @@ export interface SessionContextValue {
 
 export const SessionContext = createContext<SessionContextValue | null>(null);
 
+export const useOptionalSession = (): SessionContextValue | null => {
+  return useContext(SessionContext);
+};
+
 export const useSession = (): SessionContextValue => {
   const context = useContext(SessionContext);
 

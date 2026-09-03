@@ -28,6 +28,26 @@ export function formatUserInitials(name: string): string {
   return (parts[0]?.slice(0, 2) ?? "U").toUpperCase();
 }
 
+const ACRONYMS = new Set([
+  "IT",
+  "HR",
+  "QA",
+  "UI",
+  "UX",
+  "VP",
+  "CEO",
+  "CTO",
+  "CFO",
+  "COO",
+  "ERP",
+  "CRM",
+  "AI",
+  "ML",
+  "DB",
+  "ID",
+  "SYS",
+]);
+
 /** Human-readable role title for headers (never show raw codes like PLATFORM_ADMIN). */
 export function formatRoleLabel(role: string): string {
   const trimmed = role.trim();
@@ -35,15 +55,18 @@ export function formatRoleLabel(role: string): string {
     return "User";
   }
 
-  if (/^[A-Z0-9_]+$/.test(trimmed)) {
+  // Only transform raw SCREAMING_SNAKE_CASE codes (e.g., PLATFORM_ADMIN, IT_ADMIN)
+  if (/^[A-Z0-9_]+$/.test(trimmed) && trimmed.includes("_")) {
     return trimmed
       .split("_")
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .map((part) =>
+        ACRONYMS.has(part)
+          ? part
+          : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase(),
+      )
       .join(" ");
   }
 
-  return trimmed
-    .split(/\s+/)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
+  // Preserve user-defined role names exactly as created
+  return trimmed;
 }

@@ -3,11 +3,16 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.deps import Principal, require_tenant_user
+from app.common.deps import (
+    Principal,
+    require_tenant_page_access,
+    require_tenant_user,
+)
 from app.db.session import get_db
 from app.modules.configurations import service
 from app.schemas.configuration import (
     ConfigCategoryResponse,
+    ConfigTemplateCatalogItem,
     ConfigTemplateDetailResponse,
     ConfigTemplateListItem,
     TemplateOverrideRequest,
@@ -20,11 +25,20 @@ router = APIRouter(prefix="/config", tags=["configurations"])
 
 @router.get("/categories", response_model=list[ConfigCategoryResponse])
 async def list_categories(
-    principal: Principal = Depends(require_tenant_user),
+    principal: Principal = Depends(require_tenant_page_access("TENANT_CONFIGURATIONS", "view")),
     db: AsyncSession = Depends(get_db),
 ) -> list[ConfigCategoryResponse]:
     """Return configuration categories for the tenant's licensed offerings."""
     return await service.list_config_categories(db, principal)
+
+
+@router.get("/templates", response_model=list[ConfigTemplateCatalogItem])
+async def list_template_catalog(
+    principal: Principal = Depends(require_tenant_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[ConfigTemplateCatalogItem]:
+    """Return templates from all offerings currently licensed to the tenant."""
+    return await service.list_template_catalog(db, principal)
 
 
 @router.get(
@@ -33,7 +47,7 @@ async def list_categories(
 )
 async def list_templates(
     category_id: uuid.UUID,
-    principal: Principal = Depends(require_tenant_user),
+    principal: Principal = Depends(require_tenant_page_access("TENANT_CONFIGURATIONS", "view")),
     db: AsyncSession = Depends(get_db),
 ) -> list[ConfigTemplateListItem]:
     """Return all templates in a category with customization status."""
@@ -46,7 +60,7 @@ async def list_templates(
 )
 async def get_template(
     template_id: uuid.UUID,
-    principal: Principal = Depends(require_tenant_user),
+    principal: Principal = Depends(require_tenant_page_access("TENANT_CONFIGURATIONS", "view")),
     db: AsyncSession = Depends(get_db),
 ) -> ConfigTemplateDetailResponse:
     """Return a single template with effective (merged) values."""
@@ -60,7 +74,7 @@ async def get_template(
 async def save_override(
     template_id: uuid.UUID,
     payload: TemplateOverrideRequest,
-    principal: Principal = Depends(require_tenant_user),
+    principal: Principal = Depends(require_tenant_page_access("TENANT_CONFIGURATIONS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> ConfigTemplateDetailResponse:
     """Create or update a tenant's template customization."""
@@ -73,7 +87,7 @@ async def save_override(
 )
 async def reset_override(
     template_id: uuid.UUID,
-    principal: Principal = Depends(require_tenant_user),
+    principal: Principal = Depends(require_tenant_page_access("TENANT_CONFIGURATIONS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> ConfigTemplateDetailResponse:
     """Reset a template to platform default by deleting the override."""

@@ -205,6 +205,73 @@ async def get_templates_by_category(
     return templates
 
 
+async def get_templates_for_tenant(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+) -> list[dict]:
+    """Return all active templates covered by a tenant's active entitlements."""
+    stmt = (
+        select(ConfigTemplate, ConfigCategory, Offering, TenantConfigOverride)
+        .join(
+            ConfigCategory,
+            ConfigCategory.category_id == ConfigTemplate.category_id,
+        )
+        .join(Offering, Offering.offering_id == ConfigCategory.offering_id)
+        .join(
+            TenantOffering,
+            (TenantOffering.offering_id == Offering.offering_id)
+            & (TenantOffering.tenant_id == tenant_id),
+        )
+        .outerjoin(
+            TenantConfigOverride,
+            (TenantConfigOverride.template_id == ConfigTemplate.template_id)
+            & (TenantConfigOverride.tenant_id == tenant_id),
+        )
+        .where(
+            ConfigTemplate.is_active.is_(True),
+            ConfigCategory.status == "ACTIVE",
+            TenantOffering.status == "ACTIVE",
+            TenantOffering.starts_at <= func.now(),
+            or_(
+                TenantOffering.ends_at.is_(None),
+                TenantOffering.ends_at > func.now(),
+            ),
+        )
+        .order_by(
+            Offering.sort_order,
+            Offering.display_name,
+            ConfigCategory.sort_order,
+            ConfigCategory.display_name,
+            ConfigTemplate.sort_order,
+            ConfigTemplate.display_name,
+        )
+    )
+    rows = (await db.execute(stmt)).all()
+    templates = []
+    for template, category, offering, override in rows:
+        effective = resolve_template_values(template, override)
+        templates.append(
+            {
+                "template_id": template.template_id,
+                "category_id": template.category_id,
+                "offering_id": offering.offering_id,
+                "offering_code": offering.code,
+                "offering_name": offering.display_name,
+                "category_name": category.display_name,
+                "code": template.code,
+                "display_name": template.display_name,
+                "description": template.description,
+                "template_type": template.template_type,
+                "subject": effective.subject,
+                "is_active": effective.is_active,
+                "sort_order": template.sort_order,
+                "is_customized": effective.is_customized,
+                "created_at": template.created_at,
+            }
+        )
+    return templates
+
+
 async def get_template_by_id(
     db: AsyncSession,
     template_id: uuid.UUID,
@@ -237,6 +304,19 @@ async def get_entitled_template_by_code(
             TenantOffering.starts_at <= func.now(),
             or_(TenantOffering.ends_at.is_(None), TenantOffering.ends_at > func.now()),
         )
+    )
+    result = await db.execute(stmt)
+    return result.scalars().unique().one_or_none()
+
+
+async def get_template_by_code(
+    db: AsyncSession,
+    template_code: str,
+) -> ConfigTemplate | None:
+    """Fetch any active template by code (for platform-level notifications)."""
+    stmt = select(ConfigTemplate).where(
+        ConfigTemplate.code == template_code,
+        ConfigTemplate.is_active.is_(True),
     )
     result = await db.execute(stmt)
     return result.scalars().unique().one_or_none()

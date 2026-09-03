@@ -61,17 +61,18 @@ const parse = <T>(schema: z.ZodType<T>, payload: unknown): T => {
 };
 
 interface ListOptions {
-  offeringId: string;
+  offeringId?: string;
   signal?: AbortSignal;
 }
 
 export const defaultTemplatesApi = {
   list: async ({ offeringId, signal }: ListOptions): Promise<DefaultTemplateListItem[]> => {
     const query = new URLSearchParams();
-    query.set("offering_id", offeringId);
+    if (offeringId) query.set("offering_id", offeringId);
+    const queryString = query.size > 0 ? `?${query.toString()}` : "";
     return parse(
       z.array(templateListItemSchema),
-      await apiRequest<unknown>(`/platform/default-templates?${query.toString()}`, { signal }),
+      await apiRequest<unknown>(`/platform/default-templates${queryString}`, { signal }),
     );
   },
 

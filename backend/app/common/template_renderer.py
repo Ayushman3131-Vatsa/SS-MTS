@@ -1,12 +1,3 @@
-"""Template Rendering Engine.
-
-Used by backend services (Core HR, Task Management, Notifications, etc.) to
-render dynamic templates for a specific tenant and template code.
-
-It automatically resolves whether the tenant has a customized override or uses
-the platform default, then interpolates context variables into {{placeholders}}.
-"""
-
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -103,6 +94,40 @@ async def render_template(
         body=rendered_body,
         metadata=effective.metadata,
         is_customized=effective.is_customized,
+    )
+
+
+async def render_platform_template(
+    db: AsyncSession,
+    template_code: str,
+    context: dict[str, str | object],
+) -> RenderedTemplate:
+    """Fetch and render a platform-scoped template without tenant overrides."""
+    template = await configuration_repository.get_template_by_code(db, template_code)
+    if template is None:
+        raise NotFoundError(f"Platform template with code '{template_code}' not found")
+    if not template.is_active:
+        raise NotFoundError(f"Platform template with code '{template_code}' is inactive")
+
+    string_context = {
+        k: str(v) if v is not None else ""
+        for k, v in context.items()
+    }
+
+    rendered_subject = (
+        _interpolate_placeholders(template.subject, string_context)
+        if template.subject is not None
+        else None
+    )
+    rendered_body = _interpolate_placeholders(template.body, string_context)
+
+    return RenderedTemplate(
+        template_code=template.code,
+        template_type=template.template_type,
+        subject=rendered_subject,
+        body=rendered_body,
+        metadata=template.metadata_ or {},
+        is_customized=False,
     )
 
 

@@ -54,7 +54,7 @@ describe("ForcedPasswordChangePage", () => {
         >
           <Routes>
             <Route path="/account/change-password" element={<ForcedPasswordChangePage />} />
-            <Route path="/t/:tenantCode/app/overview" element={<h1>Tenant home</h1>} />
+            <Route path="/:tenantCode/app/overview" element={<h1>Tenant home</h1>} />
           </Routes>
         </MemoryRouter>
       </SessionContext.Provider>,
@@ -95,7 +95,7 @@ describe("ForcedPasswordChangePage", () => {
         >
           <Routes>
             <Route path="/account/change-password" element={<ForcedPasswordChangePage />} />
-            <Route path="/t/:tenantCode/app/overview" element={<h1>Tenant home</h1>} />
+            <Route path="/:tenantCode/app/overview" element={<h1>Tenant home</h1>} />
             <Route path="/platform/login" element={<h1>Platform login</h1>} />
           </Routes>
         </MemoryRouter>

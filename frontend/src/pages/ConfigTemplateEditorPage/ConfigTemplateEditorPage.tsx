@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   Save,
@@ -22,8 +22,10 @@ import {
 } from "../../features/configurations/api/configuration-api";
 import type { ConfigTemplateDetailResponse } from "../../features/configurations/model/types";
 import { TemplatePreviewModal } from "../../features/configurations/ui/TemplatePreviewModal";
-import { useWindowFocusRefresh } from "../../shared/model/useWindowFocusRefresh";
+import { canModifyPage } from "../../entities/session/model/page-access";
+import { useOptionalSession } from "../../entities/session/model/session-context";
 import { useTenantAppPath } from "../../entities/session/model/routing";
+import { useWindowFocusRefresh } from "../../shared/model/useWindowFocusRefresh";
 import styles from "./ConfigTemplateEditorPage.module.css";
 
 interface TemplateDraft {
@@ -42,9 +44,13 @@ const toSampleData = (data: ConfigTemplateDetailResponse): Record<string, string
   );
 
 export const ConfigTemplateEditorPage: React.FC = () => {
+  const principal = useOptionalSession()?.principal;
+  const canModify = canModifyPage(principal, "/app/configurations");
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const appPath = useTenantAppPath();
+  const catalogUrl = appPath(`/app/configurations${location.search}`);
   const focusRefreshKey = useWindowFocusRefresh();
 
   const [template, setTemplate] = useState<ConfigTemplateDetailResponse | null>(null);
@@ -124,6 +130,10 @@ export const ConfigTemplateEditorPage: React.FC = () => {
 
   const handleSave = async () => {
     if (!templateId) return;
+    if (!canModify) {
+      setError("Modify permission required to customize templates.");
+      return;
+    }
     setSaving(true);
     setError(null);
     setSuccessMessage(null);
@@ -150,6 +160,10 @@ export const ConfigTemplateEditorPage: React.FC = () => {
 
   const handleReset = async () => {
     if (!templateId) return;
+    if (!canModify) {
+      setError("Modify permission required to reset templates.");
+      return;
+    }
     setResetting(true);
     setError(null);
     setSuccessMessage(null);
@@ -228,7 +242,7 @@ export const ConfigTemplateEditorPage: React.FC = () => {
           <span>{error}</span>
         </div>
         <button type="button" className={styles.backButton} onClick={() => navigate(-1)}>
-          <ArrowLeft size={16} /> Back to Configurations
+          <ArrowLeft size={16} /> Back to Templates
         </button>
       </div>
     );
@@ -241,9 +255,9 @@ export const ConfigTemplateEditorPage: React.FC = () => {
       {/* Top Navbar / Breadcrumb */}
       <header className={styles.header}>
         <div className={styles.leftNav}>
-          <Link to={appPath("/app/configurations")} className={styles.backLink}>
+          <Link to={catalogUrl} className={styles.backLink}>
             <ArrowLeft size={18} />
-            <span>Configurations</span>
+            <span>Templates</span>
           </Link>
           <span className={styles.divider}>/</span>
           <span className={styles.currentTitle}>{template.display_name}</span>
@@ -265,7 +279,7 @@ export const ConfigTemplateEditorPage: React.FC = () => {
               type="button"
               className={styles.dangerButton}
               onClick={() => setIsResetConfirmOpen(true)}
-              disabled={saving || resetting}
+              disabled={saving || resetting || !canModify}
             >
               <RotateCcw size={16} />
               Reset to Default
@@ -276,7 +290,7 @@ export const ConfigTemplateEditorPage: React.FC = () => {
             type="button"
             className={styles.primaryButton}
             onClick={handleSave}
-            disabled={saving || resetting}
+            disabled={saving || resetting || !canModify}
           >
             {saving ? (
               <Loader2 size={16} className={styles.spinner} />
@@ -289,6 +303,13 @@ export const ConfigTemplateEditorPage: React.FC = () => {
       </header>
 
       {/* Status Banners */}
+      {!canModify && (
+        <div className={styles.errorBanner} style={{ background: "#f0f9ff", borderColor: "#bae6fd", color: "#0369a1" }}>
+          <AlertCircle size={18} />
+          <span>You have view-only access to configurations. Editing and resetting templates is disabled.</span>
+        </div>
+      )}
+
       {error && (
         <div className={styles.errorBanner}>
           <AlertCircle size={18} />
@@ -306,7 +327,7 @@ export const ConfigTemplateEditorPage: React.FC = () => {
       {/* Editor Grid */}
       <fieldset
         className={styles.editorFields}
-        disabled={saving || resetting}
+        disabled={saving || resetting || !canModify}
         aria-busy={saving || resetting}
       >
       <div className={styles.editorGrid}>

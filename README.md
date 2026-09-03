@@ -168,9 +168,11 @@ authentication by database-backed dependencies and service rules.
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/tenants` | Create a tenant profile and commercial configuration; does not create users or roles |
+| POST | `/tenants` | Create a tenant profile and commercial configuration; the first admin is enabled separately |
 | GET | `/tenants` | Paginated tenant list with search and `status` filtering |
 | GET | `/tenants/{tenant_id}` | Get one tenant |
+| POST | `/tenants/{tenant_id}/enable` | Create the primary-contact Tenant Admin and return one-time credentials |
+| POST | `/tenants/{tenant_id}/regenerate-initial-password` | Replace a pending first-admin temporary password |
 | GET | `/tenants/offering-catalog` | List active and inactive offering catalog entries |
 | GET | `/offerings` | List and inspect all platform offering catalog entries |
 | POST | `/offerings` | Create an offering catalog entry |

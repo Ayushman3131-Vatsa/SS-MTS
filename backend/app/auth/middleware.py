@@ -1,10 +1,3 @@
-"""Authentication transport gate for bearer and browser-session clients.
-
-Route dependencies remain responsible for loading the current account and
-checking that it is still active. This middleware validates the transport
-credential early and supplies a uniform claims context to those dependencies.
-"""
-
 from __future__ import annotations
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -39,6 +32,14 @@ UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 LOGOUT_ROUTE = ("DELETE", "/auth/session")
 
 
+def is_public_route(method: str, path: str) -> bool:
+    if (method, path) in PUBLIC_ROUTES:
+        return True
+    if method == "GET" and path.startswith("/auth/tenant/") and path.endswith("/lookup"):
+        return True
+    return False
+
+
 def _clear_auth_cookies(response: Response) -> None:
     settings = get_settings()
     response.delete_cookie(
@@ -70,8 +71,7 @@ def _authentication_error(detail: str, *, clear_cookies: bool = False) -> JSONRe
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        route_key = (request.method.upper(), request.url.path)
-        if request.method == "OPTIONS" or route_key in PUBLIC_ROUTES:
+        if request.method == "OPTIONS" or is_public_route(request.method.upper(), request.url.path):
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization", "")

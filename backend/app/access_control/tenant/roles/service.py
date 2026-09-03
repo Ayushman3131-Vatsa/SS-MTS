@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 from sqlalchemy import delete, func, select
@@ -9,7 +10,9 @@ from app.auth.models.role import Role
 from app.auth.models.user_account import UserAccount
 from app.auth.models.user_role import UserRole
 from app.common.audit import record_audit
+from app.common.email import send_templated_email
 from app.common.exceptions import BusinessRuleError, ConflictError, ForbiddenError, NotFoundError
+from app.tenant_management.models.tenant import Tenant
 
 
 def require_tenant_context(tenant_id: uuid.UUID | None) -> uuid.UUID:
@@ -178,3 +181,21 @@ async def assign_tenant_user_roles(
         new_value={"role_ids": [str(role.id) for role in roles]},
     )
     await db.commit()
+
+    if user.email:
+        tenant = await db.get(Tenant, tenant_id)
+        role_names = [role.role_name for role in roles]
+        if tenant is not None:
+            await send_templated_email(
+                db,
+                tenant_id=tenant_id,
+                template_code="tenant_user_role_updated",
+                context={
+                    "name": user.display_name,
+                    "org_name": tenant.org_name,
+                    "tenant_code": tenant.tenant_code,
+                    "assigned_roles": ", ".join(role_names) if role_names else "Unassigned",
+                    "login_url": f"/{tenant.tenant_code}/login",
+                },
+                to_email=str(user.email),
+            )

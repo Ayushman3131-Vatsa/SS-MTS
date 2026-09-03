@@ -88,6 +88,23 @@
 .emptyState h4 { margin: .2rem 0 0; color: var(--color-slate-700); font-size: .75rem; }
 .emptyState p { margin: 0; color: var(--color-slate-500); font-size: .65rem; }
 
+.credentialsBackdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgb(15 23 42 / 48%); }
+.credentialsDialog { width: min(100%, 34rem); border: 1px solid var(--color-slate-200); border-radius: .9rem; padding: 1.2rem; color: var(--color-slate-900); background: var(--color-white); box-shadow: 0 18px 50px rgb(15 23 42 / 24%); }
+.credentialsHeader { display: flex; align-items: center; justify-content: space-between; }
+.credentialsIcon { display: grid; width: 2.2rem; height: 2.2rem; place-items: center; border-radius: .6rem; color: var(--color-blue-700); background: var(--color-blue-50); }
+.closeCredentials { display: grid; width: 2rem; height: 2rem; place-items: center; border: 0; border-radius: .4rem; color: var(--color-slate-500); background: transparent; cursor: pointer; }
+.closeCredentials:hover { color: var(--color-slate-800); background: var(--color-slate-100); }
+.closeCredentials:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 1px; }
+.credentialsDialog h2 { margin: .85rem 0 .3rem; font-size: 1rem; }
+.credentialsDialog > p { margin: 0; color: var(--color-slate-600); font-size: .74rem; line-height: 1.55; }
+.primaryContactEmail { color: var(--color-slate-950); font-weight: 750; }
+.credentialFields { display: grid; gap: .8rem; margin-top: 1rem; }
+.credentialFields label { display: grid; gap: .35rem; color: var(--color-slate-700); font-size: .67rem; font-weight: 700; }
+.credentialFields label > div { display: flex; min-width: 0; gap: .5rem; }
+.credentialFields output { display: block; min-width: 0; flex: 1; overflow-x: auto; border: 1px solid var(--color-slate-200); border-radius: .5rem; padding: .58rem .65rem; color: var(--color-slate-900); background: var(--color-slate-50); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .71rem; white-space: nowrap; }
+.credentialFields button, .credentialActions button { min-height: 2.3rem; white-space: nowrap; }
+.credentialActions { display: flex; justify-content: flex-end; gap: .55rem; margin-top: 1rem; }
+
 @media (max-width: 72rem) {
   .grantForm { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .offeringField, .reasonField { grid-column: span 2; }
@@ -114,4 +131,6 @@
   .entitlementMeta div:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .entitlementActions { display: grid; grid-template-columns: 1fr 1fr; }
   .entitlementActions button { width: 100%; }
+  .credentialFields label > div, .credentialActions { align-items: stretch; flex-direction: column; }
+  .credentialFields button, .credentialActions button { width: 100%; }
 }

@@ -26,8 +26,14 @@ If any step fails, no partial tenant is committed. Tenant codes and normalized
 primary-contact emails are serialized with PostgreSQL advisory locks. A primary
 contact email is rejected when another tenant already reserved it.
 
-The CLI `python -m scripts.bootstrap_tenant_admin --tenant-code <CODE>` remains
-available for recovery if first-admin creation was skipped on an older tenant.
+New registrations create the first Tenant Admin in the registration transaction.
+For an older tenant where first-admin creation was skipped, the Platform Admin
+**Enable Tenant** action creates or reuses the canonical tenant role, copies the
+primary contact name/email into the first Tenant Admin account, and returns a
+generated temporary password once after commit. A pending password can be
+regenerated only before the administrator completes password setup. The CLI
+`python -m scripts.bootstrap_tenant_admin --tenant-code <CODE>` provides the
+same recovery workflow. Future contact edits do not rename the account.
 
 ## First tenant login
 
@@ -103,6 +109,8 @@ Platform admins manage entitlements with:
 
 - `GET /tenants?page=1&page_size=25&query=...&status=ACTIVE`;
 - `POST /tenants/{tenant_id}/suspend` and `/activate`;
+- `POST /tenants/{tenant_id}/enable` and `/regenerate-initial-password` for the
+  first Tenant Admin;
 - `GET /tenants/offering-catalog`;
 - `GET /tenants/{tenant_id}/offering-entitlements`;
 - `GET /tenants/{tenant_id}/offering-entitlements/history` for immutable transition events;

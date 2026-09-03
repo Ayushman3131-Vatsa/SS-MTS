@@ -16,6 +16,7 @@ from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
 from app.modules.configurations import repository
 from app.schemas.configuration import (
     ConfigCategoryResponse,
+    ConfigTemplateCatalogItem,
     ConfigTemplateDetailResponse,
     ConfigTemplateListItem,
     TemplateOverrideRequest,
@@ -47,6 +48,16 @@ async def list_config_categories(
 
 
 # ── Templates ────────────────────────────────────────────────────
+
+
+async def list_template_catalog(
+    db: AsyncSession,
+    principal: Principal,
+) -> list[ConfigTemplateCatalogItem]:
+    """Return every template available through the tenant's active licenses."""
+    _require_tenant_admin(principal)
+    rows = await repository.get_templates_for_tenant(db, principal.tenant_id)
+    return [ConfigTemplateCatalogItem(**row) for row in rows]
 
 
 async def list_templates(

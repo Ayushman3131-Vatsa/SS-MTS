@@ -82,6 +82,9 @@ def page_is_entitled(page: Page, entitled_codes: set[str]) -> bool:
     return page.offering_code in entitled_codes
 
 
+CORE_TENANT_MODULE_SCOPES = frozenset({"CORE", "user_access_management", "tenant_administration"})
+
+
 def pages_in_module_scope(pages: list[Page], module_scope: str | None, *, realm: str) -> list[Page]:
     if not module_scope:
         return pages
@@ -89,7 +92,10 @@ def pages_in_module_scope(pages: list[Page], module_scope: str | None, *, realm:
         return [page for page in pages if page.module == module_scope]
     if module_scope == CORE_MODULE_SCOPE:
         return [page for page in pages if page.page_code in CORE_TENANT_PAGE_CODES]
-    return [page for page in pages if page.offering_code == module_scope]
+    return [
+        page for page in pages
+        if page.offering_code == module_scope or page.module == module_scope
+    ]
 
 
 async def validate_module_scope(
@@ -106,7 +112,7 @@ async def validate_module_scope(
         if module_scope not in modules:
             raise BusinessRuleError("Select a valid module")
         return module_scope
-    if module_scope == CORE_MODULE_SCOPE:
+    if module_scope in CORE_TENANT_MODULE_SCOPES:
         return module_scope
     if tenant_id is None:
         raise BusinessRuleError("Select a subscribed module")

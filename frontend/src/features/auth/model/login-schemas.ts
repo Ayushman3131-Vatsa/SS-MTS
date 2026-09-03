@@ -20,8 +20,8 @@ const passwordSchema = z
 const tenantCodeSchema = z
   .string()
   .trim()
-  .min(2, "Enter your organization code.")
-  .max(30, "Organization code must be 30 characters or fewer.")
+  .min(2, "Enter your tenant code.")
+  .max(30, "Tenant code must be 30 characters or fewer.")
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, "Use letters, numbers, _ or -")
   .transform((value) => value.toUpperCase());
 

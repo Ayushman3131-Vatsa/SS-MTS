@@ -80,7 +80,7 @@ export const TenantLoginForm = ({
         <InputField
           id="tenant-code"
           type="text"
-          label="Organization code"
+          label="Tenant code"
           placeholder="ACME"
           autoComplete="organization"
           autoCapitalize="characters"
