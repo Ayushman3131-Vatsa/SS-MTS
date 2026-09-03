@@ -3,7 +3,11 @@ import uuid
 from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.deps import Principal, require_platform_admin
+from app.auth.deps import (
+    Principal,
+    require_platform_admin,
+    require_platform_page_access,
+)
 from app.common.db.session import get_db
 from app.tenant_management.models.enums import TenantStatus
 from app.tenant_management.tenants import service
@@ -37,11 +41,11 @@ async def get_registration_options(
 @router.post("", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(
     payload: TenantCreateRequest,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_TENANT_REGISTER", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> TenantResponse:
     created = await service.create_tenant(db, principal, payload)
-    login_path = f"/t/{created.tenant.tenant_code}/login"
+    login_path = f"/{created.tenant.tenant_code}/login"
     return TenantResponse.model_validate(created.tenant).model_copy(
         update={
             "first_access": TenantFirstAccessResponse(
@@ -106,7 +110,7 @@ async def get_tenant(
 @router.post("/{tenant_id}/first-access/rotate", response_model=TenantFirstAccessResponse)
 async def rotate_first_admin_access(
     tenant_id: uuid.UUID,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_TENANTS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> TenantFirstAccessResponse:
     rotated = await service.rotate_first_admin_access(db, principal, tenant_id)
@@ -122,7 +126,7 @@ async def suspend_tenant(
     tenant_id: uuid.UUID,
     payload: TenantStatusActionRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=255),
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_TENANTS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> TenantResponse:
     tenant = await service.transition_tenant(
@@ -141,7 +145,7 @@ async def activate_tenant(
     tenant_id: uuid.UUID,
     payload: TenantStatusActionRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=255),
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_TENANTS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> TenantResponse:
     tenant = await service.transition_tenant(
@@ -189,7 +193,7 @@ async def grant_offering(
     tenant_id: uuid.UUID,
     payload: TenantOfferingGrantRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=255),
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_TENANTS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> TenantOfferingResponse:
     key = idempotency_key or f"grant:{uuid.uuid4()}"
@@ -203,7 +207,7 @@ async def suspend_offering(
     entitlement_id: uuid.UUID,
     payload: TenantOfferingActionRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=255),
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_TENANTS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> TenantOfferingResponse:
     key = idempotency_key or f"suspend:{entitlement_id}:{payload.expected_version}"
@@ -217,7 +221,7 @@ async def resume_offering(
     entitlement_id: uuid.UUID,
     payload: TenantOfferingActionRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=255),
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_TENANTS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> TenantOfferingResponse:
     key = idempotency_key or f"resume:{entitlement_id}:{payload.expected_version}"
@@ -231,7 +235,7 @@ async def deactivate_offering(
     entitlement_id: uuid.UUID,
     payload: TenantOfferingActionRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=255),
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_TENANTS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> TenantOfferingResponse:
     key = idempotency_key or f"deactivate:{entitlement_id}:{payload.expected_version}"
@@ -247,7 +251,7 @@ async def remove_offering(
     tenant_id: uuid.UUID,
     entitlement_id: uuid.UUID,
     payload: TenantOfferingRemovalRequest,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_TENANTS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     await service.remove_retired_offering(

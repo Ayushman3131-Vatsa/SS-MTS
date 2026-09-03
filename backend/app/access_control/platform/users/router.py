@@ -10,7 +10,11 @@ from app.access_control.platform.schemas import (
     PlatformUserUpdateRequest,
 )
 from app.access_control.platform.users import service
-from app.auth.deps import Principal, require_platform_admin
+from app.auth.deps import (
+    Principal,
+    require_platform_admin,
+    require_platform_page_access,
+)
 from app.common.db.session import get_db
 
 router = APIRouter()
@@ -28,7 +32,7 @@ async def list_platform_users(
 @router.post("/users", response_model=PlatformUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_platform_user(
     payload: PlatformUserCreateRequest,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_USERS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> PlatformUserResponse:
     return await service.create_platform_user(db, actor_id=principal.id, payload=payload)
@@ -38,7 +42,7 @@ async def create_platform_user(
 async def update_platform_user(
     admin_id: uuid.UUID,
     payload: PlatformUserUpdateRequest,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_USERS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> PlatformUserResponse:
     return await service.update_platform_user(
@@ -50,7 +54,7 @@ async def update_platform_user(
 async def assign_platform_user_roles(
     admin_id: uuid.UUID,
     payload: PlatformUserRoleAssignmentRequest,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_USERS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> PlatformUserResponse:
     return await service.assign_platform_user_roles(

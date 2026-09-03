@@ -52,6 +52,7 @@ export interface DefaultRoleCreatePayload {
   role_code?: string;
   description?: string | null;
   offering_id?: string | null;
+  module_scope?: string | null;
   is_system?: boolean;
   is_active?: boolean;
   entries?: Array<{ page_id: string; access_level: AccessLevel }>;

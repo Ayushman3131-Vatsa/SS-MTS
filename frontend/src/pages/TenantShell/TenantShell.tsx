@@ -63,11 +63,13 @@ export const TenantShell = () => {
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const taskRouteActive = location.pathname.includes("/app/task-management");
   const accessRouteActive = location.pathname.includes("/app/users") || location.pathname.includes("/app/roles");
+  const adminRouteActive = location.pathname.includes("/app/overview") || location.pathname.includes("/app/configurations");
   const taskTenantId = principal?.principal_type === "tenant_user" ? principal.tenant.tenant_id : "unknown";
   const hasTaskOffering = canAccessOffering(principal, "TASK_MANAGEMENT");
   const taskExpansionKey = `task-management-navigation:${taskTenantId}`;
   const [taskExpanded, setTaskExpanded] = useState(() => taskRouteActive);
   const [accessExpanded, setAccessExpanded] = useState(accessRouteActive);
+  const [adminExpanded, setAdminExpanded] = useState(true);
 
   useEffect(() => setDrawerOpen(false), [location.pathname]);
 
@@ -76,6 +78,12 @@ export const TenantShell = () => {
       setAccessExpanded(true);
     }
   }, [accessRouteActive]);
+
+  useEffect(() => {
+    if (adminRouteActive) {
+      setAdminExpanded(true);
+    }
+  }, [adminRouteActive]);
 
   useEffect(() => {
     if (taskRouteActive) {
@@ -103,6 +111,7 @@ export const TenantShell = () => {
   const showRoles = canAccessPage(principal, "/app/roles");
   const showAccessManagement = showUsers || showRoles;
   const showConfigurations = canAccessPage(principal, "/app/configurations");
+  const showTenantAdministration = showOverview || showConfigurations;
   const showTaskOverview = canAccessPage(principal, "/app/task-management");
   const showTaskProjects = canAccessPage(principal, "/app/task-management/projects");
   const showTaskMyWork = canAccessPage(principal, "/app/task-management/my-work");
@@ -178,16 +187,44 @@ export const TenantShell = () => {
           </button>
         </div>
         <nav>
-          <p>Workspace</p>
-          {showOverview && (
-            <NavLink
-              end
-              to={getPrincipalHome(principal)}
-              className={({ isActive }) => isActive ? styles.active : ""}
-            >
-              <LayoutDashboard size={17} />
-              <span>Overview</span>
-            </NavLink>
+          {(showTenantAdministration || showAccessManagement) && <p>Administration</p>}
+          {showTenantAdministration && (
+            <div className={styles.navGroup}>
+              <button
+                type="button"
+                className={`${styles.groupToggle} ${adminRouteActive ? styles.groupActive : ""}`}
+                aria-expanded={adminExpanded}
+                aria-controls="tenant-administration-navigation"
+                onClick={() => setAdminExpanded((expanded) => !expanded)}
+              >
+                <SlidersHorizontal size={17} />
+                <span>Tenant Administration</span>
+                <ChevronDown className={adminExpanded ? styles.chevronOpen : ""} size={15} />
+              </button>
+              {adminExpanded && (
+                <div id="tenant-administration-navigation" className={styles.subnav}>
+                  {showOverview && (
+                    <NavLink
+                      end
+                      to={getPrincipalHome(principal)}
+                      className={({ isActive }) => isActive ? styles.active : ""}
+                    >
+                      <LayoutDashboard size={15} />
+                      <span>Overview</span>
+                    </NavLink>
+                  )}
+                  {showConfigurations && (
+                    <NavLink
+                      to={appPath("/app/configurations")}
+                      className={({ isActive }) => isActive ? styles.active : ""}
+                    >
+                      <SlidersHorizontal size={15} />
+                      <span>Configurations</span>
+                    </NavLink>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {showAccessManagement && (
             <div className={styles.navGroup}>
@@ -225,15 +262,6 @@ export const TenantShell = () => {
                 </div>
               )}
             </div>
-          )}
-          {showConfigurations && (
-            <NavLink
-              to={appPath("/app/configurations")}
-              className={({ isActive }) => isActive ? styles.active : ""}
-            >
-              <SlidersHorizontal size={17} />
-              <span>Configurations</span>
-            </NavLink>
           )}
           {visibleOfferings.length > 0 && <p>Licensed offerings</p>}
           {hasTaskOffering && taskOffering && (

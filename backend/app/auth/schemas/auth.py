@@ -109,3 +109,9 @@ class PasswordChangeResponse(BaseModel):
     principal: SessionPrincipalResponse
     replacement_access_token: str | None = None
     token_type: Literal["bearer"] | None = None
+
+
+class TenantLookupResponse(BaseModel):
+    exists: bool
+    tenant_code: str
+    org_name: str | None = None

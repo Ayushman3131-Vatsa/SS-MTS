@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -24,6 +25,7 @@ from app.modules.platform_default_roles.clone import (
 )
 from app.common.audit import record_audit
 from app.common.config import get_settings
+from app.common.email import send_platform_templated_email
 from app.common.exceptions import (
     BusinessRuleError,
     ConflictError,
@@ -288,6 +290,21 @@ async def create_tenant(
     created = await repository.get_tenant_details(db, tenant.tenant_id)
     if created is None:
         raise RuntimeError("Created tenant persistence graph could not be reloaded")
+
+    await send_platform_templated_email(
+        db,
+        template_code="tenant_onboarding_welcome",
+        context={
+            "name": tenant.contact_name or tenant.org_name,
+            "org_name": tenant.org_name,
+            "tenant_code": tenant.tenant_code,
+            "username": first_admin_username,
+            "temporary_password": temporary_password,
+            "login_url": f"/{tenant.tenant_code}/login",
+        },
+        to_email=first_admin_email,
+    )
+
     return CreatedTenant(
         tenant=created,
         first_admin_email=first_admin_email,

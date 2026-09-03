@@ -5,12 +5,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import { TenantLoginForm } from "./TenantLoginForm";
 
-const renderForm = (onSubmit = vi.fn().mockResolvedValue(undefined)) => {
+const renderForm = (
+  onSubmit = vi.fn().mockResolvedValue(undefined),
+  lockedTenantCode?: string,
+) => {
   render(
     <MemoryRouter
       future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
     >
-      <TenantLoginForm onSubmit={onSubmit} />
+      <TenantLoginForm onSubmit={onSubmit} lockedTenantCode={lockedTenantCode} />
     </MemoryRouter>,
   );
   return onSubmit;
@@ -56,7 +59,7 @@ describe("TenantLoginForm", () => {
 
   it("normalizes email but preserves the password", async () => {
     const user = userEvent.setup();
-    const onSubmit = renderForm();
+    const onSubmit = renderForm(undefined, "ACME");
 
     await user.type(screen.getByLabelText("Work email or username"), "Avery@Example.COM");
     await user.type(screen.getByLabelText("Password"), " keep spaces ");
@@ -66,6 +69,7 @@ describe("TenantLoginForm", () => {
 
     expect(onSubmit).toHaveBeenCalledWith(
       {
+        tenant_code: "ACME",
         email: "Avery@Example.COM",
         password: " keep spaces ",
       },

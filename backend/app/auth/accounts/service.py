@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from dataclasses import dataclass
 
@@ -13,6 +14,7 @@ from app.auth.username_identity import reserve_tenant_username
 from app.auth.models.user_session import UserSession
 from app.auth.roles import assign_role, get_active_role_names
 from app.access_control.tenant.roles.service import load_tenant_roles
+from app.common.email import send_templated_email
 from app.common.exceptions import BusinessRuleError, ConflictError, ForbiddenError, NotFoundError
 from app.common.security import hash_password, validate_password
 from app.tenant_management.models.tenant import Tenant
@@ -150,6 +152,24 @@ async def create_user(db: AsyncSession, principal: Principal, payload: UserCreat
         await db.rollback()
         raise _identity_conflict(exc) from exc
     await db.refresh(user)
+
+    if user.email:
+        await send_templated_email(
+            db,
+            tenant_id=principal.tenant_id,
+            template_code="tenant_user_welcome" if assigned_names else "tenant_user_welcome_unassigned",
+            context={
+                "name": user.display_name,
+                "org_name": tenant.org_name,
+                "tenant_code": tenant.tenant_code,
+                "username": user.username,
+                "temporary_password": temporary_password,
+                "assigned_roles": ", ".join(assigned_names) if assigned_names else "Unassigned",
+                "login_url": f"/{tenant.tenant_code}/login",
+            },
+            to_email=str(user.email),
+        )
+
     return CreatedUserView(
         view=UserView(account=user, role=primary_role, roles=tuple(assigned_names)),
         temporary_password=temporary_password,

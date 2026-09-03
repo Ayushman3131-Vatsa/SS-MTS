@@ -17,7 +17,8 @@ import {
   type Role,
   type TenantUser,
 } from "../../features/access-management/api/access-management-api";
-import { useSession } from "../../entities/session/model/session-context";
+import { canModifyPage } from "../../entities/session/model/page-access";
+import { useOptionalSession } from "../../entities/session/model/session-context";
 import { getLoginErrorContent } from "../../features/auth/model/login-errors";
 import { ApiError } from "../../shared/api/errors";
 import { Alert } from "../../shared/ui/Alert/Alert";
@@ -104,7 +105,8 @@ const computeMenuPosition = (
 };
 
 export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
-  const { principal } = useSession();
+  const principal = useOptionalSession()?.principal;
+  const canModify = canModifyPage(principal, realm === "platform" ? "/platform/users" : "/app/users");
   const [platformUsers, setPlatformUsers] = useState<PlatformUser[]>([]);
   const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -299,6 +301,7 @@ export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
   }, [platformUsers, realm, tenantUsers]);
 
   const openCreate = () => {
+    if (!canModify) return;
     setSelectedId(null);
     setForm(emptyForm());
     setDialog("create");
@@ -306,6 +309,7 @@ export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
   };
 
   const openEdit = (id: string) => {
+    if (!canModify) return;
     const row = rows.find((item) => item.id === id);
     if (!row) return;
     closeMenu();
@@ -336,6 +340,7 @@ export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
   };
 
   const handleToggleStatus = async (id: string) => {
+    if (!canModify) return;
     const row = rows.find((item) => item.id === id);
     if (!row) return;
     if (principal?.principal_id === id) {
@@ -384,6 +389,10 @@ export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
 
   const handleSaveUser = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!canModify) {
+      setError("Modify permission required to save user details.");
+      return;
+    }
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -460,10 +469,12 @@ export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
           <h1>Users</h1>
           <p className={styles.lede}>Create accounts and assign roles from User Access Management.</p>
         </div>
-        <Button type="button" onClick={openCreate}>
-          <Plus size={16} aria-hidden="true" />
-          New User
-        </Button>
+        {canModify && (
+          <Button type="button" onClick={openCreate}>
+            <Plus size={16} aria-hidden="true" />
+            New User
+          </Button>
+        )}
       </header>
 
       <div className={styles.stats}>
@@ -570,19 +581,23 @@ export const UsersManagementPage = ({ realm }: UsersManagementPageProps) => {
                     </td>
                     <td>{formatLogin(user.lastLogin)}</td>
                     <td className={styles.actionsCell}>
-                      <div className={styles.menuWrap}>
-                        <button
-                          type="button"
-                          className={styles.iconButton}
-                          aria-label={`Actions for ${user.name}`}
-                          aria-expanded={menuId === user.id}
-                          aria-haspopup="menu"
-                          title="More actions"
-                          onClick={(event) => toggleMenu(user.id, event.currentTarget)}
-                        >
-                          <MoreHorizontal size={18} aria-hidden="true" />
-                        </button>
-                      </div>
+                      {canModify ? (
+                        <div className={styles.menuWrap}>
+                          <button
+                            type="button"
+                            className={styles.iconButton}
+                            aria-label={`Actions for ${user.name}`}
+                            aria-expanded={menuId === user.id}
+                            aria-haspopup="menu"
+                            title="More actions"
+                            onClick={(event) => toggleMenu(user.id, event.currentTarget)}
+                          >
+                            <MoreHorizontal size={18} aria-hidden="true" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className={styles.emailCellMuted}>—</span>
+                      )}
                     </td>
                   </tr>
                 ))}

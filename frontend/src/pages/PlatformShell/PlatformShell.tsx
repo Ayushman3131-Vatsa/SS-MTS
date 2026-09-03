@@ -115,6 +115,10 @@ export const PlatformShell = () => {
     return null;
   }
 
+  const hasNoRoles = Boolean(
+    !principal.roles || principal.roles.length === 0 || principal.role === "Unassigned"
+  );
+
   const handleLogout = async () => {
     setIsLoggingOut(true);
     setLogoutError(null);
@@ -210,7 +214,7 @@ export const PlatformShell = () => {
         </div>
 
         <nav aria-label="Platform navigation">
-          <span className={styles.navLabel}>Workspace</span>
+          {!hasNoRoles && <span className={styles.navLabel}>Platform Console</span>}
           {primaryNavigation
             .filter((item) => canAccessPage(principal, item.to))
             .map(({ end, icon: Icon, label, to }) => (

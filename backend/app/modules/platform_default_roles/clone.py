@@ -202,10 +202,25 @@ def resolve_registration_admin_roles(
         offering_admins = [
             cloned[template.id]
             for template in templates
-            if template.offering_id == offering.offering_id
+            if (
+                template.offering_id == offering.offering_id
+                or (
+                    offering.code in {"TENANT_ADMINISTRATION", "USER_ACCESS_MANAGEMENT"}
+                    and (
+                        template.role_code == "TENANT_ADMIN"
+                        or (template.module_scope and template.module_scope.lower() in {"tenant_administration", "user_access_management", "core"})
+                    )
+                )
+            )
             and is_module_admin_role_code(template.role_code)
             and template.id in cloned
         ]
+        if not offering_admins and offering.code in {"TENANT_ADMINISTRATION", "USER_ACCESS_MANAGEMENT"}:
+            if tenant_admin:
+                offering_admins = [tenant_admin]
+            elif seeded_tenant_admin:
+                offering_admins = [seeded_tenant_admin]
+
         if not offering_admins:
             raise BusinessRuleError(
                 f"No administrator role (_ADMIN) is configured for {offering.display_name}",

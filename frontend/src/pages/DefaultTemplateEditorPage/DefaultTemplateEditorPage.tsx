@@ -30,6 +30,8 @@ import {
 } from "../../features/default-template-management/model/default-templates";
 import { offeringsApi } from "../../features/offering-management/api/offerings-api";
 import type { OfferingCatalogItem } from "../../features/offering-management/model/offerings";
+import { canModifyPage } from "../../entities/session/model/page-access";
+import { useOptionalSession } from "../../entities/session/model/session-context";
 import { TemplatePreviewModal } from "../../features/configurations/ui/TemplatePreviewModal";
 import { ApiError } from "../../shared/api/errors";
 import { Alert } from "../../shared/ui/Alert/Alert";
@@ -167,6 +169,8 @@ const renderDraft = (
 };
 
 export const DefaultTemplateEditorPage = () => {
+  const principal = useOptionalSession()?.principal;
+  const canModify = canModifyPage(principal, "/platform/default-templates");
   const { templateId } = useParams<{ templateId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -490,7 +494,7 @@ export const DefaultTemplateEditorPage = () => {
           <Button type="button" variant="secondary" disabled={saving} loading={previewing} loadingLabel="Rendering preview&hellip;" onClick={() => { void openPreview(); }}>
             <Eye size={16} aria-hidden="true" /> Preview draft
           </Button>
-          <Button type="button" loading={saving} loadingLabel="Saving&hellip;" disabled={!dirty} onClick={() => formRef.current?.requestSubmit()}>
+          <Button type="button" loading={saving} loadingLabel="Saving&hellip;" disabled={!dirty || !canModify} onClick={() => formRef.current?.requestSubmit()}>
             <Save size={16} aria-hidden="true" /> {isEditing ? "Publish changes" : "Create & publish"}
           </Button>
         </div>
@@ -512,6 +516,12 @@ export const DefaultTemplateEditorPage = () => {
             </span>
           )}
         </div>
+
+        {!canModify && (
+          <Alert tone="info" title="Read-only mode">
+            You have view-only access to default templates. Publishing changes is disabled.
+          </Alert>
+        )}
 
         {notice && <Alert tone="success" title="Saved">{notice}</Alert>}
         {error && (

@@ -3,7 +3,11 @@ import uuid
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.deps import Principal, require_platform_admin
+from app.common.deps import (
+    Principal,
+    require_platform_admin,
+    require_platform_page_access,
+)
 from app.db.session import get_db
 from app.modules.platform_default_roles import service
 from app.modules.platform_default_roles.schemas import (
@@ -66,7 +70,7 @@ async def get_default_role(
 async def create_default_role(
     payload: DefaultRoleCreateRequest,
     response: Response,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_ROLES", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> DefaultRoleDetailResponse:
     _set_private_no_store(response)
@@ -78,7 +82,7 @@ async def update_default_role(
     role_id: uuid.UUID,
     payload: DefaultRoleUpdateRequest,
     response: Response,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_ROLES", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> DefaultRoleDetailResponse:
     _set_private_no_store(response)
@@ -89,7 +93,7 @@ async def update_default_role(
 async def delete_default_role(
     role_id: uuid.UUID,
     response: Response,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_ROLES", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     _set_private_no_store(response)

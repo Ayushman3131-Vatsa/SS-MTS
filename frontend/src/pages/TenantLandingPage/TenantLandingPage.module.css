@@ -11,5 +11,89 @@
 .cards span, .page > a span { display: grid; }
 .cards small, .page > a small { color: var(--color-slate-500); font-size: .63rem; }
 .cards strong, .page > a strong { color: var(--color-slate-800); font-size: .78rem; }
-.page > a { display: flex; align-items: center; justify-content: space-between; margin-top: .8rem; border: 1px dashed var(--color-slate-300); border-radius: .8rem; padding: 1rem; color: var(--color-slate-500); text-decoration: none; }
 @media (max-width: 38rem) { .cards { grid-template-columns: 1fr; } }
+.emptyWhiteScreen { min-height: 100%; background: #ffffff; }
+
+.sectionTitle {
+  margin: 2.5rem 0 1rem;
+  color: var(--color-slate-900);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.moduleGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.moduleCard {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid var(--color-slate-200);
+  border-radius: 0.9rem;
+  padding: 1.25rem;
+  background: #ffffff;
+  text-decoration: none;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.moduleCard:hover {
+  border-color: var(--color-blue-300);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.08);
+  transform: translateY(-2px);
+}
+
+.moduleHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.moduleIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.7rem;
+  background: var(--color-blue-50);
+  color: var(--color-blue-600);
+  border: 1px solid var(--color-blue-100);
+}
+
+.moduleTitle {
+  color: var(--color-slate-900);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.moduleDescription {
+  color: var(--color-slate-500);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  margin: 0 0 1.25rem;
+}
+
+.moduleAction {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-blue-600);
+  font-size: 0.8rem;
+  font-weight: 650;
+  margin-top: auto;
+}
+
+.moduleAction svg {
+  transition: transform 0.2s ease;
+}
+
+.moduleCard:hover .moduleAction svg {
+  transform: translateX(4px);
+}

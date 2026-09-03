@@ -5,7 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.access_control.shared.schemas import RoleCreateRequest, RoleResponse, RoleUpdateRequest
 from app.access_control.tenant.roles import service
-from app.auth.deps import Principal, require_roles
+from app.auth.deps import (
+    Principal,
+    require_tenant_page_access,
+)
 from app.common.db.session import get_db
 
 router = APIRouter()
@@ -13,7 +16,7 @@ router = APIRouter()
 
 @router.get("/roles", response_model=list[RoleResponse])
 async def list_tenant_roles(
-    principal: Principal = Depends(require_roles("Tenant Admin")),
+    principal: Principal = Depends(require_tenant_page_access("TENANT_ROLES", "view")),
     db: AsyncSession = Depends(get_db),
 ) -> list[RoleResponse]:
     tenant_id = service.require_tenant_context(principal.tenant_id)
@@ -23,7 +26,7 @@ async def list_tenant_roles(
 @router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant_role(
     payload: RoleCreateRequest,
-    principal: Principal = Depends(require_roles("Tenant Admin")),
+    principal: Principal = Depends(require_tenant_page_access("TENANT_ROLES", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> RoleResponse:
     tenant_id = service.require_tenant_context(principal.tenant_id)
@@ -39,7 +42,7 @@ async def create_tenant_role(
 async def update_tenant_role(
     role_id: uuid.UUID,
     payload: RoleUpdateRequest,
-    principal: Principal = Depends(require_roles("Tenant Admin")),
+    principal: Principal = Depends(require_tenant_page_access("TENANT_ROLES", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> RoleResponse:
     tenant_id = service.require_tenant_context(principal.tenant_id)
@@ -55,7 +58,7 @@ async def update_tenant_role(
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tenant_role(
     role_id: uuid.UUID,
-    principal: Principal = Depends(require_roles("Tenant Admin")),
+    principal: Principal = Depends(require_tenant_page_access("TENANT_ROLES", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     tenant_id = service.require_tenant_context(principal.tenant_id)

@@ -1,12 +1,3 @@
-"""Authentication application service.
-
-Bearer tokens remain available for API clients. Browser clients receive an
-opaque random token whose SHA-256 digest is the only value persisted.
-
-Account lockout uses ``failed_login_count`` / ``locked_until`` on
-``platform_admins`` and ``user_accounts`` (no separate throttle table).
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -257,18 +248,13 @@ async def _authenticate_tenant_user(
 
 async def _platform_principal(db: AsyncSession, admin: PlatformAdmin) -> SessionPrincipalResponse:
     role_names, page_access = await resolve_platform_page_access(db, admin.admin_id)
-    if not role_names:
-        raise UnauthorizedError(
-            "This account has no assigned role. Contact an administrator.",
-            code="ROLE_REQUIRED",
-        )
     return SessionPrincipalResponse(
         principal_type="platform_admin",
         principal_id=admin.admin_id,
         name=admin.name,
         email=str(admin.email),
         username=str(admin.username),
-        role=role_names[0],
+        role=role_names[0] if role_names else "Unassigned",
         roles=role_names,
         page_access=page_access,
         tenant=None,
@@ -280,7 +266,7 @@ async def _tenant_principal(
     db: AsyncSession,
     user: UserAccount,
     tenant: Tenant,
-    role_name: str,
+    role_name: str | None = None,
 ) -> SessionPrincipalResponse:
     offerings = await tenant_repository.list_tenant_offerings(db, tenant.tenant_id)
     role_names, page_access = await resolve_tenant_page_access(
@@ -288,14 +274,15 @@ async def _tenant_principal(
         tenant_id=tenant.tenant_id,
         user_id=user.id,
     )
+    resolved_role = role_name or (role_names[0] if role_names else "Unassigned")
     return SessionPrincipalResponse(
         principal_type="tenant_user",
         principal_id=user.id,
         name=user.display_name,
         email=str(user.email) if user.email else None,
         username=str(user.username),
-        role=role_name,
-        roles=role_names or [role_name],
+        role=resolved_role,
+        roles=role_names or ([resolved_role] if resolved_role != "Unassigned" else []),
         page_access=page_access,
         tenant=SessionTenantResponse(
             tenant_id=tenant.tenant_id,
@@ -373,12 +360,7 @@ async def login_tenant_user(
         password=payload.password,
         ip_address=ip_address,
     )
-    role_name = await get_active_role_name(db, user.id)
-    if role_name is None:
-        raise UnauthorizedError(
-            "This account has no assigned role. Contact an administrator.",
-            code="ROLE_REQUIRED",
-        )
+    role_name = await get_active_role_name(db, user.id) or "Unassigned"
     await db.commit()
     token = create_access_token(
         {
@@ -423,12 +405,7 @@ async def login_tenant_browser(
     tenant = await db.get(Tenant, user.tenant_id)
     if tenant is None:  # pragma: no cover - protected by the foreign key
         raise UnauthorizedError(GENERIC_CREDENTIALS_MESSAGE)
-    role_name = await get_active_role_name(db, user.id)
-    if role_name is None:
-        raise UnauthorizedError(
-            "This account has no assigned role. Contact an administrator.",
-            code="ROLE_REQUIRED",
-        )
+    role_name = await get_active_role_name(db, user.id) or "Unassigned"
     return await _create_browser_session(db, await _tenant_principal(db, user, tenant, role_name))
 
 
@@ -716,7 +693,5 @@ async def session_response_for_principal(
         or tenant is None
     ):
         raise UnauthorizedError("Authentication required")
-    role_name = await get_active_role_name(db, user.id)
-    if role_name is None:
-        raise UnauthorizedError("Authentication required")
+    role_name = await get_active_role_name(db, user.id) or "Unassigned"
     return await _tenant_principal(db, user, tenant, role_name)

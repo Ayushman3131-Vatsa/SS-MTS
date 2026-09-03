@@ -13,6 +13,7 @@ import { DashboardSummary } from "../../features/platform-dashboard/ui/Dashboard
 import { RecentActivity } from "../../features/platform-dashboard/ui/RecentActivity/RecentActivity";
 import { Alert } from "../../shared/ui/Alert/Alert";
 import { Button } from "../../shared/ui/Button/Button";
+import { useOptionalSession } from "../../entities/session/model/session-context";
 import styles from "./PlatformDashboardPage.module.css";
 
 const updatedAtFormatter = new Intl.DateTimeFormat(undefined, {
@@ -39,6 +40,12 @@ const DashboardSkeleton = () => (
 );
 
 export const PlatformDashboardPage = () => {
+  const principal = useOptionalSession()?.principal;
+  const hasNoRoles = Boolean(
+    principal &&
+      (!principal.roles || principal.roles.length === 0 || principal.role === "Unassigned")
+  );
+
   const [growthMonths, setGrowthMonths] = useState<GrowthPeriod>(12);
   const [registrationDays, setRegistrationDays] =
     useState<RegistrationPeriod>(30);
@@ -52,6 +59,10 @@ export const PlatformDashboardPage = () => {
     refresh,
   } = usePlatformDashboard({ growthMonths, registrationDays });
   const isLoading = isInitialLoading || isRefreshing;
+
+  if (hasNoRoles) {
+    return <div style={{ minHeight: "100%", background: "#ffffff" }} />;
+  }
 
   return (
     <div className={styles.page} aria-busy={isLoading}>

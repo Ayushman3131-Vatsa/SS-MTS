@@ -242,6 +242,19 @@ async def get_entitled_template_by_code(
     return result.scalars().unique().one_or_none()
 
 
+async def get_template_by_code(
+    db: AsyncSession,
+    template_code: str,
+) -> ConfigTemplate | None:
+    """Fetch any active template by code (for platform-level notifications)."""
+    stmt = select(ConfigTemplate).where(
+        ConfigTemplate.code == template_code,
+        ConfigTemplate.is_active.is_(True),
+    )
+    result = await db.execute(stmt)
+    return result.scalars().unique().one_or_none()
+
+
 async def get_tenant_override(
     db: AsyncSession,
     tenant_id: uuid.UUID,

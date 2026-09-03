@@ -219,6 +219,10 @@ class TaskManagementMembershipTests(unittest.IsolatedAsyncioTestCase):
                 "get_active_role_name",
                 AsyncMock(return_value="Project Manager"),
             ),
+            patch(
+                "app.modules.task_management.memberships.service.tenant_has_task_management_modify",
+                AsyncMock(return_value=True),
+            ),
         ):
             result = await membership_service.validate_member_user(
                 db,
