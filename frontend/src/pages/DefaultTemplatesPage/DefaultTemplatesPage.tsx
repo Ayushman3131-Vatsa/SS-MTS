@@ -20,6 +20,8 @@ import {
 import type { DefaultTemplateListItem } from "../../features/default-template-management/model/default-templates";
 import { offeringsApi } from "../../features/offering-management/api/offerings-api";
 import type { OfferingCatalogItem } from "../../features/offering-management/model/offerings";
+import { canModifyPage } from "../../entities/session/model/page-access";
+import { useOptionalSession } from "../../entities/session/model/session-context";
 import { Alert } from "../../shared/ui/Alert/Alert";
 import { Button } from "../../shared/ui/Button/Button";
 import styles from "./DefaultTemplatesPage.module.css";
@@ -54,6 +56,8 @@ const templateMatches = (template: DefaultTemplateListItem, query: string) => {
 };
 
 export const DefaultTemplatesPage = () => {
+  const principal = useOptionalSession()?.principal;
+  const canModify = canModifyPage(principal, "/platform/default-templates");
   const [searchParams, setSearchParams] = useSearchParams();
   const offeringId = searchParams.get("offering_id") ?? "";
   const typeParam = searchParams.get("type");
@@ -144,10 +148,12 @@ export const DefaultTemplatesPage = () => {
           <h1>Default templates</h1>
           <p>Source templates inherited by tenant workspaces.</p>
         </div>
-        <Link className={styles.createLink} to={`/platform/default-templates/new${createSearch}`}>
-          <Plus size={17} aria-hidden="true" />
-          New default template
-        </Link>
+        {canModify && (
+          <Link className={styles.createLink} to={`/platform/default-templates/new${createSearch}`}>
+            <Plus size={17} aria-hidden="true" />
+            New default template
+          </Link>
+        )}
       </header>
 
       {error && <Alert tone="error" title="Catalog unavailable">{error}</Alert>}

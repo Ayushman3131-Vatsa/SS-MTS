@@ -59,6 +59,17 @@ class Settings(BaseSettings):
         "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
+    # Google SMTP Integration Settings
+    smtp_host: str = Field(default="smtp.gmail.com")
+    smtp_port: int = Field(default=587)
+    smtp_user: str | None = Field(default="hrms.smartskale@gmail.com")
+    smtp_password: str | None = Field(default=None)
+    smtp_from_email: str | None = Field(default="hrms.smartskale@gmail.com")
+    smtp_from_name: str = Field(default="SmartSkale HRMS")
+    smtp_use_tls: bool = Field(default=True)
+    smtp_timeout_seconds: int = Field(default=10, ge=1, le=60)
+    smtp_enabled: bool = Field(default=True)
+
     @property
     def is_development(self) -> bool:
         return self.environment.strip().lower() in {

@@ -6,7 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.access_control.platform.page_access import service
 from app.access_control.shared.catalog import page_response, pages_for_realm
 from app.access_control.shared.schemas import PageAccessResponse, PageAccessUpdateRequest, PageResponse
-from app.auth.deps import Principal, require_platform_admin
+from app.auth.deps import (
+    Principal,
+    require_platform_admin,
+    require_platform_page_access,
+)
 from app.common.db.session import get_db
 
 router = APIRouter()
@@ -35,7 +39,7 @@ async def get_platform_role_page_access(
 async def save_platform_role_page_access(
     role_id: uuid.UUID,
     payload: PageAccessUpdateRequest,
-    principal: Principal = Depends(require_platform_admin),
+    principal: Principal = Depends(require_platform_page_access("PLATFORM_ROLES", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> list[PageAccessResponse]:
     return await service.save_platform_role_page_access(

@@ -3,7 +3,12 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.deps import Principal, require_roles, require_tenant_user
+from app.auth.deps import (
+    Principal,
+    require_roles,
+    require_tenant_page_access,
+    require_tenant_user,
+)
 from app.common.db.session import get_db
 from app.auth.accounts import service
 from app.auth.schemas.user import UserCreateRequest, UserResponse, UserUpdateRequest
@@ -14,7 +19,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     payload: UserCreateRequest,
-    principal: Principal = Depends(require_roles("Tenant Admin")),
+    principal: Principal = Depends(require_tenant_page_access("TENANT_USERS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     created = await service.create_user(db, principal, payload)
@@ -42,7 +47,7 @@ async def get_user(
 async def update_user(
     user_id: uuid.UUID,
     payload: UserUpdateRequest,
-    principal: Principal = Depends(require_roles("Tenant Admin")),
+    principal: Principal = Depends(require_tenant_page_access("TENANT_USERS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     return service.to_user_response(await service.update_user(db, principal, user_id, payload))

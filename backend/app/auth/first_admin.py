@@ -54,7 +54,7 @@ def smartskale_username(tenant_code: str) -> str:
 
 
 def tenant_login_path(tenant_code: str) -> str:
-    return f"/t/{tenant_code.strip().upper()}/login"
+    return f"/{tenant_code.strip().upper()}/login"
 
 
 async def assign_roles_to_user(

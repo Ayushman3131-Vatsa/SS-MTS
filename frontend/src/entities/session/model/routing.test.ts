@@ -26,13 +26,13 @@ describe("getPrincipalHome", () => {
   it.each(["Tenant Admin", "Task Manager"] as const)(
     "routes %s to the tenant overview",
     (role) => {
-      expect(getPrincipalHome(tenantPrincipal(role))).toBe("/t/NORTHSTAR/app/overview");
+      expect(getPrincipalHome(tenantPrincipal(role))).toBe("/NORTHSTAR/app/overview");
     },
   );
 
   it("routes every suspended tenant user to the restricted status page", () => {
     expect(getPrincipalHome(tenantPrincipal("Tenant Admin", "SUSPENDED"))).toBe(
-      "/t/NORTHSTAR/app/suspended",
+      "/NORTHSTAR/app/suspended",
     );
   });
 

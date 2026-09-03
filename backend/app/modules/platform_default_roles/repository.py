@@ -112,6 +112,17 @@ async def get_offering(db: AsyncSession, offering_id: uuid.UUID) -> Offering | N
     return await db.get(Offering, offering_id)
 
 
+async def get_offering_by_code_or_slug(
+    db: AsyncSession, code_or_slug: str
+) -> Offering | None:
+    stmt = select(Offering).where(
+        (Offering.code == code_or_slug.upper())
+        | (Offering.route_slug == code_or_slug.lower())
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def list_roles(
     db: AsyncSession,
     *,

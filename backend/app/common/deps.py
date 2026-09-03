@@ -10,7 +10,9 @@ from app.auth.deps import (
     get_current_principal,
     require_offering,
     require_platform_admin,
+    require_platform_page_access,
     require_roles,
+    require_tenant_page_access,
     require_tenant_user,
 )
 
@@ -19,6 +21,8 @@ __all__ = [
     "get_current_principal",
     "require_offering",
     "require_platform_admin",
+    "require_platform_page_access",
     "require_roles",
+    "require_tenant_page_access",
     "require_tenant_user",
 ]

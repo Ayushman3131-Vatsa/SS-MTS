@@ -19,6 +19,7 @@ class DefaultRoleCreateRequest(StrictRequestModel):
     role_code: str | None = Field(default=None, min_length=1, max_length=100)
     description: str | None = Field(default=None, max_length=1000)
     offering_id: uuid.UUID | None = None
+    module_scope: str | None = Field(default=None, max_length=100)
     is_system: bool = False
     is_active: bool = True
     entries: list[DefaultRolePageAccessUpdate] = Field(default_factory=list, max_length=250)

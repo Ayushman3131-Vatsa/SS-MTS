@@ -241,6 +241,23 @@ class SuspendedTenantAuthenticationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(raised.exception.code, "TENANT_SUSPENDED")
 
+    async def test_tenant_lookup_returns_details_when_found(self) -> None:
+        from app.auth.login.router import lookup_tenant
+        tenant = SimpleNamespace(tenant_code="NET", org_name="Netflix")
+        with patch("app.auth.login.router.tenant_repository.get_tenant_by_code", AsyncMock(return_value=tenant)):
+            res = await lookup_tenant("net", db=AsyncMock())
+        self.assertTrue(res.exists)
+        self.assertEqual(res.tenant_code, "NET")
+        self.assertEqual(res.org_name, "Netflix")
+
+    async def test_tenant_lookup_returns_not_found_when_missing(self) -> None:
+        from app.auth.login.router import lookup_tenant
+        with patch("app.auth.login.router.tenant_repository.get_tenant_by_code", AsyncMock(return_value=None)):
+            res = await lookup_tenant("invalid123", db=AsyncMock())
+        self.assertFalse(res.exists)
+        self.assertEqual(res.tenant_code, "INVALID123")
+        self.assertIsNone(res.org_name)
+
 
 async def _collect_asgi_response(app, scope, receive_messages):
     sent = []

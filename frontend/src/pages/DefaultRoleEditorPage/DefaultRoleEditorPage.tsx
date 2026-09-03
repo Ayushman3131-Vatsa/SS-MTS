@@ -112,7 +112,7 @@ export const DefaultRoleEditorPage = () => {
   }, [initialOfferingId, isNew, roleId]);
 
   const selectedOffering = offerings.find((item) => item.offering_id === editor.offering_id);
-  const moduleLabel = selectedOffering?.display_name ?? "Workspace";
+  const moduleLabel = selectedOffering?.display_name ?? "Administration";
   const listReturn = editor.offering_id
     ? `/platform/roles?type=tenant&offering_id=${encodeURIComponent(editor.offering_id)}`
     : "/platform/roles?type=tenant";
@@ -281,7 +281,7 @@ export const DefaultRoleEditorPage = () => {
             </label>
             {isNew ? (
               <label>
-                Module
+                <strong>Offering</strong>
                 <select
                   value={editor.offering_id}
                   onChange={(event) => {
@@ -296,12 +296,18 @@ export const DefaultRoleEditorPage = () => {
                     });
                   }}
                 >
-                  <option value="">Workspace (core)</option>
-                  {offerings.map((offering) => (
-                    <option key={offering.offering_id} value={offering.offering_id}>
-                      {offering.display_name}
-                    </option>
-                  ))}
+                  <option value="">Administration (All core pages)</option>
+                  {offerings
+                    .filter(
+                      (offering) =>
+                        offering.code !== "PLATFORM_ADMINISTRATION" &&
+                        offering.code !== "PLATFORM_USER_ACCESS_MANAGEMENT",
+                    )
+                    .map((offering) => (
+                      <option key={offering.offering_id} value={offering.offering_id}>
+                        {offering.display_name}
+                      </option>
+                    ))}
                 </select>
               </label>
             ) : (

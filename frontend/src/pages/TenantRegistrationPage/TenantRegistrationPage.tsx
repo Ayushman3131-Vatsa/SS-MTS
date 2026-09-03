@@ -22,6 +22,8 @@ import type {
   TenantRegistrationPayload,
 } from "../../features/tenant-management/model/tenants";
 import { TenantAdminCredentialsPanel } from "../../features/tenant-management/ui/TenantAdminCredentialsPanel/TenantAdminCredentialsPanel";
+import { canModifyPage } from "../../entities/session/model/page-access";
+import { useOptionalSession } from "../../entities/session/model/session-context";
 import { Alert } from "../../shared/ui/Alert/Alert";
 import { Button } from "../../shared/ui/Button/Button";
 import { ApiError, InvalidApiResponseError, NetworkError } from "../../shared/api/errors";
@@ -145,6 +147,8 @@ const textOrNull = (value: string): string | null => value.trim() || null;
 
 export const TenantRegistrationPage = () => {
   const navigate = useNavigate();
+  const principal = useOptionalSession()?.principal;
+  const canModify = canModifyPage(principal, "/platform/tenants/register");
   const [options, setOptions] = useState<TenantRegistrationOptions | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -218,6 +222,10 @@ export const TenantRegistrationPage = () => {
   };
 
   const onSubmit = async (values: RegistrationFormValues) => {
+    if (!canModify) {
+      setSubmitError("You have view-only access. Registering new tenants requires Modify permission.");
+      return;
+    }
     if (selectedPlan?.requires_end_date && !values.subscription_end_date) {
       setError("subscription_end_date", {
         message: "An end date is required for this plan",
@@ -381,6 +389,7 @@ export const TenantRegistrationPage = () => {
           <Button
             form="tenant-registration"
             type="submit"
+            disabled={isSubmitting || !canModify}
             loading={isSubmitting}
             loadingLabel="Registering tenant…"
           >
@@ -389,6 +398,12 @@ export const TenantRegistrationPage = () => {
           </Button>
         </div>
       </header>
+
+      {!canModify && (
+        <Alert tone="info" title="Read-only mode">
+          You have view-only permissions for this page. Registering new tenants is disabled.
+        </Alert>
+      )}
 
       {submitError && (
         <Alert tone="error" title="Registration failed">
@@ -697,7 +712,7 @@ export const TenantRegistrationPage = () => {
         </section>
 
         <div className={styles.mobileActions}>
-          <Button type="submit" fullWidth loading={isSubmitting} loadingLabel="Registering tenant…">
+          <Button type="submit" fullWidth disabled={isSubmitting || !canModify} loading={isSubmitting} loadingLabel="Registering tenant…">
             Register tenant
           </Button>
         </div>
