@@ -13,6 +13,12 @@ class TenantOfferingStatus(str, Enum):
     DEACTIVATED = "DEACTIVATED"
 
 
+class OfferingRoleType(str, Enum):
+    PLATFORM = "PLATFORM"
+    TENANT = "TENANT"
+    BOTH = "BOTH"
+
+
 class DatabaseIsolationMode(str, Enum):
     SHARED = "SHARED"
     DEDICATED = "DEDICATED"

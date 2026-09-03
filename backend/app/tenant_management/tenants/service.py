@@ -10,8 +10,6 @@ from app.access_control.tenant.defaults import ensure_system_role_page_defaults
 from app.auth.deps import Principal
 from app.auth.email_identity import reserve_new_tenant_contact
 from app.auth.first_admin import (
-    assign_roles_to_user,
-    bootstrap_users_for_tenant,
     create_first_tenant_admin,
     create_smartskale_tenant_user,
     rotate_pending_tenant_admin_password,
@@ -19,9 +17,6 @@ from app.auth.first_admin import (
 from app.auth.roles import seed_tenant_system_roles
 from app.modules.platform_default_roles.clone import (
     clone_default_roles_for_tenant,
-    is_module_admin_role_code,
-    list_active_templates_for_offerings,
-    resolve_registration_admin_roles,
 )
 from app.common.audit import record_audit
 from app.common.config import get_settings
@@ -213,29 +208,13 @@ async def create_tenant(
 
     seeded_roles = await seed_tenant_system_roles(db, tenant.tenant_id)
     offering_id_set = {offering.offering_id for offering in offerings}
-    cloned = await clone_default_roles_for_tenant(
+    await clone_default_roles_for_tenant(
         db,
         tenant_id=tenant.tenant_id,
         offering_ids=offering_id_set,
     )
-    templates = await list_active_templates_for_offerings(db, offering_id_set)
-    if cloned:
-        if not any(role.role_code == "TENANT_ADMIN" for role in cloned.values()):
-            await ensure_system_role_page_defaults(db, tenant.tenant_id)
-        admin_roles = resolve_registration_admin_roles(
-            cloned=cloned,
-            templates=templates,
-            offerings=offerings,
-            seeded_tenant_admin=seeded_roles.get("TENANT_ADMIN"),
-        )
-    else:
-        await ensure_system_role_page_defaults(db, tenant.tenant_id)
-        if offerings:
-            raise NotFoundError(
-                "Default administrator roles are not configured for the selected modules",
-                code="MODULE_ADMIN_ROLE_MISSING",
-            )
-        admin_roles = [seeded_roles["TENANT_ADMIN"]]
+    await ensure_system_role_page_defaults(db, tenant.tenant_id)
+    admin_roles = [seeded_roles["TENANT_ADMIN"]]
 
     first_admin_email, first_admin_username, temporary_password = await create_first_tenant_admin(
         db,
@@ -497,6 +476,11 @@ async def grant_offering(
             "Inactive catalog offerings cannot be granted",
             code="OFFERING_CATALOG_INACTIVE",
         )
+    if offering.role_type == "PLATFORM":
+        raise BusinessRuleError(
+            "Platform offerings cannot be granted to tenants",
+            code="OFFERING_NOT_TENANT_ELIGIBLE",
+        )
     now = await _database_now(db)
     if payload.ends_at <= now:
         raise BusinessRuleError(
@@ -532,14 +516,12 @@ async def grant_offering(
         idempotency_key=idempotency_key,
         occurred_at=now,
     )
-    cloned = await clone_default_roles_for_tenant(
+    await clone_default_roles_for_tenant(
         db,
         tenant_id=tenant_id,
         offering_ids={payload.offering_id},
     )
-    admin_roles = [role for role in cloned.values() if is_module_admin_role_code(role.role_code)]
-    for user in await bootstrap_users_for_tenant(db, tenant):
-        await assign_roles_to_user(db, user_id=user.id, roles=admin_roles)
+    await ensure_system_role_page_defaults(db, tenant_id)
     await db.commit()
     return await _entitlement_response(db, tenant_id, entitlement.entitlement_id)
 
@@ -639,6 +621,7 @@ async def transition_offering(
         idempotency_key=idempotency_key,
         occurred_at=now,
     )
+    await ensure_system_role_page_defaults(db, tenant_id)
     await db.commit()
     return await _entitlement_response(db, tenant_id, entitlement_id)
 
@@ -831,6 +814,7 @@ async def reconcile_expired_offerings(db: AsyncSession) -> int:
         .with_for_update(skip_locked=True)
     )
     rows = list(result.scalars().all())
+    affected_tenant_ids: set[uuid.UUID] = set()
     for entitlement in rows:
         tenant = await repository.get_tenant(db, entitlement.tenant_id)
         offering = await db.get(Offering, entitlement.offering_id)
@@ -839,6 +823,7 @@ async def reconcile_expired_offerings(db: AsyncSession) -> int:
         old_value = _entitlement_snapshot(entitlement)
         entitlement.status = TenantOfferingStatus.EXPIRED.value
         entitlement.version += 1
+        affected_tenant_ids.add(entitlement.tenant_id)
         new_value = _entitlement_snapshot(entitlement)
         await _write_offering_event(
             db,
@@ -853,6 +838,9 @@ async def reconcile_expired_offerings(db: AsyncSession) -> int:
             idempotency_key=f"offering-expired:{entitlement.entitlement_id}:{entitlement.version}",
             occurred_at=now,
         )
+    await db.flush()
+    for tenant_id in affected_tenant_ids:
+        await ensure_system_role_page_defaults(db, tenant_id)
     await db.commit()
     return len(rows)
 

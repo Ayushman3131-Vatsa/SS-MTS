@@ -194,13 +194,22 @@ async def list_active_subscription_plans(db: AsyncSession) -> list[SubscriptionP
 
 async def list_active_offerings(db: AsyncSession) -> list[Offering]:
     result = await db.execute(
-        select(Offering).where(Offering.status == "ACTIVE").order_by(Offering.sort_order, Offering.display_name)
+        select(Offering)
+        .where(
+            Offering.status == "ACTIVE",
+            Offering.role_type.in_(("TENANT", "BOTH")),
+        )
+        .order_by(Offering.sort_order, Offering.display_name)
     )
     return list(result.scalars().all())
 
 
 async def list_all_offerings(db: AsyncSession) -> list[Offering]:
-    result = await db.execute(select(Offering).order_by(Offering.status.desc(), Offering.sort_order, Offering.display_name))
+    result = await db.execute(
+        select(Offering)
+        .where(Offering.role_type.in_(("TENANT", "BOTH")))
+        .order_by(Offering.status.desc(), Offering.sort_order, Offering.display_name)
+    )
     return list(result.scalars().all())
 
 
@@ -208,7 +217,11 @@ async def get_active_offerings_by_ids(db: AsyncSession, offering_ids: set[uuid.U
     if not offering_ids:
         return []
     result = await db.execute(
-        select(Offering).where(Offering.offering_id.in_(offering_ids), Offering.status == "ACTIVE")
+        select(Offering).where(
+            Offering.offering_id.in_(offering_ids),
+            Offering.status == "ACTIVE",
+            Offering.role_type.in_(("TENANT", "BOTH")),
+        )
     )
     return list(result.scalars().all())
 

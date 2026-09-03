@@ -22,6 +22,7 @@ def _snapshot(offering: Offering) -> dict[str, object]:
         "route_slug": offering.route_slug,
         "sort_order": offering.sort_order,
         "status": offering.status,
+        "role_type": offering.role_type,
     }
 
 
@@ -60,8 +61,19 @@ def _record_activity(
     )
 
 
-async def list_catalog(db: AsyncSession) -> list[repository.OfferingCatalogReadModel]:
-    return await repository.list_catalog(db)
+async def list_catalog(
+    db: AsyncSession,
+    *,
+    query: str | None = None,
+    role_type: str | None = None,
+    status: str | None = None,
+) -> list[repository.OfferingCatalogReadModel]:
+    return await repository.list_catalog(
+        db,
+        query=query,
+        role_type=role_type,
+        status=status,
+    )
 
 
 async def create(
@@ -100,6 +112,12 @@ async def update(
     if not values:
         raise BusinessRuleError("Provide at least one field to update", code="OFFERING_UPDATE_EMPTY")
     old_value = _snapshot(offering)
+    if values.get("role_type") == "PLATFORM" and offering.role_type != "PLATFORM":
+        if await repository.has_open_tenant_entitlements(db, offering_id):
+            raise BusinessRuleError(
+                "Deactivate or remove this offering from all tenants before changing it to Platform",
+                code="OFFERING_HAS_TENANT_ASSIGNMENTS",
+            )
     for field, value in values.items():
         setattr(offering, field, value)
     try:
