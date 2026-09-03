@@ -43,7 +43,7 @@ async def preview_default_template(
 @router.get("", response_model=list[DefaultTemplateListItem])
 async def list_default_templates(
     response: Response,
-    offering_id: uuid.UUID = Query(...),
+    offering_id: uuid.UUID | None = Query(default=None),
     principal: Principal = Depends(require_platform_admin),
     db: AsyncSession = Depends(get_db),
 ) -> list[DefaultTemplateListItem]:

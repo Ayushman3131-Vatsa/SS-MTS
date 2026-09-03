@@ -145,15 +145,18 @@ def _to_read_model(row) -> DefaultTemplateReadModel:
     return DefaultTemplateReadModel(**data)
 
 
-async def list_for_offering(
+async def list_templates(
     db: AsyncSession,
-    offering_id: uuid.UUID,
+    offering_id: uuid.UUID | None = None,
 ) -> list[DefaultTemplateReadModel]:
+    statement = _read_statement()
+    if offering_id is not None:
+        statement = statement.where(Offering.offering_id == offering_id)
     rows = (
         await db.execute(
-            _read_statement()
-            .where(Offering.offering_id == offering_id)
-            .order_by(
+            statement.order_by(
+                Offering.sort_order,
+                Offering.display_name,
                 ConfigCategory.sort_order,
                 ConfigTemplate.sort_order,
                 ConfigTemplate.display_name,

@@ -99,13 +99,16 @@ def _record_activity(
 
 async def list_templates(
     db: AsyncSession,
-    offering_id: uuid.UUID,
+    offering_id: uuid.UUID | None,
 ) -> list[DefaultTemplateListItem]:
-    if await repository.get_offering(db, offering_id) is None:
+    if (
+        offering_id is not None
+        and await repository.get_offering(db, offering_id) is None
+    ):
         raise NotFoundError("Offering not found", code="OFFERING_NOT_FOUND")
     return [
         DefaultTemplateListItem.model_validate(item)
-        for item in await repository.list_for_offering(db, offering_id)
+        for item in await repository.list_templates(db, offering_id)
     ]
 
 

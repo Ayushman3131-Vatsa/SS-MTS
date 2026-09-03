@@ -7,6 +7,7 @@ import {
   ChartSpline,
   ClipboardCheck,
   Clock,
+  FileStack,
   Headphones,
   KeyRound,
   LayoutDashboard,
@@ -218,8 +219,8 @@ export const TenantShell = () => {
                       to={appPath("/app/configurations")}
                       className={({ isActive }) => isActive ? styles.active : ""}
                     >
-                      <SlidersHorizontal size={15} />
-                      <span>Configurations</span>
+                      <FileStack size={15} />
+                      <span>Templates</span>
                     </NavLink>
                   )}
                 </div>

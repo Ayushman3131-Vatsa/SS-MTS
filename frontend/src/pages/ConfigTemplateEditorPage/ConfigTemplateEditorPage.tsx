@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   Save,
@@ -48,7 +48,9 @@ export const ConfigTemplateEditorPage: React.FC = () => {
   const canModify = canModifyPage(principal, "/app/configurations");
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const appPath = useTenantAppPath();
+  const catalogUrl = appPath(`/app/configurations${location.search}`);
   const focusRefreshKey = useWindowFocusRefresh();
 
   const [template, setTemplate] = useState<ConfigTemplateDetailResponse | null>(null);
@@ -240,7 +242,7 @@ export const ConfigTemplateEditorPage: React.FC = () => {
           <span>{error}</span>
         </div>
         <button type="button" className={styles.backButton} onClick={() => navigate(-1)}>
-          <ArrowLeft size={16} /> Back to Configurations
+          <ArrowLeft size={16} /> Back to Templates
         </button>
       </div>
     );
@@ -253,9 +255,9 @@ export const ConfigTemplateEditorPage: React.FC = () => {
       {/* Top Navbar / Breadcrumb */}
       <header className={styles.header}>
         <div className={styles.leftNav}>
-          <Link to={appPath("/app/configurations")} className={styles.backLink}>
+          <Link to={catalogUrl} className={styles.backLink}>
             <ArrowLeft size={18} />
-            <span>Configurations</span>
+            <span>Templates</span>
           </Link>
           <span className={styles.divider}>/</span>
           <span className={styles.currentTitle}>{template.display_name}</span>

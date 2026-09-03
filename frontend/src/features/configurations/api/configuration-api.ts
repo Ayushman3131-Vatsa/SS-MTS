@@ -1,6 +1,7 @@
 import { apiRequest } from "../../../shared/api/client";
 import type {
   ConfigCategoryResponse,
+  ConfigTemplateCatalogItem,
   ConfigTemplateDetailResponse,
   ConfigTemplateListItem,
   TemplateOverrideRequest,
@@ -9,6 +10,10 @@ import type {
 
 export const fetchConfigCategories = async (): Promise<ConfigCategoryResponse[]> => {
   return apiRequest<ConfigCategoryResponse[]>("/config/categories");
+};
+
+export const fetchConfigTemplates = async (): Promise<ConfigTemplateCatalogItem[]> => {
+  return apiRequest<ConfigTemplateCatalogItem[]>("/config/templates");
 };
 
 export const fetchCategoryTemplates = async (

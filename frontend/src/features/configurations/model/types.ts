@@ -28,6 +28,14 @@ export interface ConfigTemplateListItem {
   is_customized: boolean;
 }
 
+export interface ConfigTemplateCatalogItem extends ConfigTemplateListItem {
+  offering_id: string;
+  offering_code: string;
+  offering_name: string;
+  category_name: string;
+  created_at: string;
+}
+
 export interface TemplatePlaceholder {
   key: string;
   label: string;

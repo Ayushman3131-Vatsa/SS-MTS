@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.modules.configurations import service
 from app.schemas.configuration import (
     ConfigCategoryResponse,
+    ConfigTemplateCatalogItem,
     ConfigTemplateDetailResponse,
     ConfigTemplateListItem,
     TemplateOverrideRequest,
@@ -29,6 +30,15 @@ async def list_categories(
 ) -> list[ConfigCategoryResponse]:
     """Return configuration categories for the tenant's licensed offerings."""
     return await service.list_config_categories(db, principal)
+
+
+@router.get("/templates", response_model=list[ConfigTemplateCatalogItem])
+async def list_template_catalog(
+    principal: Principal = Depends(require_tenant_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[ConfigTemplateCatalogItem]:
+    """Return templates from all offerings currently licensed to the tenant."""
+    return await service.list_template_catalog(db, principal)
 
 
 @router.get(
