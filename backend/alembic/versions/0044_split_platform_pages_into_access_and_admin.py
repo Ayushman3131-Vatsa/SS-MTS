@@ -1,7 +1,7 @@
 ﻿"""split platform pages into user_access_management and platform_administration
 
 Revision ID: 0044
-Revises: 0043
+Revises: 0043a
 """
 
 from typing import Sequence, Union
@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "0044"
-down_revision: Union[str, None] = "0043"
+down_revision: Union[str, None] = "0043a"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

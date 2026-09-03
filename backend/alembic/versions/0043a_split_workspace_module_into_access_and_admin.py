@@ -1,7 +1,7 @@
 ﻿"""split workspace module into user_access_management and tenant_administration
 
-Revision ID: 0043
-Revises: 0042
+Revision ID: 0043a
+Revises: 0043
 """
 
 from typing import Sequence, Union
@@ -9,8 +9,8 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = "0043"
-down_revision: Union[str, None] = "0042"
+revision: str = "0043a"
+down_revision: Union[str, None] = "0043"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
