@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.access_control.platform.schemas import (
@@ -32,10 +32,14 @@ async def list_platform_users(
 @router.post("/users", response_model=PlatformUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_platform_user(
     payload: PlatformUserCreateRequest,
+    response: Response,
     principal: Principal = Depends(require_platform_page_access("PLATFORM_USERS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> PlatformUserResponse:
-    return await service.create_platform_user(db, actor_id=principal.id, payload=payload)
+    created = await service.create_platform_user(db, actor_id=principal.id, payload=payload)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return created
 
 
 @router.patch("/users/{admin_id}", response_model=PlatformUserResponse)

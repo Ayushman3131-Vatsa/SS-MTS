@@ -50,6 +50,14 @@ async def get_current_principal(request: Request, db: AsyncSession = Depends(get
         admin = await db.get(PlatformAdmin, admin_id)
         if admin is None or not admin.is_active:
             raise UnauthorizedError("Authentication required")
+        if getattr(request.state, "auth_method", None) == "bearer":
+            try:
+                credential_version = int(claims["credential_version"])
+            except (KeyError, TypeError, ValueError):
+                # Deliberately reject pre-version platform JWTs at rollout.
+                raise UnauthorizedError("Authentication required") from None
+            if credential_version != admin.credential_version:
+                raise UnauthorizedError("Authentication required")
         assigned = await platform_roles_for_admin(db, admin.admin_id)
         role_name = assigned[0].role_name if assigned else "Unassigned"
         return Principal(

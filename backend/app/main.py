@@ -5,6 +5,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
 from app.common.config import get_settings
+from app.common.logging_security import configure_sensitive_log_redaction
 from app.common.exceptions import AppError
 from app.auth.middleware import AuthenticationMiddleware, PUBLIC_ROUTES
 from app.common.middleware.security_middleware import (
@@ -25,6 +26,7 @@ from app.modules.task_management.router import router as task_management_legacy_
 from app.task_management.router import router as task_management_router
 from app.tenant_management.router import router as tenant_management_router
 
+configure_sensitive_log_redaction()
 settings = get_settings()
 app = FastAPI(title="Multi-Tenant Task Management POC", version="0.1.0")
 

@@ -109,6 +109,8 @@ async def create_user(db: AsyncSession, principal: Principal, payload: UserCreat
         email=normalized_email,
         name=payload.name,
         org_name=tenant.org_name,
+        username=username,
+        tenant_code=tenant.tenant_code,
     )
 
     user = UserAccount(

@@ -52,7 +52,6 @@ class Settings(BaseSettings):
     max_request_body_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
     deactivated_offering_retention_days: int = Field(default=90, ge=1, le=3650)
     smartskale_setup_email: str = Field(default="hrms.support@smartskale.com")
-    smartskale_setup_password: str = Field(default="Smartskale123!")
     attachment_storage_root: Path = Field(
         default_factory=lambda: Path(tempfile.gettempdir()) / "multi_tenant_poc_attachments"
     )
@@ -131,14 +130,6 @@ class Settings(BaseSettings):
         if "@" not in email:
             raise ValueError("SMARTSKALE_SETUP_EMAIL must be a valid email address")
         return email
-
-    @field_validator("smartskale_setup_password")
-    @classmethod
-    def validate_setup_password(cls, value: str) -> str:
-        from app.common.security import validate_password
-
-        validate_password(value, email="hrms.support@smartskale.com", name="Smartskale Admin")
-        return value
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":

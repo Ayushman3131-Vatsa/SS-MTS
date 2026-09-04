@@ -47,10 +47,13 @@ async def get_registration_options(
 @router.post("", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(
     payload: TenantCreateRequest,
+    response: Response,
     principal: Principal = Depends(require_platform_page_access("PLATFORM_TENANT_REGISTER", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> TenantResponse:
     created = await service.create_tenant(db, principal, payload)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
     login_path = f"/{created.tenant.tenant_code}/login"
     return TenantResponse.model_validate(created.tenant).model_copy(
         update={
@@ -65,7 +68,7 @@ async def create_tenant(
                     username=created.smartskale_username,
                     temporary_password=created.smartskale_password,
                     login_path=login_path,
-                    password_change_required=False,
+                    password_change_required=True,
                 ),
             )
         }
@@ -177,10 +180,13 @@ async def regenerate_initial_password(
 @router.post("/{tenant_id}/first-access/rotate", response_model=TenantFirstAccessResponse)
 async def rotate_first_admin_access(
     tenant_id: uuid.UUID,
+    response: Response,
     principal: Principal = Depends(require_platform_page_access("PLATFORM_TENANTS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> TenantFirstAccessResponse:
     rotated = await service.rotate_first_admin_access(db, principal, tenant_id)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
     return TenantFirstAccessResponse(
         email=rotated.email,
         username=rotated.username,

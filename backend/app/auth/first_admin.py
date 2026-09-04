@@ -29,7 +29,14 @@ _PASSWORD_LENGTH = 16
 _SPECIAL = "!@#$%^&*()-_=+"
 
 
-def generate_temporary_password(*, email: str, name: str, org_name: str) -> str:
+def generate_temporary_password(
+    *,
+    email: str,
+    name: str,
+    org_name: str,
+    username: str | None = None,
+    tenant_code: str | None = None,
+) -> str:
     alphabet = string.ascii_letters + string.digits + _SPECIAL
     random = secrets.SystemRandom()
     while True:
@@ -43,7 +50,14 @@ def generate_temporary_password(*, email: str, name: str, org_name: str) -> str:
         random.shuffle(characters)
         password = "".join(characters)
         try:
-            validate_password(password, email=email, name=name, org_name=org_name)
+            validate_password(
+                password,
+                email=email,
+                name=name,
+                org_name=org_name,
+                username=username,
+                tenant_code=tenant_code,
+            )
         except ValueError:
             continue
         return password
@@ -96,6 +110,8 @@ async def create_first_tenant_admin(
         email=email,
         name=tenant.contact_name,
         org_name=tenant.org_name,
+        username=username,
+        tenant_code=tenant.tenant_code,
     )
     admin = UserAccount(
         tenant_id=tenant.tenant_id,
@@ -143,7 +159,13 @@ async def create_smartskale_tenant_user(
         tenant_id=tenant.tenant_id,
     )
     username = await reserve_tenant_username(db, smartskale_username(tenant.tenant_code))
-    password = settings.smartskale_setup_password
+    password = generate_temporary_password(
+        email=email,
+        name="Smartskale Admin",
+        org_name=tenant.org_name,
+        username=username,
+        tenant_code=tenant.tenant_code,
+    )
     user = UserAccount(
         tenant_id=tenant.tenant_id,
         display_name="Smartskale Admin",
@@ -152,7 +174,7 @@ async def create_smartskale_tenant_user(
         password_hash=hash_password(password),
         created_by_user_id=None,
         is_active=True,
-        force_pw_reset=False,
+        force_pw_reset=True,
     )
     db.add(user)
     await db.flush()
@@ -169,7 +191,7 @@ async def create_smartskale_tenant_user(
             "username": username,
             "email": email,
             "roles": [item.role_name for item in roles],
-            "force_pw_reset": False,
+            "force_pw_reset": True,
         },
     )
     return email, username, password

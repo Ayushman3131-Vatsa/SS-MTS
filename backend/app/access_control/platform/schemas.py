@@ -61,7 +61,7 @@ class PlatformUserCreateRequest(StrictRequestModel):
         email = str(self.email).strip() if self.email else f"{self.username}@accounts.local"
         object.__setattr__(self, "email", normalize_email(email))
         if self.password:
-            validate_password(self.password, email=email, name=display_name)
+            validate_password(self.password, email=email, name=display_name, username=self.username)
         return self
 
 

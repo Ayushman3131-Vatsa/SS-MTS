@@ -69,11 +69,11 @@ The two existing bearer endpoints remain available at `/auth/admin/login` and
 
 Creation and password-change boundaries enforce the strong password policy:
 
-- 12–128 characters;
+- 8–128 characters;
 - at least one uppercase letter, lowercase letter, number, and special
   character;
 - not a common password;
-- does not contain the account email, name, or organization.
+- does not contain the account email, name, username, organization, or tenant code.
 
 Sign-in validates only that a password is present and no longer than 128
 characters. Reapplying creation-time strength rules during sign-in would lock

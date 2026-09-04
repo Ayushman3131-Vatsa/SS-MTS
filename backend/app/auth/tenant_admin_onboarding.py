@@ -37,7 +37,14 @@ class InitialTenantAdminCredentials:
     temporary_password: str
 
 
-def generate_temporary_password(*, email: str, name: str, org_name: str) -> str:
+def generate_temporary_password(
+    *,
+    email: str,
+    name: str,
+    org_name: str,
+    username: str | None = None,
+    tenant_code: str | None = None,
+) -> str:
     """Generate a password that satisfies the application's current policy."""
     alphabet = string.ascii_letters + string.digits + _SPECIAL
     random = secrets.SystemRandom()
@@ -52,7 +59,14 @@ def generate_temporary_password(*, email: str, name: str, org_name: str) -> str:
         random.shuffle(characters)
         password = "".join(characters)
         try:
-            validate_password(password, email=email, name=name, org_name=org_name)
+            validate_password(
+                password,
+                email=email,
+                name=name,
+                org_name=org_name,
+                username=username,
+                tenant_code=tenant_code,
+            )
         except ValueError:
             continue
         return password
@@ -154,10 +168,13 @@ async def enable_initial_tenant_admin(
 
     roles = await _ensure_system_roles(db, tenant.tenant_id)
     await ensure_system_role_page_defaults(db, tenant.tenant_id)
+    username = await allocate_unique_tenant_username(db, contact_email)
     password = generate_temporary_password(
         email=contact_email,
         name=tenant.contact_name,
         org_name=tenant.org_name,
+        username=username,
+        tenant_code=tenant.tenant_code,
     )
     await reserve_new_user_email(
         db,
@@ -165,7 +182,6 @@ async def enable_initial_tenant_admin(
         tenant_id=tenant.tenant_id,
         allow_tenant_primary_contact=True,
     )
-    username = await allocate_unique_tenant_username(db, contact_email)
     admin = UserAccount(
         tenant_id=tenant.tenant_id,
         display_name=tenant.contact_name,
@@ -268,6 +284,8 @@ async def regenerate_initial_tenant_admin_password(
         email=contact_email,
         name=tenant.contact_name,
         org_name=tenant.org_name,
+        username=str(admin.username),
+        tenant_code=tenant.tenant_code,
     )
     now = await _database_now(db)
     admin.password_hash = hash_password(password)

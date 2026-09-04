@@ -50,7 +50,12 @@ class UserCreateRequest(StrictRequestModel):
         if self.email:
             object.__setattr__(self, "email", normalize_email(str(self.email).strip()))
         if self.password:
-            validate_password(self.password, email=str(self.email) if self.email else None, name=display_name)
+            validate_password(
+                self.password,
+                email=str(self.email) if self.email else None,
+                name=display_name,
+                username=self.username,
+            )
         return self
 
 

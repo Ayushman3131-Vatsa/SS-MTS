@@ -79,14 +79,13 @@ async def send_email(
     from_email = settings.smtp_from_email or settings.smtp_user or "hrms.smartskale@gmail.com"
     from_header = f"{settings.smtp_from_name} <{from_email}>"
 
-    # If SMTP password is not configured or SMTP is disabled, log email safely
+    # Email bodies can contain temporary credentials. Never write them to logs.
     if not settings.smtp_password or not settings.smtp_enabled:
         logger.info(
-            "[EMAIL SERVICE - DRY RUN / UNCONFIGURED]\nTo: %s\nSubject: %s\nFrom: %s\nBody:\n%s",
+            "[EMAIL SERVICE - DRY RUN / UNCONFIGURED] To: %s Subject: %s From: %s Body: [SUPPRESSED]",
             to_email,
             subject,
             from_header,
-            body,
         )
         return True
 

@@ -65,15 +65,21 @@ class PasswordPolicyTests(unittest.TestCase):
         for password in ("Password123!", "P@ssword2026!"):
             with self.subTest(password=password), self.assertRaises(ValueError):
                 validate_password(password)
-        validate_password(
-            "Northstar!Labs42",
-            org_name="Northstar Labs",
-        )
-        validate_password(
-            "Ayush!Secure42",
-            name="Ayush Sharma",
-            email="ayush@example.com",
-        )
+        validate_password("Orbit!Sparrow42", org_name="Northstar Labs")
+        with self.assertRaises(ValueError):
+            validate_password("Northstar!Labs42", org_name="Northstar Labs")
+        with self.assertRaises(ValueError):
+            validate_password(
+                "Ayush!Secure42",
+                name="Ayush Sharma",
+                email="ayush@example.com",
+            )
+
+    def test_short_and_identity_based_passwords_are_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_password("Ab1!def")
+        with self.assertRaises(ValueError):
+            validate_password("J0hn!Secure42", username="john.smith", tenant_code="ACME")
 
     def test_new_hashes_are_argon2id(self) -> None:
         password_hash = hash_password("Orbit!Sparrow42")

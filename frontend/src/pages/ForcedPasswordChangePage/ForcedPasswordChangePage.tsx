@@ -20,7 +20,7 @@ const schema = z
     currentPassword: z.string().min(1, "Enter the temporary password.").max(128),
     newPassword: z
       .string()
-      .min(1, "Enter a new password.")
+      .min(8, "Use at least 8 characters.")
       .max(128, "Password must be 128 characters or fewer.")
       .regex(/[a-z]/, "Include a lowercase letter.")
       .regex(/[A-Z]/, "Include an uppercase letter.")
@@ -131,7 +131,7 @@ export const ForcedPasswordChangePage = () => {
           disabled={isSubmitting}
           leadingIcon={<LockKeyhole size={18} />}
           error={errors.newPassword?.message}
-          hint="Use upper, lower, number, and symbol."
+          hint="Use at least 8 characters with upper, lower, number, and symbol."
           trailingControl={(
             <button type="button" onClick={() => setShowNew((value) => !value)} aria-label={showNew ? "Hide new password" : "Show new password"}>
               {showNew ? <EyeOff size={18} /> : <Eye size={18} />}

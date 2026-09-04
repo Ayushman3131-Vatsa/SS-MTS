@@ -13,8 +13,8 @@ one database transaction.
 4. system roles (`TENANT_ADMIN`, `PROJECT_MANAGER`, `EMPLOYEE`) and default
    page access for **Access Management plus currently effective offerings**;
 5. the first Tenant Admin account (contact email + generated temporary password)
-   and a Smartskale Admin (`ss_<CODE>_admin`, password from
-   `SMARTSKALE_SETUP_PASSWORD`);
+   and a Smartskale Admin (`ss_<CODE>_admin`, with a unique generated
+   temporary password);
 6. platform activity and tenant audit records.
 
 The create response includes `first_access` (`email`, `username`,
@@ -50,8 +50,8 @@ same recovery workflow. Future contact edits do not rename the account.
    `TASK_MANAGEMENT` → Overview, Users, Roles & Permissions, Task Management.
 
 Smartskale Admin uses the same login URL, `SMARTSKALE_SETUP_EMAIL` or
-`ss_{CODE}_admin`, and `SMARTSKALE_SETUP_PASSWORD`. That account does not
-require a first-login password change.
+`ss_{CODE}_admin`, and a unique generated temporary password. That account
+requires a first-login password change.
 
 Inactive users (`is_active = false`) cannot authenticate; existing browser
 sessions are revoked on deactivate.

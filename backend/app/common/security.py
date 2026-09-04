@@ -16,7 +16,7 @@ _pwd_context = CryptContext(
     argon2__parallelism=4,
 )
 
-MIN_PASSWORD_LENGTH = 1
+MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 128
 
 # This intentionally remains small and auditable. The structural checks below
@@ -69,6 +69,37 @@ _LEETSPEAK_TRANSLATION = str.maketrans(
 )
 
 
+def _normalized_secret_text(value: str) -> str:
+    """Normalize text for password/context comparisons without changing passwords."""
+
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKC", value)
+        .casefold()
+        .translate(_LEETSPEAK_TRANSLATION)
+        if character.isalnum()
+    )
+
+
+def _identity_tokens(*values: str | None) -> set[str]:
+    """Return meaningful identity fragments that must not appear in a password."""
+
+    tokens: set[str] = set()
+    for value in values:
+        if not value:
+            continue
+        # Include each whitespace/punctuation-delimited fragment as well as the
+        # full normalized value (for example, an email local-part).
+        for fragment in value.replace("@", " ").replace(".", " ").split():
+            normalized = _normalized_secret_text(fragment)
+            if len(normalized) >= 3:
+                tokens.add(normalized)
+        normalized = _normalized_secret_text(value)
+        if len(normalized) >= 3:
+            tokens.add(normalized)
+    return tokens
+
+
 def normalize_email(value: str) -> str:
     """Return the canonical form used for storage and lookup.
 
@@ -85,6 +116,8 @@ def validate_password(
     email: str | None = None,
     name: str | None = None,
     org_name: str | None = None,
+    username: str | None = None,
+    tenant_code: str | None = None,
 ) -> None:
     """Validate passwords at account creation/change boundaries.
 
@@ -120,6 +153,15 @@ def validate_password(
     )
     if password_folded in _COMMON_PASSWORDS or common_stem_match:
         errors.append("not be a commonly used password")
+
+    normalized_password = _normalized_secret_text(password)
+    # Passwords are exact secrets; this comparison is solely for policy
+    # enforcement at creation/change boundaries. Never log either value.
+    if any(
+        token in normalized_password
+        for token in _identity_tokens(email, name, org_name, username, tenant_code)
+    ):
+        errors.append("not contain your name, email, username, organization, or tenant code")
 
     if errors:
         raise ValueError("Password must " + ", ".join(errors) + ".")

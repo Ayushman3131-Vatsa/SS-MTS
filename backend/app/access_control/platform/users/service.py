@@ -112,7 +112,12 @@ async def create_platform_user(
         name=str(payload.name),
         org_name="Platform",
     )
-    validate_password(temporary_password, email=normalized_email, name=str(payload.name))
+    validate_password(
+        temporary_password,
+        email=normalized_email,
+        name=str(payload.name),
+        username=username,
+    )
     user = PlatformAdmin(
         name=str(payload.name),
         username=username,

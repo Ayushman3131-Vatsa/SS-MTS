@@ -284,7 +284,7 @@ paginated `/task-management/*` API described in
    (`backend/app/common/authz.py`) — e.g. an Employee can only reach tasks they're
    assigned to, never another employee's.
 
-Account creation enforces a 12–128 character password with uppercase,
+Account creation enforces an 8–128 character password with uppercase,
 lowercase, number, and special-character requirements plus common/contextual
 password rejection. Login deliberately does not reapply creation-time
 strength rules, so valid legacy passwords remain usable.

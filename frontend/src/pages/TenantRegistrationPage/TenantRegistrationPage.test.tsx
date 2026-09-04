@@ -167,7 +167,7 @@ describe("TenantRegistrationPage offering access workflow", () => {
           username: "ss_SOLO_admin",
           temporary_password: "Smartskale123!",
           login_path: "/SOLO/login",
-          password_change_required: false,
+          password_change_required: true,
         },
       },
     } as never);

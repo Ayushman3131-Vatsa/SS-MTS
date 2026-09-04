@@ -343,7 +343,13 @@ async def login_platform_admin(
         ip_address=ip_address,
     )
     await db.commit()
-    token = create_access_token({"sub": str(admin.admin_id), "type": "admin"})
+    token = create_access_token(
+        {
+            "sub": str(admin.admin_id),
+            "type": "admin",
+            "credential_version": admin.credential_version,
+        }
+    )
     return TokenResponse(access_token=token, role="Administrator", tenant_id=None)
 
 
@@ -440,13 +446,19 @@ async def change_platform_password(
     if verify_password(payload.new_password, admin.password_hash):
         raise BusinessRuleError("New password must be different from the current password")
     try:
-        validate_password(payload.new_password, email=str(admin.email), name=admin.name)
+        validate_password(
+            payload.new_password,
+            email=str(admin.email),
+            name=admin.name,
+            username=str(admin.username),
+        )
     except ValueError as exc:
         raise BusinessRuleError(str(exc)) from exc
 
     now = _utc_now()
     admin.password_hash = hash_password(payload.new_password)
     admin.force_pw_reset = False
+    admin.credential_version += 1
     admin.failed_login_count = 0
     admin.locked_until = None
     await db.execute(
@@ -486,7 +498,17 @@ async def change_platform_password(
         principal=response_principal,
         session_token=session_token,
         csrf_token=csrf_token,
-        replacement_access_token=None,
+        replacement_access_token=(
+            create_access_token(
+                {
+                    "sub": str(admin.admin_id),
+                    "type": "admin",
+                    "credential_version": admin.credential_version,
+                }
+            )
+            if auth_method == "bearer"
+            else None
+        ),
     )
 
 
@@ -514,6 +536,8 @@ async def change_tenant_password(
             email=str(user.email) if user.email else None,
             name=user.display_name,
             org_name=tenant.org_name,
+            username=str(user.username),
+            tenant_code=tenant.tenant_code,
         )
     except ValueError as exc:
         raise BusinessRuleError(str(exc)) from exc

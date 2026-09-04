@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import (
@@ -19,10 +19,13 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     payload: UserCreateRequest,
+    response: Response,
     principal: Principal = Depends(require_tenant_page_access("TENANT_USERS", "modify")),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     created = await service.create_user(db, principal, payload)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
     return service.to_user_response(created.view, temporary_password=created.temporary_password)
 
 
