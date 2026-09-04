@@ -71,7 +71,9 @@ def _authentication_error(detail: str, *, clear_cookies: bool = False) -> JSONRe
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if request.method == "OPTIONS" or is_public_route(request.method.upper(), request.url.path):
+        route_key = (request.method.upper(), request.url.path)
+
+        if route_key[0] == "OPTIONS" or is_public_route(*route_key):
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization", "")
