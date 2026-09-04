@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronLeft, ChevronRight, Eye, Pencil, Plus, RefreshCw, Search, Shield, X, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Eye, MoreHorizontal, Pencil, Plus, Search, Shield, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -7,13 +7,9 @@ import {
   createPlatformRole,
   createTenantRole,
   listPlatformPageAccess,
-  listPlatformPages,
   listPlatformRoles,
-  listPlatformUsers,
   listTenantPageAccess,
-  listTenantPages,
   listTenantRoles,
-  listTenantUsers,
   savePlatformPageAccess,
   saveTenantPageAccess,
   updatePlatformRole,
@@ -21,9 +17,7 @@ import {
   type AccessLevel,
   type Page,
   type PageAccess,
-  type PlatformUser,
   type Role,
-  type TenantUser,
 } from "../../features/access-management/api/access-management-api";
 import { defaultRolesApi } from "../../features/default-role-management/api/default-roles-api";
 import type { DefaultRoleListItem } from "../../features/default-role-management/model/default-roles";
@@ -138,7 +132,6 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
   const roleKind: "platform" | "tenant" | "all" =
     realm === "tenant" ? "tenant" : typeParam === "tenant" ? "tenant" : typeParam === "platform" ? "platform" : "all";
   const offeringId = roleKind === "tenant" ? (searchParams.get("offering_id") ?? "") : "";
-  const coreSelected = roleKind === "tenant" && !offeringId;
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState("");
   // NEW: which system the currently-open role belongs to, used only while roleKind is "all"
@@ -155,12 +148,9 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
   const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sensitiveOnly, setSensitiveOnly] = useState(false);
-  const [detailTab, setDetailTab] = useState<"permissions" | "users">("permissions");
-  const [assignedUsers, setAssignedUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [roleForm, setRoleForm] = useState(emptyRoleForm);
-  const [catalogPages, setCatalogPages] = useState<Page[]>([]);
 
   // NEW: list vs. detail navigation. The roles table is now the landing screen ("Role Search
   // Screen"); clicking "View" on a row (or finishing "Create Role") drops into the existing
@@ -233,7 +223,10 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
     realm === "tenant" ? "tenant" : roleKind === "all" ? viewingKind : roleKind === "tenant" ? "tenant" : "platform";
   const isTenantTemplate = realm === "platform" && effectiveDetailKind === "tenant";
   const canModify = canModifyPage(principal, realm === "platform" ? "/platform/roles" : "/app/roles");
-  const licensedOfferings = principal?.principal_type === "tenant_user" ? principal.tenant.offerings : [];
+  const licensedOfferings = useMemo(
+    () => (principal?.principal_type === "tenant_user" ? principal.tenant.offerings : []),
+    [principal],
+  );
   // NEW: the server-scoped Offering dropdown (drives a URL param + refetch) only makes
   // sense once we've narrowed to a single kind of tenant role; the merged "all" list uses
   // the client-side offering filter below instead, same as the pure-platform list does.
@@ -242,8 +235,6 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
     realm === "tenant"
       ? licensedOfferings.find((item) => item.offering_id === offeringId || item.code === offeringId)
       : offerings.find((item) => item.offering_id === offeringId || item.code === offeringId);
-  const activeModuleCode =
-    realm === "tenant" ? (selectedOffering?.code ?? (offeringId || "CORE")) : selectedOffering?.code ?? (coreSelected ? "CORE" : "");
   const moduleRoles = useMemo(() => {
     if (realm === "tenant" || (realm === "platform" && roleKind === "tenant")) {
       if (!offeringId || offeringId === "all") {
@@ -301,14 +292,6 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
           entry.access_level,
       ).length,
     [originalAccess, pageAccess],
-  );
-
-  // NEW: is this particular table row a tenant default-role template (as opposed to a
-  // real platform role, or — on the tenant realm — a real tenant role)? Uses the row's own
-  // tag when we're in the merged "all" list, falling back to the page-level kind otherwise.
-  const isRowTemplate = useCallback(
-    (role: RoleRow) => realm === "platform" && (role._kind ? role._kind === "tenant" : roleKind === "tenant"),
-    [realm, roleKind],
   );
 
   const isRoleTenant = useCallback(
@@ -404,9 +387,8 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
         setOfferings(catalog);
       }
       if (realm === "platform" && roleKind === "all") {
-        const [platformRoles, platformPages, coreTemplates, ...offeringTemplateLists] = await Promise.all([
+        const [platformRoles, coreTemplates, ...offeringTemplateLists] = await Promise.all([
           listPlatformRoles(),
-          listPlatformPages(),
           defaultRolesApi.list({ offeringId: null, coreOnly: true }),
           ...catalog.map((offering) => defaultRolesApi.list({ offeringId: offering.offering_id, coreOnly: false })),
         ]);
@@ -418,7 +400,6 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
           })),
         ];
         setRoles(merged);
-        setCatalogPages(platformPages);
         setSelectedRoleId((current) => (merged.some((item) => item.role_id === current) ? current : merged[0]?.role_id || ""));
         return;
       }
@@ -443,18 +424,13 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
           });
         }
         setRoles(templates.map((item) => ({ ...toListedRole(item), _kind: "tenant" as const })));
-        setCatalogPages([]);
         setSelectedRoleId((current) =>
           templates.some((item) => item.role_id === current) ? current : templates[0]?.role_id || "",
         );
         return;
       }
-      const [rolesResult, pagesResult] = await Promise.all([
-        realm === "platform" ? listPlatformRoles() : listTenantRoles(),
-        realm === "platform" ? listPlatformPages() : listTenantPages(),
-      ]);
+      const rolesResult = await (realm === "platform" ? listPlatformRoles() : listTenantRoles());
       setRoles(rolesResult.map((role) => ({ ...role, _kind: realm === "platform" ? ("platform" as const) : undefined })));
-      setCatalogPages(pagesResult);
       setSelectedRoleId((current) =>
         rolesResult.some((role) => role.role_id === current) ? current : rolesResult[0]?.role_id || "",
       );
@@ -501,39 +477,6 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
     };
     void loadAccess();
   }, [realm, roles, selectedRoleId, viewingKind]);
-
-  useEffect(() => {
-    if (detailTab !== "users" || !selectedRole) {
-      setAssignedUsers([]);
-      return;
-    }
-    const loadUsers = async () => {
-      try {
-        if (isTenantTemplate) {
-          setAssignedUsers([]);
-          return;
-        }
-        if (realm === "platform") {
-          const users = await listPlatformUsers();
-          setAssignedUsers(
-            users
-              .filter((user) => user.roles.some((role) => role.role_id === selectedRole.role_id))
-              .map((user: PlatformUser) => ({ id: user.admin_id, name: user.name, email: user.email })),
-          );
-          return;
-        }
-        const users = await listTenantUsers();
-        setAssignedUsers(
-          users
-            .filter((user: TenantUser) => user.roles.includes(selectedRole.role_name) || user.role === selectedRole.role_name)
-            .map((user) => ({ id: user.user_id, name: user.name, email: user.email })),
-        );
-      } catch {
-        setAssignedUsers([]);
-      }
-    };
-    void loadUsers();
-  }, [detailTab, isTenantTemplate, realm, selectedRole]);
 
   useEffect(() => {
     if (moduleRoles.some((role) => role.role_id === selectedRoleId)) return;
@@ -591,7 +534,6 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
     next.delete("offering_id");
     next.delete("scope");
     setSelectedRoleId("");
-    setDetailTab("permissions");
     setSearchParams(next, { replace: true });
   };
 
@@ -601,7 +543,6 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
     if (id === "core" || id === "all") next.delete("offering_id");
     else next.set("offering_id", id);
     setSelectedRoleId("");
-    setDetailTab("permissions");
     setQuery("");
     setSearchParams(next, { replace: true });
   };
@@ -614,7 +555,6 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
     setSelectedRoleId(roleId);
     setError(null);
     setNotice(null);
-    setDetailTab("permissions");
     setQuery("");
     setView("detail");
   };
@@ -963,14 +903,28 @@ export const RolesPermissionsPage = ({ realm }: RolesPermissionsPageProps) => {
                         </td>
                         <td>{formatCreatedDate(role.created_at)}</td>
                         <td className={styles.actionsCell}>
-                          <button
-                            type="button"
-                            className={styles.tableActionButton}
-                            onClick={() => openRole(role.role_id)}
-                          >
-                            {canModify ? <Pencil size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
-                            <span>{canModify ? "View / Edit" : "View"}</span>
-                          </button>
+                          <div className={styles.rowActions}>
+                            <button
+                              type="button"
+                              className={styles.tableActionButton}
+                              onClick={() => openRole(role.role_id)}
+                            >
+                              {canModify ? <Pencil size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
+                              <span>{canModify ? "View / Edit" : "View"}</span>
+                            </button>
+                            {canModify && (
+                              <button
+                                type="button"
+                                className={styles.iconButton}
+                                aria-label={`More actions for ${role.role_name}`}
+                                aria-haspopup="menu"
+                                aria-expanded={menuId === role.role_id}
+                                onClick={(event) => toggleMenu(role.role_id, event.currentTarget)}
+                              >
+                                <MoreHorizontal size={18} aria-hidden="true" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
